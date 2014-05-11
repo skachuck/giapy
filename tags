@@ -1,0 +1,219 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+Abs_xyzt_data	abtract_large_xyz.py	/^class Abs_xyzt_data(object):$/;"	c
+Basemap	plot_tools/animations.py	/^from mpl_toolkits.basemap import Basemap$/;"	i
+Basemap	plot_tools/transect_animation.py	/^from mpl_toolkits.basemap import Basemap$/;"	i
+DATAPATH	__init__.py	/^DATAPATH = '\/Data\/emergence_data\/'$/;"	v
+DATAPATH	apl_tools/__init__.py	/^DATAPATH = '\/Data\/emergence_data\/'$/;"	v
+EARTHPATH	__init__.py	/^EARTHPATH = ''$/;"	v
+EARTHPATH	apl_tools/__init__.py	/^EARTHPATH = ''$/;"	v
+EarthGrid	grid.py	/^class EarthGrid(object):$/;"	c
+EarthTwoD	earth_tools/earth_two_d.py	/^class EarthTwoD(object):$/;"	c
+EmergeData	data_tools/emergedata.py	/^class EmergeData(object):$/;"	c
+EmergeData	data_tools/emergedataobject.py	/^class EmergeData(object):$/;"	c
+EmergeDatum	data_tools/emergedataobject.py	/^class EmergeDatum(object):$/;"	c
+ICEPATH	__init__.py	/^ICEPATH = ''$/;"	v
+ICEPATH	apl_tools/__init__.py	/^ICEPATH = ''$/;"	v
+Ice2d	ice_tools/icehistory.py	/^class Ice2d(object):$/;"	c
+IceHistory	ice_tools/icehistory.py	/^class IceHistory(object):$/;"	c
+MyObject	plot_tools/transect_animation.py	/^class MyObject(object):$/;"	c
+ReboundCalc2D	reboundcalc.py	/^class ReboundCalc2D(object):$/;"	c
+RectBivariateSpline	plot_tools/animations.py	/^from scipy.interpolate import RectBivariateSpline$/;"	i
+RectBivariateSpline	plot_tools/interp_path.py	/^from scipy.interpolate import RectBivariateSpline$/;"	i
+RectBivariateSpline	plot_tools/transect_animation.py	/^from scipy.interpolate import RectBivariateSpline, interp1d$/;"	i
+RectBivariateSpline	rebound_twoD.py	/^from scipy.interpolate import RectBivariateSpline$/;"	i
+TransectPath	plot_tools/interp_path.py	/^class TransectPath(object):$/;"	c
+WRITEPATH	__init__.py	/^WRITEPATH = ''/;"	v
+WRITEPATH	apl_tools/__init__.py	/^WRITEPATH = ''/;"	v
+_UT2list	earth_tools/earth_two_d.py	/^def _UT2list(m):$/;"	f
+__getitem__	abtract_large_xyz.py	/^    def __getitem__(self, key):$/;"	m	class:Abs_xyzt_data	file:
+__getitem__	data_tools/emergedata.py	/^    def __getitem__(self, key):$/;"	m	class:EmergeData	file:
+__getitem__	data_tools/emergedataobject.py	/^    def __getitem__(self, key):$/;"	m	class:EmergeData	file:
+__init__	abtract_large_xyz.py	/^    def __init__(self):$/;"	m	class:Abs_xyzt_data
+__init__	data_tools/emergedata.py	/^    def __init__(self, data=[]):$/;"	m	class:EmergeData
+__init__	data_tools/emergedataobject.py	/^    def __init__(self):$/;"	m	class:EmergeDatum
+__init__	data_tools/emergedataobject.py	/^    def __init__(self, data=[]):$/;"	m	class:EmergeData
+__init__	earth_tools/earth_two_d.py	/^    def __init__(self, u=None, d=None, fr23=10., mode='integrate'):$/;"	m	class:EarthTwoD
+__init__	grid.py	/^    def __init__(self, res):$/;"	m	class:EarthGrid
+__init__	ice_tools/icehistory.py	/^    def __init__(self):$/;"	m	class:Ice2d
+__init__	ice_tools/icehistory.py	/^    def __init__(self):$/;"	m	class:IceHistory
+__init__	plot_tools/interp_path.py	/^    def __init__(self, xs, ys, ds):$/;"	m	class:TransectPath
+__init__	reboundcalc.py	/^    def __init__(earth, ice, sea, ):$/;"	m	class:ReboundCalc2D
+__iter__	abtract_large_xyz.py	/^    def __iter__(self):$/;"	m	class:Abs_xyzt_data	file:
+__iter__	data_tools/emergedata.py	/^    def __iter__(self):$/;"	m	class:EmergeData	file:
+__iter__	data_tools/emergedataobject.py	/^    def __iter__(self):$/;"	m	class:EmergeData	file:
+__repr__	abtract_large_xyz.py	/^    def __repr__(self):$/;"	m	class:Abs_xyzt_data	file:
+_list2UT	earth_tools/earth_two_d.py	/^def _list2UT(l, N):$/;"	f
+_list_to_fft_mat	earth_tools/earth_two_d.py	/^def _list_to_fft_mat(lis, index, N):$/;"	f
+_symmetrize	earth_tools/earth_two_d.py	/^def _symmetrize(A):$/;"	f
+_tile_arrays	earth_tools/earth_two_d.py	/^def _tile_arrays(A):$/;"	f
+_unsort	earth_tools/earth_two_d.py	/^def _unsort(l, ind):$/;"	f
+anim_transect	plot_tools/transect_animation.py	/^def anim_transect(emerg_func, load_func, sl_curve, topo, path, ts, m, filename):$/;"	f
+anim_transects	plot_tools/animations.py	/^def anim_transects(emerg_func, load_func, topo_func, paths, filename):$/;"	f
+animate	plot_tools/animations.py	/^    def animate(i):$/;"	f	function:anim_transects
+animate	plot_tools/transect_animation.py	/^    def animate(i):$/;"	f	function:anim_transect
+animation	plot_tools/animations.py	/^import matplotlib.animation as animation$/;"	i
+animation	plot_tools/transect_animation.py	/^import matplotlib.animation as animation$/;"	i
+by_loc	data_tools/emergedata.py	/^    def by_loc(self, latmin=-90, latmax=90, lonmin=-180, lonmax=180):$/;"	m	class:EmergeData
+by_loc	data_tools/emergedataobject.py	/^    def by_loc(self, latmin=-90, latmax=90, lonmin=-180, lonmax=180):$/;"	m	class:EmergeData
+by_recnbr	data_tools/emergedata.py	/^    def by_recnbr(self, nbrs):$/;"	m	class:EmergeData
+by_recnbr	data_tools/emergedataobject.py	/^    def by_recnbr(self, nbrs):$/;"	m	class:EmergeData
+by_time	data_tools/emergedata.py	/^    def by_time(self, time, scale=1):$/;"	m	class:EmergeData
+by_time	data_tools/emergedataobject.py	/^    def by_time(self, time, scale=1):$/;"	m	class:EmergeData
+calc_taus_from_earth	earth_tools/earth_two_d.py	/^    def calc_taus_from_earth(self, N):$/;"	m	class:EarthTwoD
+colors	plot_tools/emergence.py	/^colors = ['r', 'purple', 'orange', 'green']$/;"	v
+comp_emerg_locs	plot_tools/emergence.py	/^def comp_emerg_locs(models, colors=None, insetmap=None):$/;"	f
+comp_emerg_model	plot_tools/emergence.py	/^def comp_emerg_model(locs, colors=None, insetmap=None):$/;"	f
+data_tools	__init__.py	/^import giapy.data_tools$/;"	i
+data_tools	apl_tools/__init__.py	/^import giapy.data_tools$/;"	i
+data_tools	rebound_twoD.py	/^import giapy.data_tools.emergedata as emergedata$/;"	i
+earth	plot_tools/transect_animation.py	/^earth = earth_two_d.load(u'\/Users\/skachuck\/Documents\/Work Documents\/GIA_Modeling\/ProgramRewrite\/EarthModels\/earth64.p')$/;"	v
+earth_tools	__init__.py	/^import giapy.earth_tools$/;"	i
+earth_tools	apl_tools/__init__.py	/^import giapy.earth_tools$/;"	i
+earth_tools	plot_tools/transect_animation.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+earth_tools	rebound_twoD.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+earth_two_d	plot_tools/transect_animation.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+earth_two_d	rebound_twoD.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+emerg_int	plot_tools/animations.py	/^emerg_int = RectBivariateSpline(lon576, lat576, emerg[0,:,:].T)$/;"	v
+emergedata	rebound_twoD.py	/^import giapy.data_tools.emergedata as emergedata$/;"	i
+eur	data_tools/__init__.py	/^eur = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}$/;"	v
+eur	plot_tools/__init__.py	/^eur = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}$/;"	v
+eur_map_param	plot_tools/__init__.py	/^eur_map_param = {'width':4900000,'height':4700000,$/;"	v
+europe	grid.py	/^europe = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}$/;"	v
+europe_plot_box	grid.py	/^europe_plot_box = {'lon_0': 35, 'lat_0': 60.15, 'llcrnrlon':-5, 'urcrnrlon':99, 'llcrnrlat':35, 'urcrnrlat':80}$/;"	v
+exp_decay_const	earth_tools/earth_two_d.py	/^def exp_decay_const(earth, i, j):$/;"	f
+fft	ice_tools/icehistory.py	/^    def fft(self, N):$/;"	m	class:Ice2d
+filter	data_tools/emergedata.py	/^    def filter(self, func, args, filename=None):$/;"	m	class:EmergeData
+filter	data_tools/emergedataobject.py	/^    def filter(self, func, args, filename=None):$/;"	m	class:EmergeData
+form_long_vectors	data_tools/emergedata.py	/^    def form_long_vectors(self):$/;"	m	class:EmergeData
+form_long_vectors	data_tools/emergedataobject.py	/^    def form_long_vectors(self):$/;"	m	class:EmergeData
+form_wl	earth_tools/earth_two_d.py	/^def form_wl(N):$/;"	f
+get_resp	earth_tools/earth_two_d.py	/^    def get_resp(self, t_dur, taus=None, fr23=None):$/;"	m	class:EarthTwoD
+giapy	__init__.py	/^import giapy.data_tools$/;"	i
+giapy	__init__.py	/^import giapy.earth_tools$/;"	i
+giapy	__init__.py	/^import giapy.ice_tools$/;"	i
+giapy	__init__.py	/^import giapy.plot_tools$/;"	i
+giapy	apl_tools/__init__.py	/^import giapy.data_tools$/;"	i
+giapy	apl_tools/__init__.py	/^import giapy.earth_tools$/;"	i
+giapy	apl_tools/__init__.py	/^import giapy.ice_tools$/;"	i
+giapy	apl_tools/__init__.py	/^import giapy.plot_tools$/;"	i
+giapy	plot_tools/transect_animation.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+giapy	plot_tools/transect_animation.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+giapy	rebound_twoD.py	/^import giapy.data_tools.emergedata as emergedata$/;"	i
+giapy	rebound_twoD.py	/^import giapy.earth_tools.earth_two_d as earth_two_d$/;"	i
+giapy	rebound_twoD.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+ice	plot_tools/transect_animation.py	/^ice = icehistory.load(u'\/Users\/skachuck\/Documents\/Work Documents\/GIA_Modeling\/ProgramRewrite\/IceModels\/eur_ice.p')$/;"	v
+ice_tools	__init__.py	/^import giapy.ice_tools$/;"	i
+ice_tools	apl_tools/__init__.py	/^import giapy.ice_tools$/;"	i
+ice_tools	plot_tools/transect_animation.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+ice_tools	rebound_twoD.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+icehistory	plot_tools/transect_animation.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+icehistory	rebound_twoD.py	/^import giapy.ice_tools.icehistory as icehistory$/;"	i
+ices_along_path	plot_tools/transect_animation.py	/^ices_along_path = np.array([off_grid_profile(ice.lon, ice.lat, ice_heights, path) for ice_heights in ice.heights])$/;"	v
+ices_interp	plot_tools/transect_animation.py	/^ices_interp = RectBivariateSpline(ice.times[::-1], path.ds, ices_along_path[::-1,:])$/;"	v
+import_from_file	data_tools/emergedata.py	/^    def import_from_file(self, filename):$/;"	m	class:EmergeData
+import_from_file	data_tools/emergedataobject.py	/^    def import_from_file(self, filename):$/;"	m	class:EmergeData
+init	plot_tools/animations.py	/^    def init():$/;"	f	function:anim_transects
+init	plot_tools/transect_animation.py	/^    def init():$/;"	f	function:anim_transect
+interp1d	plot_tools/transect_animation.py	/^from scipy.interpolate import RectBivariateSpline, interp1d$/;"	i
+interp3d_emergence	rebound_twoD.py	/^def interp3d_emergence(uplift, data, out_times, verbose=False):$/;"	f
+lat1152	plot_tools/animations.py	/^lat1152 = Lat1152[:,0]$/;"	v
+lat1152	plot_tools/transect_animation.py	/^lat1152 = Lat1152[:,0]*180\/np.pi$/;"	v
+lat576	plot_tools/animations.py	/^lat576 = Lat576[:,0]$/;"	v
+linear_path	plot_tools/interp_path.py	/^def linear_path(p0, p1, n=50):$/;"	f
+load	data_tools/emergedata.py	/^def load(filename):$/;"	f
+load	data_tools/emergedataobject.py	/^def load(filename):$/;"	f
+load	earth_tools/earth_two_d.py	/^def load(filename):$/;"	f
+load	ice_tools/icehistory.py	/^def load(filename):$/;"	f
+load_all	abtract_large_xyz.py	/^    def load_all(self):$/;"	m	class:Abs_xyzt_data
+load_data	abtract_large_xyz.py	/^    def load_data(self):$/;"	m	class:Abs_xyzt_data
+load_data	ice_tools/icehistory.py	/^    def load_data(self, filename):$/;"	m	class:Ice2d
+load_int	plot_tools/animations.py	/^load_int = RectBivariateSpline(lon576, lat576, load[0,:,:].T)$/;"	v
+load_one	abtract_large_xyz.py	/^    def load_one(self, one):$/;"	m	class:Abs_xyzt_data
+lon1152	plot_tools/animations.py	/^lon1152 = Lon1152[0,:]$/;"	v
+lon1152	plot_tools/transect_animation.py	/^lon1152 = Lon1152[0,:]*180\/np.pi$/;"	v
+lon576	plot_tools/animations.py	/^lon576 = Lon576[0,:]$/;"	v
+m	grid.py	/^    m = basemap.Basemap(width=4900000,height=4700000,$/;"	v	class:EarthGrid
+m	plot_tools/animations.py	/^              lat_1=50.,lat_2=89.9,lat_0=72,lon_0=20.)$/;"	v
+m	plot_tools/transect_animation.py	/^              lat_1=50.,lat_2=89.9,lat_0=72,lon_0=20.)$/;"	v
+map_path	plot_tools/interp_path.py	/^def map_path(p0, p1, m, n=50, lonlat=False):$/;"	f
+matplotlib	plot_tools/animations.py	/^import matplotlib.animation as animation$/;"	i
+matplotlib	plot_tools/animations.py	/^import matplotlib.pyplot as plt$/;"	i
+matplotlib	plot_tools/interp_path.py	/^import matplotlib.pyplot as plt$/;"	i
+matplotlib	plot_tools/transect_animation.py	/^import matplotlib.animation as animation$/;"	i
+matplotlib	plot_tools/transect_animation.py	/^import matplotlib.pyplot as plt$/;"	i
+modelplot	plot_tools/emergence.py	/^modelplot = {'ls':'-', 'lw':2.5, 'alpha':0.7}$/;"	v
+n	plot_tools/transect_animation.py	/^n = 100$/;"	v
+nam	data_tools/__init__.py	/^nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}$/;"	v
+nam	plot_tools/__init__.py	/^nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}$/;"	v
+np	abtract_large_xyz.py	/^import numpy as np$/;"	i
+np	apl_tools/t_files.py	/^import numpy as np$/;"	i
+np	data_tools/emergedata.py	/^import numpy as np$/;"	i
+np	data_tools/emergedataobject.py	/^import numpy as np$/;"	i
+np	earth_tools/earth_two_d.py	/^import numpy as np$/;"	i
+np	grid.py	/^import numpy as np$/;"	i
+np	ice_tools/icehistory.py	/^import numpy as np$/;"	i
+np	plot_tools/animations.py	/^import numpy as np$/;"	i
+np	plot_tools/interp_path.py	/^import numpy as np$/;"	i
+np	plot_tools/transect_animation.py	/^import numpy as np$/;"	i
+np	rebound_twoD.py	/^import numpy as np$/;"	i
+off_grid_profile	plot_tools/interp_path.py	/^def off_grid_profile(x, y, Z, path, interper=None):$/;"	f
+open_everything	rebound_twoD.py	/^def open_everything():$/;"	f
+out_times	plot_tools/transect_animation.py	/^out_times = np.arange(20,0, -1)$/;"	v
+path	plot_tools/transect_animation.py	/^path = map_path([-10, 48], [60, 65], m, n)$/;"	v
+path_lonlat	plot_tools/transect_animation.py	/^path_lonlat = map_path([-10, 48], [60, 65], m, n, lonlat=True)$/;"	v
+perform_convolution	plot_tools/transect_animation.py	/^from rebound_twoD import perform_convolution$/;"	i
+perform_convolution	rebound_twoD.py	/^def perform_convolution(taus, earth, ice, out_times=[0], verbose=False):$/;"	f
+pickle	abtract_large_xyz.py	/^import cPickle as pickle$/;"	i
+pickle	data_tools/emergedata.py	/^import cPickle as pickle$/;"	i
+pickle	data_tools/emergedataobject.py	/^import cPickle as pickle$/;"	i
+pickle	earth_tools/earth_two_d.py	/^import cPickle as pickle$/;"	i
+pickle	ice_tools/icehistory.py	/^import cPickle as pickle$/;"	i
+plot_loc	data_tools/emergedata.py	/^    def plot_loc(self, map, kwarg={}):$/;"	m	class:EmergeData
+plot_loc	data_tools/emergedataobject.py	/^    def plot_loc(self, map, kwarg={}):$/;"	m	class:EmergeData
+plot_tools	__init__.py	/^import giapy.plot_tools$/;"	i
+plot_tools	apl_tools/__init__.py	/^import giapy.plot_tools$/;"	i
+plt	plot_tools/animations.py	/^import matplotlib.pyplot as plt$/;"	i
+plt	plot_tools/interp_path.py	/^import matplotlib.pyplot as plt$/;"	i
+plt	plot_tools/transect_animation.py	/^import matplotlib.pyplot as plt$/;"	i
+pointplot	plot_tools/emergence.py	/^pointplot = {'marker':'+', 'ls':'None', 'mfc':'None', 'ms':12, 'mew':1.2}$/;"	v
+prop	earth_tools/earth_two_d.py	/^def prop(u, d, k):$/;"	f
+read_t_files	apl_tools/t_files.py	/^def read_t_files(directory, filenames, data_col=2):$/;"	f
+read_t_files	plot_tools/animations.py	/^from giapy.apl_tools import read_t_files$/;"	i
+read_t_files	plot_tools/transect_animation.py	/^from giapy.apl_tools.t_files import read_t_files$/;"	i
+readice	ice_tools/icehistory.py	/^    def readice(self, filename, Nx, Ny):$/;"	m	class:Ice2d
+rebound_2d_earth_res	rebound_twoD.py	/^def rebound_2d_earth_res(params, earth, ice, emerge_data, verbose=False):$/;"	f
+rebound_2d_taus_res	rebound_twoD.py	/^def rebound_2d_taus_res(taus, earth, ice, emerge_data, verbose=False):$/;"	f
+save	abtract_large_xyz.py	/^    def save(self, filename):$/;"	m	class:Abs_xyzt_data
+save	data_tools/emergedata.py	/^    def save(self, filename):$/;"	m	class:EmergeData
+save	data_tools/emergedataobject.py	/^    def save(self, filename):$/;"	m	class:EmergeData
+save	earth_tools/earth_two_d.py	/^    def save(self, filename):$/;"	m	class:EarthTwoD
+save	ice_tools/icehistory.py	/^    def save(self, filename):$/;"	m	class:Ice2d
+save_data	abtract_large_xyz.py	/^    def save_data(self, filename):$/;"	m	class:Abs_xyzt_data
+scan_map_param	plot_tools/__init__.py	/^scan_map_param = {'llcrnrlon':-10,'llcrnrlat':45,'urcrnrlon':60,'urcrnrlat':69,$/;"	v
+sealevel_curve	plot_tools/transect_animation.py	/^sealevel_curve = MyObject()$/;"	v
+select_area	grid.py	/^    def select_area(self, array, latmin, latmax, lonmin, lonmax):$/;"	m	class:EarthGrid
+set_asth	earth_tools/earth_two_d.py	/^    def set_asth(self, vis, h=75):$/;"	m	class:EarthTwoD
+set_desc	abtract_large_xyz.py	/^    def set_desc(self, string):$/;"	m	class:Abs_xyzt_data
+set_lith	earth_tools/earth_two_d.py	/^    def set_lith(self, fr23):$/;"	m	class:EarthTwoD
+set_mantle	earth_tools/earth_two_d.py	/^    def set_mantle(self, vis):$/;"	m	class:EarthTwoD
+set_rheology	earth_tools/earth_two_d.py	/^    def set_rheology(self, mant_vis=1, asth_vis=0.018, asth_thi=75, fr23=10):$/;"	m	class:EarthTwoD
+singGenerator	ice_tools/icehistory.py	/^        def singGenerator(self):$/;"	f	function:IceHistory.singiter
+singiter	ice_tools/icehistory.py	/^    def singiter(self):$/;"	m	class:IceHistory
+sphere_path	plot_tools/interp_path.py	/^def sphere_path(p0, p1, n=50, r=6371):$/;"	f
+sval	data_tools/__init__.py	/^sval = {'latmin':76, 'latmax':81, 'lonmin':10, 'lonmax':30}$/;"	v
+sval	plot_tools/__init__.py	/^sval = {'latmin':76, 'latmax':81, 'lonmin':10, 'lonmax':30}$/;"	v
+sval_map_param	plot_tools/__init__.py	/^            'lat_1':76.,'lat_2':81,'lat_0':78.5,'lon_0':20.}$/;"	v
+time	rebound_twoD.py	/^import time$/;"	i
+topo_along_path	plot_tools/transect_animation.py	/^topo_along_path = off_grid_profile(lon1152, lat1152, topo1152, path_lonlat)$/;"	v
+topo_int	plot_tools/animations.py	/^topo_int = RectBivariateSpline(lon1152, lat1152, topo1152[0,:,:].T)$/;"	v
+transect_with_inset_context	plot_tools/interp_path.py	/^def transect_with_inset_context(X, Y, Z, **kw):$/;"	f
+uplift	plot_tools/transect_animation.py	/^uplift = perform_convolution(earth.taus, earth, ice, out_times)$/;"	v
+uplift	plot_tools/transect_animation.py	/^uplift = uplift-uplift[-1]$/;"	v
+uplifts_along_path	plot_tools/transect_animation.py	/^uplifts_along_path = np.array([off_grid_profile(np.linspace(0, 4900000, min(earth.N, 491), endpoint=False), np.linspace(0, 4700000, min(earth.N, 471), endpoint=False), u, path) for u in uplift])$/;"	v
+uplifts_interp	plot_tools/transect_animation.py	/^uplifts_interp = RectBivariateSpline(out_times[::-1], path.ds, uplifts_along_path[::-1,:])$/;"	v
+yield_wl	earth_tools/earth_two_d.py	/^def yield_wl(i, j, fwl=6000):$/;"	f

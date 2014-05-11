@@ -1,0 +1,27 @@
+*** The current version is not yet ready for public use.
+    If you are chomping at the bit, go for it and let me know.
+    Otherwise, wait.
+***
+
+This package provides the classes and functions necessary for calculating
+the Glacial Isostatic Adjustment of the earth and comparing it to geophysical
+data. The method being developed is principally that of Cathles (1975), though
+I hope to expand this in future.
+
+A note on UNITS (unless otherwise specified):
+    Time - time is measured in thousand years before present (cal ka bp),
+    meaning positive times are in the past.
+
+    Length - Length is usually specified in the individual modules, but
+    kilometers is fairly standard.
+
+    Viscosity - in 10^21 Pa s
+
+    Flexural Rigidity - in 10^23 N m
+
+
+----------
+References
+----------
+Cathles, L.M. "The Viscosity of the Earth's Mantle." Princeton University
+    Press. Princeton, NJ. 1975.
