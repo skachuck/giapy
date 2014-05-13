@@ -1,10 +1,11 @@
 import numpy as np
 import time
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, interp1d
 
 import giapy.ice_tools.icehistory as icehistory
 import giapy.earth_tools.earth_two_d as earth_two_d
 import giapy.data_tools.emergedata as emergedata
+from giapy.data_tools.meltwater import gen_eustatic
             
 def perform_convolution(earth, ice, out_times=[0], t_rel=0, verbose=False): 
     #TODO Make this a class? Attach observers, like out_times? uplift?
@@ -44,18 +45,19 @@ def perform_convolution(earth, ice, out_times=[0], t_rel=0, verbose=False):
                 uplift_f[t_out == out_times, :, :] += 0.3 *\
                                     delta_ice * earth.get_resp(t_dur)
     
+    # The resolution correction
+    res = float(N)/ice.N
     # Retransform the uplift
-    # The normalization needs to be corrected for each dimension (ice.N/N)**2
-    uplift = np.real(np.fft.ifft2(uplift_f, s=[N, N]))/((ice.N/N)**2)
+    # The normalization needs to be corrected for each dimension (N/ice.N)**2
+    uplift = np.real(np.fft.ifft2(uplift_f, s=[N, N]))*(res**2)
 
     # Calculate uplift relative to t_rel (default, present)
     if t_rel is not None: 
         uplift = uplift[np.where(out_times==t_rel)] - uplift 
 
-    if verbose: print 'Convolution completed, '+str(time.clock()-time_start)+'s'
-    #TODO make resolution correction to grid.
+    if verbose: print 'Convolution time: {0}s'.format(time.clock()-time_start)
 
-    return uplift[:,:ice.shape[0], :ice.shape[1]]
+    return uplift[:,:np.ceil(res*ice.shape[0]), :np.ceil(res*ice.shape[1])]
     
 def interp3d_emergence(uplift, data, out_times, verbose=False):
     """Interpolate uplift surfaces (xyz data at a specific t) to data locations 
@@ -90,10 +92,7 @@ def interp3d_emergence(uplift, data, out_times, verbose=False):
     # Interpolate the calculated uplift at each time on the Lat-Lon grid
     # to the data locations.
     for uplift_at_a_time in uplift:
-        #interp_func = scipy.interpolate.interp2d(X, Y, uplift_at_a_time)
-        #interp_emerge.append(np.array([interp_func(loc[0], loc[1]) for loc in emerge_data.locs]).flatten())
         interp_func = RectBivariateSpline(X, Y, uplift_at_a_time.T)
-        # TODO data.locs currently as lon,lat list. Need Array. Need mapping
         interp_data.append(interp_func.ev(data.locs[:,0], data.locs[:,1]))
     interp_data = np.array(interp_data).T
     
@@ -107,7 +106,7 @@ def interp3d_emergence(uplift, data, out_times, verbose=False):
     # flatten the array    
     calc_vector = np.array([item for l in calc_vector for item in l])
     
-    if verbose: print 'Interpolation time: '+str(time.clock()-time_start)+'s'
+    if verbose: print 'Interpolation time: {0}s'.format(time.clock()-time_start)
 
     return calc_vector
 
@@ -115,35 +114,53 @@ def interp3d_emergence(uplift, data, out_times, verbose=False):
 def rebound_2d_taus_res(taus, earth, ice, emerge_data, verbose=False):
     time_start = time.clock()
     earth.set_taus(taus)
-    out_times = np.array([15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]) 
+    out_times = np.linspace(15, 0, 16) 
     uplift = perform_convolution(earth, ice, out_times=out_times, verbose=verbose)
     calc_vector = interp3d_emergence(uplift, emerge_data, out_times, verbose=verbose)
     
     if verbose:
-        print 'Cost function evaluatation time: '+str(time.clock()-time_start)+'s'
+        print 'Cost function evaluatation time: {0}s'.format(time.clock()-time_start)
     
     return (calc_vector-emerge_data.long_data)/10
     
-def rebound_2d_earth_res(params, earth, ice, emerge_data, verbose=False):
-    time_start = time.clock()
-    out_times = np.array([15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
-    
-    earth.set_mantle(params[0])
-    earth.set_asth(params[0])
-    earth.set_lith(params[1])
-    earth.calc_taus_from_earth(earth.N)
+def rebound_2d_earth_res(params, earth, ice, emerge_data, esl=None, verbose=False):
+    """Calculate the residual vector between the emergence predicted by an
+    earth and ice model, with the earth reset with parameters params, and the
+    data contained in emerge_data.long_data at emerge_data.locs.
 
-    uplift = perform_convolution(earth, ice, out_times=out_times, verbose=verbose)
-    calc_vector = interp3d_emergence(uplift, emerge_data, out_times, verbose=verbose)
+    Parameters
+    ----------
+    params (array-like) - the list of new earth parameters. Must be used in
+                          earth.reset_params(params).
+    earth - earth_model
+    ice - ice_model
+    emerge_data - 
+    """
+    time_start = time.clock()
+    out_times = np.linspace(15, 0, 16)
+    
+    earth.reset_params(*params)
+    if verbose:
+        print 'Earth params reset: {0}s'.format(time.clock()-time_start)
+
+    uplift = perform_convolution(earth, ice, out_times=out_times,
+                                        verbose=verbose)    
+
+    if esl is not None:
+        eslcorr = esl(out_times)
+        uplift = uplift + eslcorr[:, np.newaxis, np.newaxis]
+
+    calc_vector = interp3d_emergence(uplift, emerge_data, out_times,
+                                        verbose=verbose)
     
     if verbose: 
-        print 'Cost function evaluatation time: '+str(time.clock()-time_start)+'s'
+        print 'Cost function evaluatation time: {0}s'.format(time.clock()-time_start)
     
     sig = 0.1*np.array(emerge_data.long_data)
 
     return (calc_vector-emerge_data.long_data)/10
    
-def rebound_2d_earth_jac(xs, eps_f=10e-16):
+def jacobian(xs, func, eps_f=5e-11):
     jac = []
     for i, x in enumerate(xs):
         xs = np.asarray(xs)
@@ -151,14 +168,14 @@ def rebound_2d_earth_jac(xs, eps_f=10e-16):
         # Optimal one-pt separation is (eps_f*f/f'')^(1/2) ~ sqrt(eps_f)*x
         # Optimal two-pt separation is (eps_f*f/f''')^(1/3) ~ cbrt(eps_f)*x
         h = np.zeros(len(xs))
-        h[i] = np.sqrt(eps_f*x)
+        h[i] = (eps_f**(1./3.))*x
 
         # Evaluate the function
         # One-pt
         #f1 = rebound_2d_earth_res(xs...)
         # Two-pt
-        f1 = rebound_2d_earth_res(xs-h)
-        f2 = rebound_2d_earth_res(xs+h)
+        f1 = func(xs-h)
+        f2 = func(xs+h)
 
         # Difference
         # One-pt
@@ -198,3 +215,5 @@ def calc_tilts(uplift, Lon, Lat, r=6371):
 
     return tilt
 
+if __name__=='__main__':
+    esl = gen_eustatic()

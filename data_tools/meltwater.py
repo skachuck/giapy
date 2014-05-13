@@ -2,9 +2,7 @@ import cPickle as pickle
 import numpy as np
 from scipy.interpolate import interp1d
 
-class 
-
-def generate_meltwater_interpolator(filename):
+def gen_eustatic():
     times = np.array([ 0,  6,  7,  8,  
                        9, 10, 11, 12,
                       13, 14, 15, 16, 
@@ -17,4 +15,4 @@ def generate_meltwater_interpolator(filename):
     
     sealevel_curve = interp1d(times, meters)
 
-    pickle.dump(sealevel_curve, open(filename, 'w'))
+    return sealevel_curve
