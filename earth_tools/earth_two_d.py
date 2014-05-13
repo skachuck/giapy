@@ -9,7 +9,6 @@ def _list2UT(l, N):
         mat.append(l[start:start+N-i])
         start += N-i
     return mat
-#    return tile_arrays(symmetrize(mat))
 
 def _UT2list(m):
     """Return the elements of an NxN upper triangular in row major order"""
@@ -167,8 +166,43 @@ def exp_decay_const(earth, i, j):
     
     return tau
 
-class EarthTwoD(object):
-    """Return the isostatic response of a 2D earth.
+class EarthTwoDBase(object):
+    """A Base class for 2D, flat earth models. Provides methods for saving,
+    adding descriptions, and returning response.
+
+    User must define a method for generating taus, 
+    """
+    def __init__(self):
+        self.taus = None
+        self.ak = None
+        self.alpha = None
+        self.index = None
+        self.N = None
+
+    def __call__(self, t_dur):
+        return self.get_resp(t_dur)
+        
+    def save(self, filename):
+        pickle.dump(self, open(filename, 'wb'))
+
+    def get_resp(self, t_dur):
+        """Calculate and return earth response to a unit load in an fft_mat.
+        
+        Parameters
+        ----------
+        t_dur (float) - the duration, in cal ka BP, of applied load
+        """            
+        # Convert tau list to fft matrix
+        taus = _list_to_fft_mat(self.taus, self.index, self.N)
+        
+        resp = (1-np.exp(t_dur*1000/taus))/self.alpha
+        return resp
+
+    def set_N(self, N):
+        self.N = N
+
+class EarthNLayer(EarthTwoDBase):
+    """Return the isostatic response of a 2D earth with n viscosity layers.
     
     The response is calculated from a viscous profile overlain by an elastic
     lithosphere in the fourier domain.
@@ -180,50 +214,35 @@ class EarthTwoD(object):
         else:
             self.u = u
         if d is None:
-            self.d = np.array([400.,300.,300.,300.,300.,300.,300.,200.,215.,175.,75.])
+            self.d = np.array([400.,300.,300.,300.,300.,300.,
+                               300.,200.,215.,175.,75.       ])
         else:
             self.d = d
             
         self.fr23=fr23
-
-    def __call__(self, t_dur):
-        return self.get_resp(t_dur)
-        
-    def save(self, filename):
-        pickle.dump(self, open(filename, 'wb'))
-        
-    def set_mantle(self, vis):
-        """Set the mantle viscosity profile.
-
-        Assumes last element is Asthenosphere viscosity, changes with
-        self.set_asth.
-        """
-        self.u[:-1] = np.repeat(vis, len(self.u[:-1]))
-        
-    def set_asth(self, vis, h=75):
-        """Set the asthenosphere viscosity and depth (default 75 km)."""
-        self.u[-1] = vis
-        self.d[-1] = h
-        
-    def set_lith(self, fr23):
-        """Set the flexural rigidity of the lithosphere."""
-        self.fr23 = fr23
-        
-    def set_rheology(self, mant_vis=1, asth_vis=0.018, asth_thi=75, fr23=10):
+                
+    def reset_params(self, mant_vis=None, asth_vis=None, asth_thi=None,
+                    fr23=None, N=None):
         """Set the full mantle rheology and calculate the decay constants.
 
         self.N must have been set already.
         """
         #TODO defaults should be the values already in earth
-        self.set_mantle(mant_vis)
-        self.set_asth(asth_vis, asth_thi)
-        self.set_lith(fr23)
-        self.calc_taus_from_earth(self.N)
+        if mant_vis is not None:
+            # Assumes last element is asthenosphere viscosity
+            self.u[:-1] = np.repeat(mant_vis, len(self.u[:-1]))
+        if asth_vis is not None:
+            self.u[-1] = asth_vis
+        if asth_thi is not None:
+            self.d[-1] = asth_thi
+        self.fr23 = fr23 or self.fr23
+        N = N or self.N
+        self.calc_taus(self.N)
 
     def set_taus(self, taus):
         self.taus=taus
         
-    def calc_taus_from_earth(self, N):
+    def calc_taus(self, N=None):
         """Generate and store a list of exponential decay constants.
         
         The procedure sets class data: 
@@ -240,7 +259,7 @@ class EarthTwoD(object):
 
         For description of formats, see help(_list_to_fft_mat)
         """
-        self.N = N
+        self.N = N or self.N
         taus = [[exp_decay_const(self, i, j) for i in xrange(j, N/2+1)] 
                                                 for j in xrange(N/2+1)]
        #TODO Generalize to arbitrary wavelengths 
@@ -267,41 +286,27 @@ class EarthTwoD(object):
         # frequencey matrix from an NxN fft.
         self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
         
-    def get_resp(self, t_dur, taus=None, fr23=None):
-        """Calculate and return earth response to a unit load in an fft_mat.
         
-        Parameters
-        ----------
-        t_dur (float) - the duration, in cal ka BP, of applied load
-        taus - list, in order of increasing wavenumber, of decay constants.
-                default uses internally calculated taus
-        fr23 - the fr23 of the lithosphere.
-                default uses internally stored fr23
-        """
-        if taus is None:
-            taus=self.taus
-            
-        if fr23 is None:
-            alpha = self.alpha
-        else:
-            ak = _list_to_fft_mat(self.ak, self.index, self.N)
-            # TODO alpha here also
-            alpha = (1.+((ak/0.062832)**4)*fr23*48)
-            
-        # Convert tau list to fft matrix
-        taus = _list_to_fft_mat(taus, self.index, self.N)
-        
-        resp = (1-np.exp(t_dur*1000/taus))/alpha
-        return resp
-        
-class EarthTwoLayer(object):
+class EarthTwoLayer(EarthTwoDBase):
+    """Return the isostatic response of a flat earth with two layers.
+    
+    The response is calculated analytically in the fourier domain from a
+    uniform mantle of viscosity u overlain by an elastic lithosphere with
+    flexural rigidty fr23.
+    """
     def __init__(self, u, fr23, g=10, rho=3.313):
         self.u = u
         self.fr23 = fr23
         self.g = g
         self.rho = rho
 
-    def calc_taus_from_earth(self, N):
+    def reset_params(self, u=None, fr23=None, N=None):
+        self.u = u or self.u
+        self.fr23 = fr23 or self.fr23
+        N = N or self.N
+        self.calc_taus(N)
+
+    def calc_taus(self, N=None):
         """Generate and store a list of exponential decay constants.
         
         The procedure sets class data: 
@@ -318,7 +323,7 @@ class EarthTwoLayer(object):
 
         For description of formats, see help(_list_to_fft_mat)
         """
-        self.N = N
+        self.N = N or self.N
         
        #TODO Generalize to arbitrary wavelengths 
         wl = np.array([[6000/np.sqrt(i**2+j**2) if (i!=0 or j!=0) else 16000 
@@ -333,7 +338,7 @@ class EarthTwoLayer(object):
         self.ak = self.ak[self.index]
 
         #TODO scaling matches solutions if mult by 32394513.999996319?
-        self.taus = -2*self.u*self.ak/self.g/self.rho*(10**15)
+        self.taus = -2*self.u*self.ak/self.g/self.rho*32394513.999996319
         
         # the Lithosphere filter, sorted by wave number
         #TODO reevaluate this term (48?)
@@ -346,12 +351,31 @@ class EarthTwoLayer(object):
         # frequencey matrix from an NxN fft.
         self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
 
-class EarthThreeLayer(object):
-    def __init__(self, u1, u2, h, fr23, g=10, rho=3.313):
+class EarthThreeLayer(EarthTwoDBase):
+    """Return the isostatic response of a flat earth with three layers.
+    
+    The response is calculated analytically in the fourier domain from a
+    two layer mantle whose lower layer, of viscosity u1, is overlain layer
+    of viscosity u2 and width h, which in turn is overlain by an elastic
+    lithosphere with flexural rigidty fr23.
+    """
+    def __init__(self, u1, u2, fr23, h, g=10, rho=3.313):
         self.g = g
         self.rho = rho
+        self.u1 = u1
+        self.u2 = u2
+        self.fr23 = fr23
+        self.h = h
 
-    def calc_taus_from_earth(self, N):
+    def reset_params(self, u1=None, u2=None, fr23=None, h=None, N=None):
+        self.u1 = u1 or self.u1
+        self.u2 = u2 or self.u2
+        self.fr23 = fr23 or self.fr23
+        self.h = h or self.h
+        N = N or self.N
+        self.calc_taus(N)    
+
+    def calc_taus(self, N):
         """Generate and store a list of exponential decay constants.
         
         The procedure sets class data: 
@@ -381,8 +405,15 @@ class EarthThreeLayer(object):
         self.index = range(len(self.ak))
         self.index.sort(key=self.ak.__getitem__)
         self.ak = self.ak[self.index]
+    
+        c = np.cosh(ak*self.h)
+        s = np.sinh(ak*self.h)
+        u = self.u2/self.u1
+        ui = 1./u
+        r = 2*c*s*u + (1-u)*(ak*self.h)**2 + (u*s**2+c**2)
+        r = r/((u+ui)*s*c + ak*self.h(u-ui) + (s**2+c**s))
 
-        self.taus = 2*self.u*self.ak/self.g/self.rho
+        self.taus = -2*self.u*self.ak/self.g/self.rho*r
         
         # the Lithosphere filter, sorted by wave number
         #TODO reevaluate this term (48?)
