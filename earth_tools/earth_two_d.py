@@ -161,8 +161,8 @@ def exp_decay_const(earth, i, j):
     
     # As cc[1] gives the surface velocity, the exponential time constant is its
     # reciprocal (see Cathles 1975, p43)
-    #TODO reevaluate this expression
-    tau = 19556.*ak*100./cc[1]
+    # 1955600 = 2/rho (~3.313) /g (~9.8) * (1/pi*1e8) unit conversion to years
+    tau = 1955600.*ak/cc[1]
     
     return tau
 
@@ -208,7 +208,7 @@ class EarthNLayer(EarthTwoDBase):
     lithosphere in the fourier domain.
     """
     
-    def __init__(self, u=None, d=None, fr23=10.):
+    def __init__(self, u=None, d=None, fr23=10., g=9.8, rho=3.313):
         if u is None:
             self.u = np.array([1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,0.018])
         else:
@@ -220,6 +220,8 @@ class EarthNLayer(EarthTwoDBase):
             self.d = d
             
         self.fr23=fr23
+        self.g=g
+        self.rho=rho
                 
     def reset_params(self, mant_vis=None, asth_vis=None, asth_thi=None,
                     fr23=None, N=None):
@@ -227,7 +229,7 @@ class EarthNLayer(EarthTwoDBase):
 
         self.N must have been set already.
         """
-        #TODO defaults should be the values already in earth
+        
         if mant_vis is not None:
             # Assumes last element is asthenosphere viscosity
             self.u[:-1] = np.repeat(mant_vis, len(self.u[:-1]))
@@ -237,7 +239,7 @@ class EarthNLayer(EarthTwoDBase):
             self.d[-1] = asth_thi
         self.fr23 = fr23 or self.fr23
         N = N or self.N
-        self.calc_taus(self.N)
+        self.calc_taus(N)
 
     def set_taus(self, taus):
         self.taus=taus
@@ -276,9 +278,9 @@ class EarthNLayer(EarthTwoDBase):
         self.taus = _UT2list(taus)[self.index]
         
         # the Lithosphere filter, sorted by wave number
-        #TODO reevaluate this term (48?)
-        self.alpha = (1.+((self.ak/0.062832)**4)*self.fr23*48)
-        
+        # factor of 1e8 is for unit conversion
+        self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
+
         # Augment the decay times by the Lithosphere filter
         self.taus = self.taus/self.alpha                                       
                                                 
@@ -294,7 +296,8 @@ class EarthTwoLayer(EarthTwoDBase):
     uniform mantle of viscosity u overlain by an elastic lithosphere with
     flexural rigidty fr23.
     """
-    def __init__(self, u, fr23, g=10, rho=3.313):
+    
+    def __init__(self, u, fr23, g=9.8, rho=3.313):
         self.u = u
         self.fr23 = fr23
         self.g = g
@@ -337,12 +340,16 @@ class EarthTwoLayer(EarthTwoDBase):
         self.index.sort(key=self.ak.__getitem__)
         self.ak = self.ak[self.index]
 
-        #TODO scaling matches solutions if mult by 32394513.999996319?
-        self.taus = -2*self.u*self.ak/self.g/self.rho*32394513.999996319
+        self.taus = -2*self.u*self.ak/self.g/self.rho
+        # Unit conversion so result is in years:
+        # u in Pa s=kg/m s, ak in 1/km, g in m/s2, rho in g/cc
+        # and np.pi*1e7 s/yr
+        self.taus = self.taus*(1./np.pi)*1e8
+
         
         # the Lithosphere filter, sorted by wave number
-        #TODO reevaluate this term (48?)
-        self.alpha = (1.+((self.ak/0.062832)**4)*self.fr23*48)
+        # factor of 1e8 is for unit conversion
+        self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
         
         # Augment the decay times by the Lithosphere filter
         self.taus = self.taus/self.alpha                                       
@@ -359,7 +366,8 @@ class EarthThreeLayer(EarthTwoDBase):
     of viscosity u2 and width h, which in turn is overlain by an elastic
     lithosphere with flexural rigidty fr23.
     """
-    def __init__(self, u1, u2, fr23, h, g=10, rho=3.313):
+    
+    def __init__(self, u1, u2, fr23, h, g=9.8, rho=3.313):
         self.g = g
         self.rho = rho
         self.u1 = u1
@@ -405,19 +413,24 @@ class EarthThreeLayer(EarthTwoDBase):
         self.index = range(len(self.ak))
         self.index.sort(key=self.ak.__getitem__)
         self.ak = self.ak[self.index]
-    
-        c = np.cosh(ak*self.h)
-        s = np.sinh(ak*self.h)
+        
+        # Cathles (1975) III-21
+        c = np.cosh(self.ak*self.h)
+        s = np.sinh(self.ak*self.h)
         u = self.u2/self.u1
         ui = 1./u
-        r = 2*c*s*u + (1-u)*(ak*self.h)**2 + (u*s**2+c**2)
-        r = r/((u+ui)*s*c + ak*self.h(u-ui) + (s**2+c**s))
+        r = 2*c*s*u + (1-u**2)*(self.ak*self.h)**2 + ((u*s)**2+c**2)
+        r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
 
-        self.taus = -2*self.u*self.ak/self.g/self.rho*r
+        self.taus = -2*self.u1*self.ak/self.g/self.rho*r
+        # Unit conversion so result is in years:
+        # u in Pa s=kg/m s, ak in 1/km, g in m/s2, rho in g/cc
+        # and np.pi*1e7 s/yr
+        self.taus = self.taus*(1./np.pi)*1e8
         
         # the Lithosphere filter, sorted by wave number
-        #TODO reevaluate this term (48?)
-        self.alpha = (1.+((self.ak/0.062832)**4)*self.fr23*48)
+        # factor of 1e8 is for unit conversion
+        self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
         
         # Augment the decay times by the Lithosphere filter
         self.taus = self.taus/self.alpha                                       
