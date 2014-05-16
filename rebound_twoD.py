@@ -57,6 +57,7 @@ def perform_convolution(earth, ice, out_times=[0], t_rel=0, verbose=False):
 
     if verbose: print 'Convolution time: {0}s'.format(time.clock()-time_start)
 
+    # Correctly grid the uplift array by removing the fourier padding
     return uplift[:,:np.ceil(res*ice.shape[0]), :np.ceil(res*ice.shape[1])]
     
 def interp3d_emergence(uplift, data, out_times, verbose=False):
@@ -76,11 +77,9 @@ def interp3d_emergence(uplift, data, out_times, verbose=False):
     """
     time_start = time.clock()
     ##########################################
-    # STUFF TO FIX HEEEEEEERE!!!!!!!!!!!!!
-    #N = np.shape(uplift)[-1]    
+    # STUFF TO FIX HEEEEEEERE!!!!!!!!!!!!!  
     N = uplift[0].shape
-    # TODO These should be gotten from somewhere, right? uplift.grid??
-    #X = np.arange(0, 4910000, 10000) ; Y = np.arange(0, 4710000, 10000)    
+    # TODO These should be gotten from somewhere, right? uplift.grid?? 
     X = np.linspace(0, 4900000, num=N[1], endpoint=True)
     Y = np.linspace(0, 4700000, num=N[0], endpoint=True)
     ##########################################
@@ -110,6 +109,25 @@ def interp3d_emergence(uplift, data, out_times, verbose=False):
 
     return calc_vector
 
+def interp_tilt(uplift, data, out_times, basemap, verbose=False):
+    time_start = time.clock()
+
+    ##########################################
+    # STUFF TO FIX HEEEEEEERE!!!!!!!!!!!!!  
+    N = uplift[0].shape
+    # TODO These should be gotten from somewhere, right? uplift.grid?? 
+    X = np.linspace(0, 4900000, num=N[1], endpoint=True)
+    Y = np.linspace(0, 4700000, num=N[0], endpoint=True)
+    ##########################################
+
+    Lon, Lat = basemap(*np.meshgrid(X, Y), inverse=True)
+
+    tilt = calc_tilts(uplift[np.where(out_times==13)[0][0]], Lon, Lat)
+
+    interp_func = RectBivariateSpline(X, Y, tilt.T)
+    calc_vector = interp_func.ev(data.locs[:,0], data.locs[:,1])
+
+    return calc_vector
 
 def rebound_2d_taus_res(taus, earth, ice, emerge_data, verbose=False):
     time_start = time.clock()
@@ -158,12 +176,23 @@ def rebound_2d_earth_res(params, earth, ice, emerge_data, esl=None, verbose=Fals
     
     sig = 0.1*np.array(emerge_data.long_data)
 
-    return (calc_vector-emerge_data.long_data)/10
+    return (calc_vector-emerge_data.long_data)#/10
+
+def tilt_2d_earth_res(params, earth, ice, tilt_data, basemap):
+    out_times = np.linspace(15, 0, 16)
+
+    earth.reset_params(*params)
+
+    uplift = perform_convolution(earth, ice, out_times)
+    calc_vector = interp_tilt(uplift, tilt_data, out_times, basemap)
+
+    return (calc_vector-tilt_data.long_data)/1.
+
    
-def jacobian(xs, func, eps_f=5e-11):
+def jacobian(xs, func, args, eps_f=5e-11):
     jac = []
+    xs = np.asarray(xs)
     for i, x in enumerate(xs):
-        xs = np.asarray(xs)
         # Determine the separation to use
         # Optimal one-pt separation is (eps_f*f/f'')^(1/2) ~ sqrt(eps_f)*x
         # Optimal two-pt separation is (eps_f*f/f''')^(1/3) ~ cbrt(eps_f)*x
@@ -174,8 +203,8 @@ def jacobian(xs, func, eps_f=5e-11):
         # One-pt
         #f1 = rebound_2d_earth_res(xs...)
         # Two-pt
-        f1 = func(xs-h)
-        f2 = func(xs+h)
+        f1 = func(xs-h, *args)
+        f2 = func(xs+h, *args)
 
         # Difference
         # One-pt
@@ -186,6 +215,14 @@ def jacobian(xs, func, eps_f=5e-11):
     # put them together
     jac = np.asarray(jac)
     return jac
+
+def jacobian_emerge(xs, earth, ice, data, esl):
+    args = [earth, ice, data, esl]
+    return jacobian(xs, rebound_2d_earth_res, args).T
+
+def jacobian_tilt(xs, earth, ice, data, basemap):
+    args = [earth, ice, data, basemap]
+    return jacobian(xs, tilt_2d_earth_res, args).T
     
 def open_everything():
     ice = icehistory.load(u'./IceModels/eur_ice.p')
@@ -195,17 +232,38 @@ def open_everything():
     return ice, earth, europe_data
 
 def calc_tilts(uplift, Lon, Lat, r=6371):
-    # central difference in lat and lon, throw out edges
-    du_lat = uplift[2:, 1:-1]-uplift[:-2, 1:-1]
-    du_lon = uplift[1:-1, 2:]-uplift[1:-1, :-2]
+    """Calculate the gradient magnitude of an uplift plane.
     
-    dLat = (Lat[2:, 1:-1]-Lat[:-2, 1:-1])
-    dLon = (Lon[1:-1, 2:]-Lon[1:-1, :-2])
+    Uses two-point central difference in the body and one-point difference
+    along the edges.
 
-    # dLon, dLat = np.meshgrid(dlon, dlat)
-    # convert from degrees to kilometers 
-    dX = dLon*r*np.pi/180*np.cos(Lat[1:-1, 1:-1]*np.pi/180)
-    dY = dLat*r*np.pi/180
+    Parameters
+    ----------
+    uplift
+    """
+
+    # central difference in lat and lon, throw out edges
+    ushape = uplift.shape[-2:]
+    du_lat = np.zeros(ushape)
+    du_lon = np.zeros(ushape)
+    dX = np.zeros(ushape)
+    dY = np.zeros(ushape)
+
+    du_lat[1:-1, :] = uplift[2:, :]-uplift[:-2, :]
+    du_lat[0, :] = uplift[1, :]-uplift[0, :]
+    du_lat[-1, :] = uplift[-1, :]-uplift[-2, :]
+    
+    du_lon[:, 1:-1] = uplift[:, 2:]-uplift[:, :-2]
+    du_lon[:, 0] = uplift[:, 1]-uplift[:, 0]
+    du_lon[:, -1] = uplift[:, -1]-uplift[:, -2]
+
+    dX[:, 1:-1] = haversine(Lat[:, :-2], Lat[:, 2:], Lon[:, :-2], Lon[:, 2:])
+    dX[:, 0] = haversine(Lat[:, 0], Lat[:, 1], Lon[:, 0], Lon[:, 1])
+    dX[:, -1] = haversine(Lat[:, -2], Lat[:, -1], Lon[:, -2], Lon[:, -1])
+
+    dY[1:-1, :] = haversine(Lat[:-2, :], Lat[2:, :], Lon[:-2, :], Lon[2:, :])
+    dY[0, :] = haversine(Lat[0, :], Lat[1, :], Lon[0, :], Lon[1, :])
+    dY[-1, :] = haversine(Lat[-2, :], Lat[-1, :], Lon[-2, :], Lon[-1, :])
 
     # derivatives with respect to lon/lat
     du_lon_dx = du_lon/dX
@@ -214,6 +272,18 @@ def calc_tilts(uplift, Lon, Lat, r=6371):
     tilt = np.sqrt(du_lon_dx**2+du_lat_dy**2)
 
     return tilt
+
+def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
+    """Calculate the distance bewteen two sets of lat/lon pairs.
+    """
+    if not radians:
+        lat1, lat2, lon1, lon2 = np.radians([lat1, lat2, lon1, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    ds = r*2*np.arcsin(np.sqrt(np.sin(dlat/2)**2 + 
+                        np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2))
+
+    return ds
 
 if __name__=='__main__':
     esl = gen_eustatic()
