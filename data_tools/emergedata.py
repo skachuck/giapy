@@ -4,6 +4,7 @@ This module includes procedures for importing and manipulating emergence data.
 
 import numpy as np
 import cPickle as pickle
+import time
 
 class EmergeData(object):
     """
@@ -11,16 +12,64 @@ class EmergeData(object):
     def __init__(self, data=[]):
 
         self.data = data     
-        self.long_data = []
-        self.long_time = []
-        self.locs = []
+        self.form_long_vectors()
         
     def __getitem__(self, key):
         return self.data.__getitem__(key)
         
     def __iter__(self):
         return self.data.__iter__()
+
+    def interp(self, simobject, verbose=False):
+        """Interpolate uplift surfaces (xyz data at a specific t) to data
+        locations (non-grid) and data times (between times calculated). 
         
+        Uses progressive linear interpolations: first the uplift at each 
+        outputted time is interpolated to the data locations in data.locs, 
+        then they are interpolated to the data times in each location.
+        
+        Parameters
+        ----------
+        simobject 
+        """
+        time_start = time.clock()
+        
+        # Extract attributes from simobject
+        uplift = simobject.uplift
+        out_times = simobject.out_times
+        grid = simobject.grid
+
+        # interp_data will be an array of size (N_output_times, N_locations)
+        # for use in interpolating the calculated emergence to the locations
+        # and times at which there are data in data
+        interp_data = []
+        # Interpolate the calculated uplift at each time on the Lat-Lon grid
+        # to the data locations.
+        for uplift_at_a_time in uplift:
+            interp_func = grid.create_interper(uplift_at_a_time.T)
+            interp_data.append(interp_func.ev(self.locs[:,0], self.locs[:,1]))
+        interp_data = np.array(interp_data).T
+        
+        calc_vector = []
+        # Interpolate the calculated uplifted at each time and data location
+        # to the times of the data location.
+        for interp, loc in zip(interp_data, self.data):
+            calc_vector.append(np.interp(loc['data_dict']['times'],
+            out_times[::-1], interp[::-1]))
+        
+        # flatten the array    
+        calc_vector = np.array([item for l in calc_vector for item in l])
+        
+        if verbose: 
+            print 'Interpolation time: {0}s'.format(time.clock()-time_start)
+    
+        return calc_vector
+
+    def residual(self, simobject, verbose=False):
+        calc_vector = self.interp(simobject, verbose)
+
+        return (calc_vector-self.long_data)/1.0
+
     def import_from_file(self, filename):
         """Reads emergence data from a file where it is stored in the form...
         
@@ -106,6 +155,7 @@ class EmergeData(object):
             self.locs.append([lon, lat])
             line = f.readline()                 # step on.
             
+        self.locs = np.array(self.locs)
         f.close()
         
     def form_long_vectors(self):
@@ -128,6 +178,7 @@ class EmergeData(object):
                 self.long_data.append(point)
             for point in loc['data_dict']['times']:
                 self.long_time.append(point)
+        self.locs = np.array(self.locs)
         
     def save(self, filename):
         """Save the EmergeData interface object, with empty data list
