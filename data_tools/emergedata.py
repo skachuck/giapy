@@ -120,19 +120,25 @@ class EmergeData(object):
             if recnbr < 400 or recnbr >= 500:
                 for i in range(int(num)):
                     line = np.array(f.readline().split('\t')[:2]).astype(np.float)
-                    times.append(line[0])
-                    self.long_time.append(line[0])
-                    emerg.append(line[1])
-                    self.long_data.append(line[1])
+                    if line[0] in times:
+                        pass
+                    else:
+                        times.append(line[0])
+                        self.long_time.append(line[0])
+                        emerg.append(line[1])
+                        self.long_data.append(line[1])
             else:
                 # Newer data were given time bounds to read in as well (we're 
                 # skipping them for now and reading in the most-likely time).
                 for i in range(int(num)):
                     line = np.array(f.readline().split('\t')[:5]).astype(np.float)
-                    times.append(line[0])
-                    self.long_time.append(line[0])
-                    emerg.append(line[3])
-                    self.long_data.append(line[3])
+                    if line[0] in times:
+                        pass
+                    else:
+                        times.append(line[0])
+                        self.long_time.append(line[0])
+                        emerg.append(line[3])
+                        self.long_data.append(line[3])
   
             # Post processing of data based on metadata
             if unit == 2: emerg = np.array(emerg)*0.3048          # ft -> m
@@ -145,14 +151,25 @@ class EmergeData(object):
             data['emerg']=emerg
             data['error']=[]  
             
-            # Form the dictionary entry for this location
-            self.data.append(dict(zip(['lat', 'lon', 'year', 'desc', 'comm', 
-                                        'auth', 'tect', 'tectup', 'age', 
-                                        'recnbr', 'data_dict'], 
-                                        [lat, lon, int(year), desc, comm, 
-                                        auth, int(tect), tectup, int(age), 
-                                        int(recnbr), data])))
-            self.locs.append([lon, lat])
+            badpts = [137, 41, 232, 234, 230, 231, 228, 229, 235, 236, 310,
+                        200, 183, 318, 319, 320, 295, 296]
+
+            # ignore bad pts
+            if int(recnbr) in badpts: 
+                pass
+            # and pts whose locations are already in
+            elif [lon, lat] in self.locs:
+                print ('Recnbr {0} at [{1}, {2}] is a duplicate loc'\
+                        .format(recnbr, lon, lat))
+            else:
+                # Form the dictionary entry for this location
+                self.data.append(dict(zip(['lat', 'lon', 'year', 'desc', 'comm', 
+                                            'auth', 'tect', 'tectup', 'age', 
+                                            'recnbr', 'data_dict'], 
+                                            [lat, lon, int(year), desc, comm, 
+                                            auth, int(tect), tectup, int(age), 
+                                            int(recnbr), data])))
+                self.locs.append([lon, lat])
             line = f.readline()                 # step on.
             
         self.locs = np.array(self.locs)
