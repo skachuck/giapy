@@ -113,7 +113,7 @@ def exp_decay_const(earth, i, j):
     
     Returns
     -------
-    tau - the exponential decay constant for harmonic load i,j
+    tau - the exponential decay constant for harmonic load i,j, in yrs
     
     The resulting decay, dec(i, j) = 1-np.exp(elapsed_time * 1000./tauc(i, j)),
     along with lithospheric filter can be returned using earth.get_resp.
@@ -195,7 +195,7 @@ class EarthTwoDBase(object):
         # Convert tau list to fft matrix
         taus = _list_to_fft_mat(self.taus, self.index, self.N)
         
-        resp = (1-np.exp(t_dur*1000/taus))/self.alpha
+        resp = (1-np.exp(t_dur/taus))/self.alpha
         return resp
 
     def set_N(self, N):
@@ -275,7 +275,7 @@ class EarthNLayer(EarthTwoDBase):
         self.index = range(len(self.ak))
         self.index.sort(key=self.ak.__getitem__)
         self.ak = self.ak[self.index]
-        self.taus = _UT2list(taus)[self.index]
+        self.taus = _UT2list(taus)[self.index]*1e-3     # and convert to kyrs
         
         # the Lithosphere filter, sorted by wave number
         # factor of 1e8 is for unit conversion
@@ -341,10 +341,10 @@ class EarthTwoLayer(EarthTwoDBase):
         self.ak = self.ak[self.index]
 
         self.taus = -2*self.u*self.ak/self.g/self.rho
-        # Unit conversion so result is in years:
+        # Unit conversion so result is in kyrs:
         # u in Pa s=kg/m s, ak in 1/km, g in m/s2, rho in g/cc
         # and np.pi*1e7 s/yr
-        self.taus = self.taus*(1./np.pi)*1e8
+        self.taus = self.taus*(1./np.pi)*1e5
 
         
         # the Lithosphere filter, sorted by wave number
@@ -423,10 +423,10 @@ class EarthThreeLayer(EarthTwoDBase):
         r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
 
         self.taus = -2*self.u1*self.ak/self.g/self.rho*r
-        # Unit conversion so result is in years:
+        # Unit conversion so result is in kyrs:
         # u in Pa s=kg/m s, ak in 1/km, g in m/s2, rho in g/cc
         # and np.pi*1e7 s/yr
-        self.taus = self.taus*(1./np.pi)*1e8
+        self.taus = self.taus*(1./np.pi)*1e5
         
         # the Lithosphere filter, sorted by wave number
         # factor of 1e8 is for unit conversion
