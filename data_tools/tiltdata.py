@@ -31,7 +31,7 @@ class TiltData(object):
     def residual(self, simobject, verbose=False):
         calc_vector = self.interp(simobject, verbose)
 
-        return (calc_vector-self.long_data)/0.1
+        return (calc_vector-self.long_data)/0.01
 
 def calc_tilts(uplift, Lon, Lat, r=6371):
     """Calculate the gradient magnitude of an uplift plane.
@@ -41,27 +41,34 @@ def calc_tilts(uplift, Lon, Lat, r=6371):
 
     Parameters
     ----------
-    uplift
+    uplift - the uplift at a single time.
+    Lon, Lat - the Lon/Lat meshgrid associated with the uplift array.
     """
 
-    # central difference in lat and lon, throw out edges
+    if uplift.shape != Lon.shape != Lat.shape:
+        raise ValueError('uplift {0}, Lon {1}, and Lat {2} must all have same\
+                            shape'.format(uplift.shape, Lon.shape, Lat.shape))
+
+    # intialize arrays to shape of one uplift plane
     ushape = uplift.shape[-2:]
     du_lat = np.zeros(ushape)
     du_lon = np.zeros(ushape)
     dX = np.zeros(ushape)
     dY = np.zeros(ushape)
 
-    du_lat[1:-1, :] = uplift[2:, :]-uplift[:-2, :]
-    du_lat[0, :] = uplift[1, :]-uplift[0, :]
-    du_lat[-1, :] = uplift[-1, :]-uplift[-2, :]
-    
-    du_lon[:, 1:-1] = uplift[:, 2:]-uplift[:, :-2]
-    du_lon[:, 0] = uplift[:, 1]-uplift[:, 0]
-    du_lon[:, -1] = uplift[:, -1]-uplift[:, -2]
+    # differences in horizontal (longitudinal) direction
+    du_lon[:, 1:-1] = uplift[:, 2:]-uplift[:, :-2]  # body
+    du_lon[:, 0] = uplift[:, 1]-uplift[:, 0]        # left
+    du_lon[:, -1] = uplift[:, -1]-uplift[:, -2]     # right
 
     dX[:, 1:-1] = haversine(Lat[:, :-2], Lat[:, 2:], Lon[:, :-2], Lon[:, 2:])
     dX[:, 0] = haversine(Lat[:, 0], Lat[:, 1], Lon[:, 0], Lon[:, 1])
     dX[:, -1] = haversine(Lat[:, -2], Lat[:, -1], Lon[:, -2], Lon[:, -1])
+
+    # differences in vertical (latitudinal) direction
+    du_lat[1:-1, :] = uplift[2:, :]-uplift[:-2, :]  # body
+    du_lat[0, :] = uplift[1, :]-uplift[0, :]        # bottom
+    du_lat[-1, :] = uplift[-1, :]-uplift[-2, :]     # top
 
     dY[1:-1, :] = haversine(Lat[:-2, :], Lat[2:, :], Lon[:-2, :], Lon[2:, :])
     dY[0, :] = haversine(Lat[0, :], Lat[1, :], Lon[0, :], Lon[1, :])
@@ -70,7 +77,7 @@ def calc_tilts(uplift, Lon, Lat, r=6371):
     # derivatives with respect to lon/lat
     du_lon_dx = du_lon/dX
     du_lat_dy = du_lat/dY
-    # convert to derivaties with respect to km
+    # calculate magnitude of gradient vectors
     tilt = np.sqrt(du_lon_dx**2+du_lat_dy**2)
 
     return tilt

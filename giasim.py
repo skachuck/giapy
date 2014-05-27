@@ -2,20 +2,16 @@ import numpy as np
 import time
 
 class GiaSim(object):
-    """
-    # Set up the simulation with earth and ice model (and grid?)
-    simulation = GiaSim(earth, ice)
-    
-    simulation.add_data(emerge_data)
-    simulation.add_data(tilt_data)
-    
-    simulation.calc_residual(params)
-        perform_convolution -> store uplift
-        send uplift, out_times, grid to data objects
-        for data_source in data objects:
-            res = data objects.interpolate(simulation.uplift, etc.
-        put residuals together
-        return residuals
+    """Calculate and store Glacial Isostacy Simulation results, and compare
+    with data. Must be called with an earth model (earth), an ice model (ice)
+    and a grid (grid). To add a data source to be used in residual finding and
+    interpolation, use GiaSim.attach_data.
+
+    Parameters
+    ----------
+    earth - the earth model to be used in the simulation
+    ice - the ice model to be used in the simulation
+    grid - the map associated with the earth and ice models
     """
     
     def __init__(self, earth, ice, grid):
@@ -27,12 +23,28 @@ class GiaSim(object):
     def attach_data(self, data):
         self.datalist.append(data)
 
+    def reset_data(self):
+        self.datalist = []
+
+    def remove_data(self, data):
+        self.datalist.remove(data)
+
+    def attach_esl(self, esl):
+        self.esl = esl
+
+    def set_out_times(self, out_times):
+        self.out_times = out_times
+
     def residuals(self, xs, verbose=False):
+        """Calculate the residuals associated with stored data sources and
+        earth parameters xs.
+        """
         if not self.datalist:
             raise StandardError('self.datalist is empty. Use self.attach_data.')
         
         self.earth.reset_params(*xs)
         self.perform_convolution()
+        if hasattr(self, 'esl'): self.mw_corr()
         res = []
 
         for data in self.datalist:
@@ -41,6 +53,9 @@ class GiaSim(object):
         return np.concatenate(res)
 
     def jacobian(self, xs, eps_f=5e-11):
+        """Calculate the jacobian associated with stored data sources and
+        parameters xs, with function evaluation error eps_f (default 5e-11).
+        """
         jac = []
         xs = np.asarray(xs)
         for i, x in enumerate(xs):
@@ -69,12 +84,12 @@ class GiaSim(object):
 
     def perform_convolution(self, out_times=None, t_rel=0, verbose=False):  
         """Convolve an ice load and an earth response model in fft space.
+        Calculate the uplift associated with stored earth and ice model.
         
         Parameters
         ----------
-        earth - an object that has procedure earth.get_resp(t_dur)
-        ice - an obect that has ice.fft(), ice.times
-        out_times - an array of times at which to caluclate the convolution
+        out_times - an array of times at which to caluclate the convolution.
+                    (default is to use previously stored values).
         t_rel - the time relative to which uplift is considered (defaul present)
                 (None for no relative)
         """
@@ -128,3 +143,10 @@ class GiaSim(object):
         self.uplift = uplift[:, :shape[0], :shape[1]]
 
         if verbose: print 'Convolution time: {0}s'.format(time.clock()-time_start)
+
+    def mw_corr(self, esl=None):
+        """Apply the meltwater correction to transform uplift to emergence."""
+        self.esl = esl or self.esl
+            
+        eslcorr = self.esl(self.out_times)
+        self.uplift = self.uplift + eslcorr[:, np.newaxis, np.newaxis]   
