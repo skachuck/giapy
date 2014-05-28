@@ -10,7 +10,6 @@ class EmergeData(object):
     """
     """
     def __init__(self, data=[]):
-
         self.data = data     
         self.form_long_vectors()
         
@@ -19,6 +18,13 @@ class EmergeData(object):
         
     def __iter__(self):
         return self.data.__iter__()
+
+    def __len__(self):
+        return len(self.data)
+
+    def transform_locs(self, basemap, inverse=False):
+        xs, ys = basemap(self.locs[:,0], self.locs[:,1], inverse=inverse)
+        self.locs[:,0], self.locs[:,1] = xs, ys
 
     def interp(self, simobject, verbose=False):
         """Interpolate uplift surfaces (xyz data at a specific t) to data

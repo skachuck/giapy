@@ -1,6 +1,8 @@
 import numpy as np
 import time
 
+from scipy.stats import leastsq
+
 class GiaSim(object):
     """Calculate and store Glacial Isostacy Simulation results, and compare
     with data. Must be called with an earth model (earth), an ice model (ice)
@@ -34,6 +36,11 @@ class GiaSim(object):
 
     def set_out_times(self, out_times):
         self.out_times = out_times
+        
+    def leastsq(self, x0, full_output=0):
+        m = leastsq(self.residuals, x0, Dfun=self.jacobian, 
+                    col_deriv=1, full_output=1)
+        return m
 
     def residuals(self, xs, verbose=False):
         """Calculate the residuals associated with stored data sources and
@@ -80,7 +87,7 @@ class GiaSim(object):
 
         # put them together
         jac = np.asarray(jac)
-        return jac.T
+        return jac
 
     def perform_convolution(self, out_times=None, t_rel=0, verbose=False):  
         """Convolve an ice load and an earth response model in fft space.

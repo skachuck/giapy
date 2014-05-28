@@ -31,7 +31,7 @@ class TiltData(object):
     def residual(self, simobject, verbose=False):
         calc_vector = self.interp(simobject, verbose)
 
-        return (calc_vector-self.long_data)/0.01
+        return (calc_vector-self.long_data)/0.1
 
 def calc_tilts(uplift, Lon, Lat, r=6371):
     """Calculate the gradient magnitude of an uplift plane.
