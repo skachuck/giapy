@@ -1,7 +1,7 @@
 import numpy as np
 import time
 
-from scipy.stats import leastsq
+from scipy.optimize import leastsq
 
 class GiaSim(object):
     """Calculate and store Glacial Isostacy Simulation results, and compare
@@ -37,9 +37,10 @@ class GiaSim(object):
     def set_out_times(self, out_times):
         self.out_times = out_times
         
-    def leastsq(self, x0, full_output=0):
+    def leastsq(self, x0, priors=None, full_output=0):
+        self.priors = priors
         m = leastsq(self.residuals, x0, Dfun=self.jacobian, 
-                    col_deriv=1, full_output=1)
+                    col_deriv=1, full_output=full_output)
         return m
 
     def residuals(self, xs, verbose=False):
@@ -56,6 +57,9 @@ class GiaSim(object):
 
         for data in self.datalist:
             res.append(data.residual(self, verbose=verbose))
+        
+        if self.priors:
+            res.append((xs-self.priors[:,0])/self.priors[:,1]
 
         return np.concatenate(res)
 

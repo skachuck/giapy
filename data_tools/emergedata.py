@@ -6,12 +6,17 @@ import numpy as np
 import cPickle as pickle
 import time
 
+from scipy.interpolate import interp1d
+
+import giapy.data_tools as data_tools
+
 class EmergeData(object):
     """
     """
     def __init__(self, data=[]):
-        self.data = data     
+        self.data = data
         self.form_long_vectors()
+        self.W = None
         
     def __getitem__(self, key):
         return self.data.__getitem__(key)
@@ -73,8 +78,11 @@ class EmergeData(object):
 
     def residual(self, simobject, verbose=False):
         calc_vector = self.interp(simobject, verbose)
-
-        return (calc_vector-self.long_data)/1.0
+        res = calc_vector - self.long_data
+        if self.W is None:
+            return res/1.0
+        else:
+            return self.W.dot(res)
 
     def import_from_file(self, filename):
         """Reads emergence data from a file where it is stored in the form...
@@ -105,13 +113,18 @@ class EmergeData(object):
         self.long_data = []
         self.long_time = []
         self.locs = []
+
+        # Generate the c14 corrector
+        c14array = np.loadtxt(data_tools.C14TABLE, delimiter=',')
+        ind = np.argsort(c14array[:,1])
+        c14corr = interp1d(c14array[ind,1], c14array[ind,0])
         
         f = open(filename, 'r')                 # open the file,
         line = f.readline()                     # read the first line to initiate
         while line:                             # the while loop.
             # read off the metadata for the location
             lat, lon, year, num = np.array(line.split('\t')[:4]).astype(np.float)
-            unit, sign, typ, age, tect, tectup, recnbr = np.array(
+            unit, sign, typ, ageky, tect, tectup, recnbr = np.array(
                                     f.readline().split('\t')[:7]).astype(np.float)
             auth = f.readline().split('\t')[0]
             desc = f.readline().split('\t')[0]
@@ -124,27 +137,23 @@ class EmergeData(object):
             emerg = []
             data = {}
             if recnbr < 400 or recnbr >= 500:
-                for i in range(int(num)):
-                    line = np.array(f.readline().split('\t')[:2]).astype(np.float)
-                    if line[0] in times:
-                        pass
-                    else:
-                        times.append(line[0])
-                        self.long_time.append(line[0])
-                        emerg.append(line[1])
-                        self.long_data.append(line[1])
+                ncol = 2
+                ecol = 1
             else:
                 # Newer data were given time bounds to read in as well (we're 
                 # skipping them for now and reading in the most-likely time).
-                for i in range(int(num)):
-                    line = np.array(f.readline().split('\t')[:5]).astype(np.float)
-                    if line[0] in times:
-                        pass
-                    else:
-                        times.append(line[0])
-                        self.long_time.append(line[0])
-                        emerg.append(line[3])
-                        self.long_data.append(line[3])
+                ncol = 5
+                ecol = 3
+
+            for i in range(int(num)):
+                line = np.array(f.readline().split('\t')[:ncol]).astype(np.float)
+                if line[0] in times:
+                    pass
+                else:
+                    times.append(line[0])
+                    self.long_time.append(line[0])
+                    emerg.append(line[ecol])
+                    self.long_data.append(line[ecol])
   
             # Post processing of data based on metadata
             if unit == 2: emerg = np.array(emerg)*0.3048          # ft -> m
@@ -152,6 +161,18 @@ class EmergeData(object):
                 times = np.array(times)/1000.
                 sign = sign/10
             if sign == 1: times = -1*np.array(times)
+            
+            if ageky == 1:
+                pass
+            elif ageky == 2:
+                # 450 for ocean mixing
+                try:
+                    times = c14corr(np.asarray(times)*1000.+450)/1000.
+                except:
+                    print desc, recnbr, times
+                    raise
+            elif ageky == 5:
+                pass
             
             data['times']=times
             data['emerg']=emerg
@@ -165,15 +186,20 @@ class EmergeData(object):
                 pass
             # and pts whose locations are already in
             elif [lon, lat] in self.locs:
-                print ('Recnbr {0} at [{1}, {2}] is a duplicate loc'\
-                        .format(recnbr, lon, lat))
+                dupnbr = [loc['recnbr'] for loc in self.data 
+                            if loc['lon']==lon and loc['lat']==lat]
+                dupyr = [loc['year'] for loc in self.data 
+                            if loc['lon']==lon and loc['lat']==lat]
+                print ('Recnbr {0} at [{1}, {2}] is a duplicate loc with {3}'\
+                        .format(recnbr, lon, lat, dupnbr))
+                print ('    pubdates are {0} and {1}').format(year, dupyr)
             else:
                 # Form the dictionary entry for this location
                 self.data.append(dict(zip(['lat', 'lon', 'year', 'desc', 'comm', 
-                                            'auth', 'tect', 'tectup', 'age', 
+                                            'auth', 'tect', 'tectup', 'ageky', 
                                             'recnbr', 'data_dict'], 
                                             [lat, lon, int(year), desc, comm, 
-                                            auth, int(tect), tectup, int(age), 
+                                            auth, int(tect), tectup, int(ageky), 
                                             int(recnbr), data])))
                 self.locs.append([lon, lat])
             line = f.readline()                 # step on.
