@@ -9,6 +9,7 @@ import time
 from scipy.interpolate import interp1d
 
 import giapy.data_tools as data_tools
+from  giapy.data_tools.yearcalib import uncalib_bloom
 
 class EmergeData(object):
     """
@@ -113,6 +114,13 @@ class EmergeData(object):
         self.long_data = []
         self.long_time = []
         self.locs = []
+        
+        # A list of bad points
+        badpts = [137, 41, 203, 232, 234, 230, 231, 228, 229, 235, 236, 310,
+                        200, 183, 318, 319, 320, 295, 296,
+                        203, # Sabine high islands - uncertain age, high scatter
+                        300 # Malaysia - uncertain calibration
+                        ]
 
         # Generate the c14 corrector
         c14array = np.loadtxt(data_tools.C14TABLE, delimiter=',')
@@ -154,32 +162,38 @@ class EmergeData(object):
                     self.long_time.append(line[0])
                     emerg.append(line[ecol])
                     self.long_data.append(line[ecol])
-  
+
+            emerg = np.asarray(emerg)
+            times = np.asarray(times)
+            
+            if int(recnbr) in badpts:
+                line = f.readline()
+                continue
+
             # Post processing of data based on metadata
-            if unit == 2: emerg = np.array(emerg)*0.3048          # ft -> m
+            if unit == 2: emerg = emerg*0.3048          # ft -> m
             if sign >=10: 
-                times = np.array(times)/1000.
+                times = times/1000.
                 sign = sign/10
-            if sign == 1: times = -1*np.array(times)
+            if sign == 1: times = -1*times
             
             if ageky == 1:
                 pass
             elif ageky == 2:
-                # 450 for ocean mixing
                 try:
-                    times = c14corr(np.asarray(times)*1000.+450)/1000.
+                    times = c14corr(times*1000.)/1000.
                 except:
                     print desc, recnbr, times
                     raise
             elif ageky == 5:
-                pass
+                times = uncalib_bloom(times*1000.)/1000.
+                times = c14corr(times*1000.)/1000.
             
             data['times']=times
             data['emerg']=emerg
             data['error']=[]  
             
-            badpts = [137, 41, 232, 234, 230, 231, 228, 229, 235, 236, 310,
-                        200, 183, 318, 319, 320, 295, 296]
+
 
             # ignore bad pts
             if int(recnbr) in badpts: 
@@ -205,6 +219,7 @@ class EmergeData(object):
             line = f.readline()                 # step on.
             
         self.locs = np.array(self.locs)
+        self.form_long_vectors()
         f.close()
         
     def form_long_vectors(self):
