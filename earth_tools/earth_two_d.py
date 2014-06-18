@@ -381,7 +381,10 @@ class EarthThreeLayer(EarthTwoDBase):
         self.fr23 = fr23 or self.fr23
         self.h = h or self.h
         N = N or self.N
-        self.calc_taus(N)    
+        self.calc_taus(N)
+
+    def get_params(self):
+        return [self.u1, self.u2, self.fr23, self.h]
 
     def calc_taus(self, N):
         """Generate and store a list of exponential decay constants.

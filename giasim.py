@@ -16,11 +16,16 @@ class GiaSim(object):
     grid - the map associated with the earth and ice models
     """
     
-    def __init__(self, earth, ice, grid):
+    def __init__(self, earth, ice, grid, datalist=None):
        self.earth = earth
        self.ice = ice
        self.grid = grid
-       self.datalist = []
+
+       if data is not None:
+           for data in datalist:
+               self.datalist = datalist
+       else:
+           self.datalist = []
 
     def attach_data(self, data):
         self.datalist.append(data)
@@ -37,20 +42,40 @@ class GiaSim(object):
     def set_out_times(self, out_times):
         self.out_times = out_times
         
-    def leastsq(self, x0, priors=None, full_output=0):
+    def leastsq(self, x0, argdict=None, priors=None, full_output=0, 
+                    save_params=False, save_chi2=False):
         self.priors = priors
-        m = leastsq(self.residuals, x0, Dfun=self.jacobian, 
+
+       if save_params:
+           self.old_params = []
+       else:
+           self.old_params = None
+
+       if save_chi2:
+           self.old_chi2 = []
+       else:
+           self.old_chi2 = None
+
+        m = leastsq(self.residuals, x0, args=(argdict,), Dfun=self.jacobian, 
                     col_deriv=1, full_output=full_output)
         return m
 
-    def residuals(self, xs, verbose=False):
+    def residuals(self, xs, argdict=None, verbose=False):
         """Calculate the residuals associated with stored data sources and
         earth parameters xs.
         """
         if not self.datalist:
             raise StandardError('self.datalist is empty. Use self.attach_data.')
-        
-        self.earth.reset_params(*xs)
+
+        if self.old_params is not None:
+            self.old_params.append(self.earth.get_params())
+
+        if argdict is None:
+            self.earth.reset_params(*xs)
+        else:
+            params = dict(zip(argdict, xs))
+            self.earth.reset_params(**params)
+
         self.perform_convolution()
         if hasattr(self, 'esl'): self.mw_corr()
         res = []
@@ -59,11 +84,15 @@ class GiaSim(object):
             res.append(data.residual(self, verbose=verbose))
         
         if self.priors:
-            res.append((xs-self.priors[:,0])/self.priors[:,1]
+            res.append((xs-self.priors[:,0])/self.priors[:,1])
 
-        return np.concatenate(res)
+        res = np.concatenate(res)
+        if self.old_chi2 is not None:
+            self.old_chi2.append(res.dot(res))
 
-    def jacobian(self, xs, eps_f=5e-11):
+        return res
+
+    def jacobian(self, xs, argdict=None, eps_f=5e-11):
         """Calculate the jacobian associated with stored data sources and
         parameters xs, with function evaluation error eps_f (default 5e-11).
         """
@@ -80,8 +109,8 @@ class GiaSim(object):
             # One-pt
             #f1 = rebound_2d_earth_res(xs...)
             # Two-pt
-            f1 = self.residuals(xs-h)
-            f2 = self.residuals(xs+h)
+            f1 = self.residuals(xs-h, argdict)
+            f2 = self.residuals(xs+h, argdict)
 
             # Difference
             # One-pt

@@ -176,24 +176,24 @@ class EmergeData(object):
                 times = times/1000.
                 sign = sign/10
             if sign == 1: times = -1*times
-            
-            if ageky == 1:
-                pass
-            elif ageky == 2:
-                try:
-                    times = c14corr(times*1000.)/1000.
-                except:
-                    print desc, recnbr, times
-                    raise
-            elif ageky == 5:
-                times = uncalib_bloom(times*1000.)/1000.
-                times = c14corr(times*1000.)/1000.
+           
+                # Correction for time calibration
+            #if ageky == 1:
+            #    pass
+            #elif ageky == 2:
+            #    try:
+            #        times = c14corr(times*1000.)/1000.
+            #    except:
+            #        print desc, recnbr, times
+            #        raise
+            #elif ageky == 5:
+            #    times = uncalib_bloom(times*1000.)/1000.
+            #    times = c14corr(times*1000.)/1000.
             
             data['times']=times
             data['emerg']=emerg
             data['error']=[]  
             
-
 
             # ignore bad pts
             if int(recnbr) in badpts: 
