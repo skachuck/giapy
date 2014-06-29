@@ -1,13 +1,19 @@
 import numpy as np
 import numpy.fft as fft 
 import re
+
 from urllib2 import urlopen, HTTPError
 from scipy.signal import get_window
+from scipy.stats import pearsonr
 
 class RLR(np.ndarray):
     """Download a Revised Local Reference for sea level from the PSMSL.
-
     
+    Data is stored as an ndarray
+    Data can be read from either monthly or annual records
+
+    Reference
+    ---------
     Simon J. Holgate, Andrew Matthews, Philip L. Woodworth, Lesley J. Rickards,
     Mark E. Tamisiea, Elizabeth Bradshaw, Peter R. Foden, Kathleen M. Gordon,
     Svetlana Jevrejeva, and Jeff Pugh (2013) New Data Systems and Products at
@@ -19,6 +25,7 @@ class RLR(np.ndarray):
         if typ not in ['monthly', 'annual']:
             raise ValueError("typ must be 'monthly' or 'annual'")
         
+        # the data array
         _url = 'http://www.psmsl.org/data/obtaining/rlr.'+typ+'.data/'
         try:
             _response = urlopen(_url+str(num)+'.rlrdata')
@@ -31,6 +38,7 @@ class RLR(np.ndarray):
             converters = None
         _data = np.loadtxt(_response, delimiter=';', converters=converters)
 
+        # the metadata
         _murl = 'http://www.psmsl.org/data/obtaining/stations/'
         _meta = urlopen(_murl+str(num)+'.php')
         _txt = _meta.read()
@@ -42,8 +50,8 @@ class RLR(np.ndarray):
                     re.findall('<td>.*?</td>', row, flags=re.DOTALL)]
                     for row in _rows]
 
-        if _table[3][0] in ['GLOSS ID', 'GLOSS ID:']:
-            _metadata = {'sitename' : _sitename,
+        if _table[3][0] in ['GLOSS ID', 'GLOSS ID:']:       # some locs have a
+            _metadata = {'sitename' : _sitename,            # gloss id
                          'stid' : int(_table[0][1]),
                          'lat'  : float(_table[1][1]),
                          'lon'  : float(_table[2][1]),
@@ -58,7 +66,7 @@ class RLR(np.ndarray):
                          'update' : _table[10][1],
                          'type' : typ
                          }
-        else:
+        else:                                               # some don't
             _metadata = {'sitename' : _sitename,
                          'stid' : int(_table[0][1]),
                          'lat'  : float(_table[1][1]),
@@ -74,6 +82,7 @@ class RLR(np.ndarray):
                          'type' : typ
                          }
         
+        # store indices of time where data are absent
         _inds = np.where(_data[:,1]!=-99999)[0]
 
         obj = np.asarray(_data).view(cls)
@@ -85,20 +94,26 @@ class RLR(np.ndarray):
     def __array_finalize__(self, obj):
         if obj is None: return
         self.metadata = getattr(obj, 'metadata', None)
+        self.inds = getattr(obj, 'inds', None)
 
-    def __str__(self):
+    def __str__(self):max(filt1[:,0].min(),
         return 'RLR( {0}, {1} )'.format(self.metadata['sitename'],
                         self.metadata['type'])
 
     def trend(self):
+        """Calculate the best linear fit for data, return at data times.
+        """
         inds = self.inds
         A = np.array([self[inds,0], np.ones(len(inds))])
         w = np.linalg.lstsq(A.T, self[inds,1])[0]
         return w[0]*self[:,0]+w[1]
 
     def detrended(self):
-        result = self[self.inds,:]
-        result[:,1] = result[:,1]-self.trend()[self.inds, :]
+        """Remove the linear trend from the RLR data.
+        """
+        inds = self.inds
+        result = self.copy()#[self.inds,:]
+        result[inds,1] = result[inds,1]-self.trend()[inds]#[self.inds, :]
         return result
 
     def window_filter(self, window):
@@ -111,20 +126,76 @@ class RLR(np.ndarray):
         else:
             d = 1
         
-        result = self[self.inds,:]
+        inds = self.inds
+        result = self.copy()#[self.inds,:]
 
         fs = fft.fftshift(fft.fftfreq(len(self.inds), d=d))
-        self_fft = fft.fftshift(fft.fft(self.detrended()[:, 1]))
-        win = get_window(window, len(self.inds))
-        result[:,1] = fft.ifft(fft.ifftshift(win*self_fft))
-        result[:,1] = result[:,1] + self.trend()[self.inds]
+        self_fft = fft.fftshift(fft.fft(self.detrended()[inds, 1]))
+        win = get_window(window, len(inds))
+        result[inds,1] = fft.ifft(fft.ifftshift(win*self_fft))
+        result[inds,1] = result[inds,1] + self.trend()[inds]#[self.inds]
+
+        return result
+
+    def runavg_filter(self, w, nmiss=0, trimmed=True, align='left'):
+        """Computes the running average of w samples.
+
+        When a gap occurs in the data, it is given zero weight in the filter,
+        and the weighting is renormalized. Thus, some gaps can be filled. If
+        the gap cannot be filled, it is flagged as missing.
+
+        Mitchum 1987 (cited by Clarke 1992)
+        """
+        result = self.copy()
+
+        if nmiss<0:
+            raise ValueError('nmiss must be non-negative')
+
+        if align=='left':
+            start = w
+            finish = self.shape[0]
+        elif align=='cent':
+            start = w/2
+            finish = self.shape[0]-w/2
+        elif align=='right':
+            start = 0
+           max(filt1[:,0].min(), finish = self.shape[0]-w
+
+        for i in range(start, finish):
+            if align=='left':
+                block = self[i-w:i, 1]
+            elif align=='cent':
+                block = self[i-w/2:i+w/2, 1]
+            elif align=='right':
+                block = self[i:i+w, 1]
+            block = block[block!=-99999]
+            if len(block)<=nmiss: 
+                result[i, 1] = -99999
+            else:
+                result[i, 1] = block.mean()
+                    
+        # reset the data not absent indices
+        if trimmed: 
+            if align=='left':
+                result = result[w:,:]
+            elif align=='cent':
+                result = result[w/2:-w/2,:]
+            elif align=='right':
+                result = result[:-w,:]
+
+        result.inds = np.where(result[:,1]!=-99999)[0]
+        return result
+
+    def time_filter(self, tmin, tmax):
+        filtinds = np.where(np.logical_and(self[:,0]>tmin, self[:,0]<=tmax))
+        result = self[filtinds]
+        # correct data not absent indices
+        result.inds = np.where(result[:,1]!=-99999)[0]
 
         return result
 
     def plot(self, ax, *args, **kwargs):
         ax.plot(self[self.inds, 0], self[self.inds, 1], *args, **kwargs)
-        ax.set_ylabel('mm')
-        ax.set_xlabel('year')
         return ax
 
 class RSLData(object):
@@ -135,7 +206,16 @@ class RSLData(object):
         elif data is not None:
             self.data = data
 
-    def download(nbrs):
+    def __getitem__(self, key):
+        return self.data.__getitem__(key)
+        
+    def __iter__(self):
+        return self.data.__iter__()
+
+    def __len__(self):
+        return len(self.data)
+
+    def download(self, nbrs):
         for n in nbrs:
             try:
                 loc = RLR(n)
@@ -156,7 +236,7 @@ class RSLData(object):
         
 
 def argmaxcontsect(inds):
-    """Given indices, returns start index and endindex for largest continuous
+    """Given indices, returns start index and end index for largest continuous
     section
     """
     diff = inds[1:]-inds[:-1]
@@ -174,30 +254,20 @@ def argmaxcontsect(inds):
 
     return inds[imax], inds[imax+cumsummax]
 
+def corrcoef(loc1, loc2, shift=0):
+    """Calculate the correlation between two RLR locations. Can shift one
+    location in time by shift keyword.
+    """
 
-class CosSinEstimator(object):
-    def __init__(self, ts, ys, fs):
-        self.fs = fs
-        
-        Ts, Fs = np.meshgrid(ts, fs)
+    filt1 = loc1.copy()
+    filt2 = loc2.copy()
 
-        c0 = np.ones(len(ts))[:, np.newaxis].T
-        coss = np.cos(2*np.pi*Ts*Fs)
-        sins = np.sin(2*np.pi*Ts*Fs)
+    filt1[:,0] += shift 
+    
+    maxyr = min(filt1[:,0].max(), filt2[:,0].max())
+    minyr = max(filt1[:,0].min(), filt2[:,0].min())
+    filt1 = filt1.time_filter(minyr, maxyr)
+    filt2 = filt2.time_filter(minyr, maxyr)
 
-        G = np.concatenate([c0, ts[:,np.newaxis].T, coss, sins]).T
-
-        self.ms = linalg.inv(G.T.dot(G)).dot(G.T).dot(ys)
-
-    def __call__(self, ts):
-        
-        Ts, Fs = np.meshgrid(ts, self.fs)
-
-        c0 = np.ones(len(ts))[:, np.newaxis].T
-        coss = np.cos(2*np.pi*Ts*Fs)
-        sins = np.sin(2*np.pi*Ts*Fs)
-
-        G = np.concatenate([c0, ts[:,np.newaxis].T, coss, sins]).T
-
-        return G.dot(self.ms)
-        
+    inds = np.intersect1d(filt1.inds, filt2.inds)
+    return pearsonr(filt1[inds,1], filt2[inds,1])[0]
