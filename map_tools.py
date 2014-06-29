@@ -3,30 +3,9 @@ from scipy.interpolate import RectBivariateSpline
 
 # Grid Interpolation
 
-# Needs a basemap.Basemap object, m
-"""
-Lon, Lat = m(X, Y, inverse=True)
-
-X, Y = m(Lon, Lat)
-
-x = np.linspace(0, 4900000, num=491, endpoint=True)
-y = np.linspace(0, 4700000, num=471, endpoint=True)
-
-X, Y = np.meshgrid(x, y)
-
-europe = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}
-
-lon = np.linspace(europe['lonmin'], europe['lonmax'], nlon)
-lat = np.linspace(europe['latmin'], europe['latmax'], nlat)
-
-Lon_interp, Lat_interp = np.meshgrid(lon, lat)
-X_interp, Y_interp = m(Lon_interp, Lat_interp) 
-
-interpolator = RectBivariateSpline(x, y, uplift)
-
-uplift_interp = interpolator(X_interp, Y_interp)
-"""
 class GridObject(object):
+    """
+    """
     def __init__(self, basemap, shape=None):
         self.basemap = basemap
 

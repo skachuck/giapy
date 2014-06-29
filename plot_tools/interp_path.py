@@ -2,6 +2,8 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 import matplotlib.pyplot as plt
 
+from giapy.map_tools import haversine
+
 class TransectPath(object):
     """Simple container for a transects xs, ys, and distances along, ds"""
     def __init__(self, xs, ys, ds):
@@ -29,13 +31,9 @@ def sphere_path(p0, p1, n=50, r=6371):
     lons = np.linspace(p0[0], p1[0], n)
     lats = p0[1]+m*(lons-p0[0])
     
-    dlons = lons[1:]-lons[:-1]
-    dlats = lats[1:]-lats[:-1]
-    
+    # Now get the distances along that line
     dds = np.zeros(n)
-    # The Haversine formula, consider using the Vincenty formula for antipodes
-    dds[1:] = r*2*np.arcsin(np.sqrt(np.sin(dlats/2)**2 + 
-            np.cos(lats[1:])*np.cos(lats[:-1])*np.sin(dlons/2)**2))
+    dds[1:] = haversine(lats[:-1], lats[1:], lons[:-1], lons[1:])
     
     # Sum up distances along the path
     ds = dds        
@@ -44,22 +42,18 @@ def sphere_path(p0, p1, n=50, r=6371):
     
     return TransectPath(lons, lats, ds)
     
-def map_path(p0, p1, m, n=50, lonlat=False):
+def map_path(p0, p1, m, n=50, lonlat=False, r=None):
     # get the lons and lats along a great circle between p0 and p1 that are
     # equally spaced on the projection of m
     lons, lats = m(*m.gcpoints(p0[0], p0[1], p1[0], p1[1], n), inverse=True)
     
     lons = np.asarray(lons)
     lats = np.asarray(lats)
-    
-    dlons = lons[1:]-lons[:-1]
-    dlats = lats[1:]-lats[:-1]
-    
+
     # Now get the distances along that line
+    r = r or m.rmajor
     dds = np.zeros(n)
-    # The Haversine formula, consider using the Vincenty formula for antipodes
-    dds[1:] = m.rmajor*2*np.arcsin(np.sqrt(np.sin(dlats/2)**2 + 
-            np.cos(lats[1:])*np.cos(lats[:-1])*np.sin(dlons/2)**2))
+    dds[1:] = haversine(lats[:-1], lats[1:], lons[:-1], lons[1:], r)
     
     # Sum up distances along the path
     ds = dds 
@@ -100,3 +94,12 @@ def transect_with_inset_context(X, Y, Z, **kw):
     insetax = fig.add_axes([0.15, 0.60, 0.25, 0.25])
     insetax.contourf(X, Y, Z)
     insetax.plot(path.xs, path.ys)
+
+def point2line(xp, x0, x1):
+    """Project points xp onto a line defined by endpoints x0 and x1
+    """
+    l = x1-x0
+    lhat = l/np.sqrt(l.dot(l))
+    r = xp-x0
+    xc = x0+(r[:, np.newaxis].dot(lhat))*lhat
+    return xc

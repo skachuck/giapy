@@ -1,5 +1,7 @@
 """Module data define regular areas for plots"""
 
+from mpl_toolkits.basemap import Basemap
+
 sval = {'latmin':76, 'latmax':81, 'lonmin':10, 'lonmax':30}
 nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}
 namc = {'latmin':30, 'latmax':50, 'lonmin':-80, 'lonmax':-50}
