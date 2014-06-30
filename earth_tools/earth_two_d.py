@@ -159,14 +159,14 @@ def exp_decay_const(earth, i, j):
     # form the final solution
     cc = np.sum(cc, axis=0)
     
-    # As cc[1] gives the surface velocity, the exponential time constant is its
-    # reciprocal (see Cathles 1975, p43)
+    # As cc[1] gives the surface velocity, the exponential time constant is 
+    # its reciprocal (see Cathles 1975, p43)
     # 1955600 = 2/rho (~3.313) /g (~9.8) * (1/pi*1e8) unit conversion to years
     tau = 1955600.*ak/cc[1]
     
     return tau
 
-class EarthTwoDBase(object):
+class FlatEarthBase(object):
     """A Base class for 2D, flat earth models. Provides methods for saving,
     adding descriptions, and returning response.
 
@@ -201,7 +201,7 @@ class EarthTwoDBase(object):
     def set_N(self, N):
         self.N = N
 
-class EarthNLayer(EarthTwoDBase):
+class EarthNLayer(FlatEarthBase):
     """Return the isostatic response of a 2D earth with n viscosity layers.
     
     The response is calculated from a viscous profile overlain by an elastic
@@ -219,24 +219,35 @@ class EarthNLayer(EarthTwoDBase):
         else:
             self.d = d
             
+        self.NLayers = len(self.u)
         self.fr23=fr23
         self.g=g
         self.rho=rho
                 
-    def reset_params(self, mant_vis=None, asth_vis=None, asth_thi=None,
-                    fr23=None, N=None):
+    def reset_params_list(self, params, arglist):
         """Set the full mantle rheology and calculate the decay constants.
 
         self.N must have been set already.
         """
-        
-        if mant_vis is not None:
-            # Assumes last element is asthenosphere viscosity
-            self.u[:-1] = np.repeat(mant_vis, len(self.u[:-1]))
-        if asth_vis is not None:
-            self.u[-1] = asth_vis
-        if asth_thi is not None:
-            self.d[-1] = asth_thi
+        us = ds = fr23 = N = None
+        i=0
+        if 'us' in arglist:
+            us = params[i:i+self.NLayers]
+            i += self.NLayers
+        if 'ds' in arglist:
+            ds = params[i:i+self.NLayers]
+            i += self.NLayers
+        if 'fr23' in arglist:
+            fr23 = params[i]
+            i += 1
+        if 'N' in arglist:
+            N = params[i]
+
+       self.reset_params(us, ds, fr23, N)
+    
+    def reset_params(self, us=None, ds=None, fr23=None, N=None):       
+        if us is not None: self.u = us
+        if ds is not None: self.d = ds
         self.fr23 = fr23 or self.fr23
         N = N or self.N
         self.calc_taus(N)
@@ -264,7 +275,7 @@ class EarthNLayer(EarthTwoDBase):
         self.N = N or self.N
         taus = [[exp_decay_const(self, i, j) for i in xrange(j, N/2+1)] 
                                                 for j in xrange(N/2+1)]
-       #TODO Generalize to arbitrary wavelengths 
+        #TODO Generalize to arbitrary wavelengths using GridObject?
         wl = np.array([[6000/np.sqrt(i**2+j**2) if (i!=0 or j!=0) else 16000 
                                     for i in range(j, N/2+1)] 
                                     for j in range(N/2+1)])
@@ -282,14 +293,14 @@ class EarthNLayer(EarthTwoDBase):
         self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
 
         # Augment the decay times by the Lithosphere filter
-        self.taus = self.taus/self.alpha                                       
+        self.taus = self.taus/self.alpha 
                                                 
         # Turn the Lithosphere filter and taus into a matrix that matches the 
         # frequencey matrix from an NxN fft.
         self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
         
         
-class EarthTwoLayer(EarthTwoDBase):
+class EarthTwoLayer(FlatEarthBase):
     """Return the isostatic response of a flat earth with two layers.
     
     The response is calculated analytically in the fourier domain from a
@@ -302,6 +313,10 @@ class EarthTwoLayer(EarthTwoDBase):
         self.fr23 = fr23
         self.g = g
         self.rho = rho
+
+    def reset_params_list(self, params, arglist):
+        params = dict(zip(arglist, xs))
+        self.reset_params(params)
 
     def reset_params(self, u=None, fr23=None, N=None):
         self.u = u or self.u
@@ -326,9 +341,9 @@ class EarthTwoLayer(EarthTwoDBase):
 
         For description of formats, see help(_list_to_fft_mat)
         """
-        self.N = N or self.N
+        N = N or self.N
         
-       #TODO Generalize to arbitrary wavelengths 
+        #TODO Generalize to arbitrary wavelengths 
         wl = np.array([[6000/np.sqrt(i**2+j**2) if (i!=0 or j!=0) else 16000 
                                     for i in range(j, N/2+1)] 
                                     for j in range(N/2+1)])
@@ -352,13 +367,13 @@ class EarthTwoLayer(EarthTwoDBase):
         self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
         
         # Augment the decay times by the Lithosphere filter
-        self.taus = self.taus/self.alpha                                       
+        self.taus = self.taus/self.alpha 
                                                 
         # Turn the Lithosphere filter and taus into a matrix that matches the 
         # frequencey matrix from an NxN fft.
         self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
 
-class EarthThreeLayer(EarthTwoDBase):
+class EarthThreeLayer(FlatEarthBase):
     """Return the isostatic response of a flat earth with three layers.
     
     The response is calculated analytically in the fourier domain from a
@@ -374,6 +389,10 @@ class EarthThreeLayer(EarthTwoDBase):
         self.u2 = u2
         self.fr23 = fr23
         self.h = h
+
+    def reset_params_list(self, params, arglist):
+        params = dict(zip(arglist, xs))
+        self.reset_params(params)
 
     def reset_params(self, u1=None, u2=None, fr23=None, h=None, N=None):
         self.u1 = u1 or self.u1
@@ -422,6 +441,9 @@ class EarthThreeLayer(EarthTwoDBase):
         s = np.sinh(self.ak*self.h)
         u = self.u2/self.u1
         ui = 1./u
+        r = 2*c*s*u + (1-u**2)*(self.ak*self.h)**2 + ((u*s)**2+c**2)
+        r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
+
         r = 2*c*s*u + (1-u**2)*(self.ak*self.h)**2 + ((u*s)**2+c**2)
         r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
 

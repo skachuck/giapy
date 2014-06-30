@@ -21,7 +21,7 @@ class GiaSim(object):
        self.ice = ice
        self.grid = grid
 
-       if data is not None:
+       if datalist is not None:
            for data in datalist:
                self.datalist = datalist
        else:
@@ -44,17 +44,28 @@ class GiaSim(object):
         
     def leastsq(self, x0, argdict=None, priors=None, full_output=0, 
                     save_params=False, save_chi2=False):
+        """Calculate the least squares minimum from starting point x0.
+
+        Optional Arguments
+        ------------------
+        argdict - 
+        priors - list of parameter prior standard deviations
+        full_output - 
+        save_params - if True, save the param steps during optimization
+        save_chi2 - if True, save the steps in chi2 during optimization
+        """
+
         self.priors = priors
 
-       if save_params:
-           self.old_params = []
-       else:
-           self.old_params = None
+        if save_params:
+            self.old_params = []
+        else:
+            self.old_params = None
 
-       if save_chi2:
-           self.old_chi2 = []
-       else:
-           self.old_chi2 = None
+        if save_chi2:
+            self.old_chi2 = []
+        else:
+            self.old_chi2 = None
 
         m = leastsq(self.residuals, x0, args=(argdict,), Dfun=self.jacobian, 
                     col_deriv=1, full_output=full_output)
@@ -73,8 +84,7 @@ class GiaSim(object):
         if argdict is None:
             self.earth.reset_params(*xs)
         else:
-            params = dict(zip(argdict, xs))
-            self.earth.reset_params(**params)
+             self.earth.reset_params_list(xs, argdict)
 
         self.perform_convolution()
         if hasattr(self, 'esl'): self.mw_corr()
