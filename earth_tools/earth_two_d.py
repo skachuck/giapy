@@ -131,15 +131,11 @@ def exp_decay_const(earth, i, j):
     
     # Determine the necessary start depth (start lower for longer wavelengths)
     # to solve a roundoff problem with the matrix method.
-    #TODO look into stability problem here
-    if wl < 40:
-        lstart = 9
-    elif wl < 200:
-        lstart = 6
-    elif wl < 500:
-        lstart = 4
+    lstart = np.where(wl < earth.depths)[0]
+    if np.any(lstart): 
+        lstart=lstart.max()
     else:
-        lstart = 0
+        lstart=0
     
     # integrate from starting depth to surface, layer by layer
     for dd, uu, in zip(earth.d[lstart:], earth.u[lstart:]):
@@ -149,6 +145,7 @@ def exp_decay_const(earth, i, j):
     
     # initialize the inegration constants
     x = np.zeros(2)
+
     # solve for them, assuming 1 dyne normal load at surface
     x[0] =  cc[1,2]/(cc[0,2]*cc[1,3]-cc[0,3]*cc[1,2])
     x[1] = -cc[0,2]/(cc[0,2]*cc[1,3]-cc[0,3]*cc[1,2])
@@ -206,6 +203,13 @@ class EarthNLayer(FlatEarthBase):
     
     The response is calculated from a viscous profile overlain by an elastic
     lithosphere in the fourier domain.
+
+    Parameters
+    ----------
+    u
+    d
+    fr23
+
     """
     
     def __init__(self, u=None, d=None, fr23=10., g=9.8, rho=3.313):
@@ -218,13 +222,20 @@ class EarthNLayer(FlatEarthBase):
                                300.,200.,215.,175.,75.       ])
         else:
             self.d = d
+
+        self.depths = (self.d[::-1].cumsum()/2.)[::-1]
             
         self.NLayers = len(self.u)
         self.fr23=fr23
         self.g=g
         self.rho=rho
+
+    def __str__(self):
+        return 'Earth with {0} viscosity layers with average {1}e21 Pa s,/n\
+                and lithospheric thickness of {2}e23 N m.\
+                '.format(self.NLayers, self.u.mean(), self.fr23)
                 
-    def reset_params_list(self, params, arglist):
+    def reset_params_list(self, params, arglist, visclog=False):
         """Set the full mantle rheology and calculate the decay constants.
 
         self.N must have been set already.
@@ -234,16 +245,18 @@ class EarthNLayer(FlatEarthBase):
         if 'us' in arglist:
             us = params[i:i+self.NLayers]
             i += self.NLayers
+            if visclog: us = 10**us
         if 'ds' in arglist:
             ds = params[i:i+self.NLayers]
             i += self.NLayers
+            self.depths = (ds[::-1].cumsum()/2.)[::-1]
         if 'fr23' in arglist:
             fr23 = params[i]
             i += 1
         if 'N' in arglist:
-            N = params[i]
+            N = int(params[i])
 
-       self.reset_params(us, ds, fr23, N)
+        self.reset_params(us, ds, fr23, N)
     
     def reset_params(self, us=None, ds=None, fr23=None, N=None):       
         if us is not None: self.u = us
@@ -251,6 +264,9 @@ class EarthNLayer(FlatEarthBase):
         self.fr23 = fr23 or self.fr23
         N = N or self.N
         self.calc_taus(N)
+
+    def get_params(self):
+        return np.concatenate([self.u, self.d, [self.fr23]])
 
     def set_taus(self, taus):
         self.taus=taus
@@ -306,6 +322,9 @@ class EarthTwoLayer(FlatEarthBase):
     The response is calculated analytically in the fourier domain from a
     uniform mantle of viscosity u overlain by an elastic lithosphere with
     flexural rigidty fr23.
+
+    Attributes
+    ----------
     """
     
     def __init__(self, u, fr23, g=9.8, rho=3.313):
@@ -313,6 +332,11 @@ class EarthTwoLayer(FlatEarthBase):
         self.fr23 = fr23
         self.g = g
         self.rho = rho
+
+    def __str__(self):
+        return 'Two layer Earth with layer {0}e21 Pa mantle overlain by/n\
+                lithosphere with rigidity {1}e23 N m.\
+                '.format(self.u, self.fr23)
 
     def reset_params_list(self, params, arglist):
         params = dict(zip(arglist, xs))
@@ -336,7 +360,9 @@ class EarthTwoLayer(FlatEarthBase):
 
         Parameters
         ----------
-        N (int) - the maximum order number. Resulting earth parameters ak,
+        N (int) - the maximum order number. 
+        
+        Resulting earth parameters ak,
         taus, and alpha will be size NxN when in FFTmat format.
 
         For description of formats, see help(_list_to_fft_mat)
@@ -389,6 +415,12 @@ class EarthThreeLayer(FlatEarthBase):
         self.u2 = u2
         self.fr23 = fr23
         self.h = h
+
+    def __str__(self):
+        return 'Three layer Earth with mantle of viscosity {0}e21 Pa s /n\
+                overlain by {1} km layer {2}e21 Pa s with y lithosphere of /n\
+                rigidity {3}e23 N m.\
+                '.format(self.u1, self.h, self.u2, self.fr23)
 
     def reset_params_list(self, params, arglist):
         params = dict(zip(arglist, xs))
@@ -444,9 +476,6 @@ class EarthThreeLayer(FlatEarthBase):
         r = 2*c*s*u + (1-u**2)*(self.ak*self.h)**2 + ((u*s)**2+c**2)
         r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
 
-        r = 2*c*s*u + (1-u**2)*(self.ak*self.h)**2 + ((u*s)**2+c**2)
-        r = r/((u+ui)*s*c + self.ak*self.h*(u-ui) + (s**2+c**2))
-
         self.taus = -2*self.u1*self.ak/self.g/self.rho*r
         # Unit conversion so result is in kyrs:
         # u in Pa s=kg/m s, ak in 1/km, g in m/s2, rho in g/cc
@@ -462,8 +491,7 @@ class EarthThreeLayer(FlatEarthBase):
                                                 
         # Turn the Lithosphere filter and taus into a matrix that matches the 
         # frequencey matrix from an NxN fft.
-        self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
-        
+        self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N) 
 
 def check_k(earth):
     """Check whether different 2D k matrices are identical, useful for
@@ -485,7 +513,6 @@ def check_k(earth):
     print "ak_wl and ak_fft are close: "+str(np.allclose(ak_wl, ak_fft))
     print "ak_wl and ak_ea are close:  "+str(np.allclose(ak_wl, ak_ea))
     print "ak_fft and ak_ea are close: "+str(np.allclose(ak_fft, ak_ea))
-
-        
+ 
 def load(filename):
     return pickle.load(open(filename, 'r'))
