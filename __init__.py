@@ -6,9 +6,3 @@ import giapy.map_tools
 
 from giapy.data_tools.meltwater import gen_eustatic
 import giapy.data_tools.emergedata
-
-# Configure paths to important directories
-DATAPATH = '/Data/emergence_data/'
-EARTHPATH = ''
-ICEPATH = ''
-WRITEPATH = ''

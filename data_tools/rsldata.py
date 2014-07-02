@@ -96,7 +96,7 @@ class RLR(np.ndarray):
         self.metadata = getattr(obj, 'metadata', None)
         self.inds = getattr(obj, 'inds', None)
 
-    def __str__(self):max(filt1[:,0].min(),
+    def __str__(self):
         return 'RLR( {0}, {1} )'.format(self.metadata['sitename'],
                         self.metadata['type'])
 
@@ -159,7 +159,7 @@ class RLR(np.ndarray):
             finish = self.shape[0]-w/2
         elif align=='right':
             start = 0
-           max(filt1[:,0].min(), finish = self.shape[0]-w
+            finish = self.shape[0]-w
 
         for i in range(start, finish):
             if align=='left':

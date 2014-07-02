@@ -1,13 +1,39 @@
+"""Methods and classes for calculations using map coordinates.
+"""
+
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
-
-# Grid Interpolation
+from mpl_toolkits.basemap import Basemap
 
 class GridObject(object):
+    """Store and manipulate objects linked to map coordinates.
+
+    Parameters
+    ----------
+    basemap (Basemap, optional): a basemap object defining the map
+    mapparam (dict, optional): the dict defining parameters for a basemap
+    shape (tuple, optional): the shape of the grid desired, default (50, 50)
+
+    Note
+    ----
+    Either basemap or mapparam are needed to instantiate. If both are given,
+        basemap is used over mapparam.
+
+    Attributes
+    ----------
+    x     : 
+    y     : 
+    shape : 
     """
-    """
-    def __init__(self, basemap, shape=None):
-        self.basemap = basemap
+    def __init__(self, basemap=None, mapparam=None, shape=None):
+        if basemap is not None: 
+            self.basemap = basemap
+        elif mapparam is not None:
+            basemap = Basemap(**mapparam)
+            self.basemap = basemap
+        else:
+            raise ValueError('GridObject needs either Basemap object or\
+                                paramaters.')
 
         self.shape = shape or (50, 50)
         self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1])

@@ -4,28 +4,69 @@ import time
 from scipy.optimize import leastsq
 
 class GiaSim(object):
-    """Calculate and store Glacial Isostacy Simulation results, and compare
+    """
+    
+    Calculate and store Glacial Isostacy Simulation results, and compare
     with data. Must be called with an earth model (earth), an ice model (ice)
     and a grid (grid). To add a data source to be used in residual finding and
     interpolation, use GiaSim.attach_data.
 
     Parameters
     ----------
-    earth - the earth model to be used in the simulation
-    ice - the ice model to be used in the simulation
-    grid - the map associated with the earth and ice models
+    earth    : giapy.earth_tools.EarthModel
+        The earth model to be used in the simulation
+    ice      : giapy.ice_tools.IceModel
+        The ice model to be used in the simulation
+    grid     : giapy.map_tools.GridObject
+        The map associated with the earth and ice models
+    datalist : list (optional)
+        A list of giapy.data_tools objects to compare to results of simulation.
+        Can be added later using GiaSim.attach_data
+
+    Attributes
+    ----------
+    earth
+    ice
+    grid
+    datalist
+    esl
+    priors
+    old_params
+    old_chi2
+
+    Example
+    -------
+    Instantiate the GiaSim object
+    >>> ice = giapy.ice_tools.icehistory.load(u'./IceModels/eur_ice.p')
+    >>> earth = giapy.earth_tools.earth_two_d.EarthTwoLayer(1, 10)
+    >>> earth.calc_taus(128)
+    >>> grid = giapy.map_tools.GridObject(mapparm=giapy.plot_tools.eur_map_param)
+    >>> data = giapy.data_tools.emerge_data.load(u'./Data/emergence_data/\
+                                                    eur_emerge_data.p')
+
+    >>> sim = giapy.GiaSim(earth, ice, grid, [data])
+    >>> sim.attach_esl(giapy.data_tools.meltwater.gen_eustatic())
+    >>> sim.set_out_times(np.arange(16, -1, -1))
+
+    Use the GiaSim object to calculate uplift. Results are stored in
+    sim.uplift with size (len(sim.out_times), sim.grid.shape)
+    >>> sim.perform_convolution()
     """
     
     def __init__(self, earth, ice, grid, datalist=None):
-       self.earth = earth
-       self.ice = ice
-       self.grid = grid
+        self.earth = earth
+        self.ice = ice
+        self.grid = grid
 
-       if datalist is not None:
-           for data in datalist:
-               self.datalist = datalist
-       else:
-           self.datalist = []
+        if datalist is not None:
+            for data in datalist:
+                self.datalist = datalist
+        else:
+            self.datalist = []
+
+        self.old_params = None
+        self.old_chi2 = None
+        self.priors = None
 
     def attach_data(self, data):
         self.datalist.append(data)
@@ -42,36 +83,34 @@ class GiaSim(object):
     def set_out_times(self, out_times):
         self.out_times = out_times
         
-    def leastsq(self, x0, argdict=None, priors=None, full_output=0, 
-                    save_params=False, save_chi2=False):
+    def leastsq(self, x0, arglist=None, priors=None, 
+                    save_params=False, save_chi2=False, **kwargs):
         """Calculate the least squares minimum from starting point x0.
 
-        Optional Arguments
-        ------------------
-        argdict - 
-        priors - list of parameter prior standard deviations
-        full_output - 
+        Parameters
+        ----------
+        x0 - the initial guess vector
+        arglist - 
+        priors - list of parameter prior standard deviations 
         save_params - if True, save the param steps during optimization
         save_chi2 - if True, save the steps in chi2 during optimization
+        **kwargs - see kwargs for scipy.optimize.leastsq
         """
 
         self.priors = priors
 
-        if save_params:
-            self.old_params = []
-        else:
-            self.old_params = None
+        self.old_params = [] if save_params else None
+        self.old_chi2 = [] if save_chi2 else None
 
-        if save_chi2:
-            self.old_chi2 = []
-        else:
-            self.old_chi2 = None
+        m = leastsq(self.residuals, x0, args=(arglist,), Dfun=self.jacobian, 
+                    col_deriv=1, **kwargs)
+        
+        if save_params: self.old_params = np.asarray(self.old_params)
+        if save_chi2: self.old_chi2 = np.asarray(self.old_chi2)
 
-        m = leastsq(self.residuals, x0, args=(argdict,), Dfun=self.jacobian, 
-                    col_deriv=1, full_output=full_output)
         return m
 
-    def residuals(self, xs, argdict=None, verbose=False):
+    def residuals(self, xs, arglist=None, verbose=False):
         """Calculate the residuals associated with stored data sources and
         earth parameters xs.
         """
@@ -81,10 +120,10 @@ class GiaSim(object):
         if self.old_params is not None:
             self.old_params.append(self.earth.get_params())
 
-        if argdict is None:
+        if arglist is None:
             self.earth.reset_params(*xs)
         else:
-             self.earth.reset_params_list(xs, argdict)
+             self.earth.reset_params_list(xs, arglist)
 
         self.perform_convolution()
         if hasattr(self, 'esl'): self.mw_corr()
@@ -102,7 +141,7 @@ class GiaSim(object):
 
         return res
 
-    def jacobian(self, xs, argdict=None, eps_f=5e-11):
+    def jacobian(self, xs, arglist=None, eps_f=5e-11):
         """Calculate the jacobian associated with stored data sources and
         parameters xs, with function evaluation error eps_f (default 5e-11).
         """
@@ -113,14 +152,14 @@ class GiaSim(object):
             # Optimal one-pt separation is (eps_f*f/f'')^(1/2) ~ sqrt(eps_f)*x
             # Optimal two-pt separation is (eps_f*f/f''')^(1/3) ~ cbrt(eps_f)*x
             h = np.zeros(len(xs))
-            h[i] = (eps_f**(1./3.))*x
+            h[i] = (eps_f**(1./3.))*max(x, 0.5)
 
             # Evaluate the function
             # One-pt
             #f1 = rebound_2d_earth_res(xs...)
             # Two-pt
-            f1 = self.residuals(xs-h, argdict)
-            f2 = self.residuals(xs+h, argdict)
+            f1 = self.residuals(xs-h, arglist)
+            f2 = self.residuals(xs+h, arglist)
 
             # Difference
             # One-pt
