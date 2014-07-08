@@ -38,6 +38,7 @@ class GridObject(object):
         self.shape = shape or (50, 50)
         self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1])
         self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0])
+        self.Lon, self.Lat = basemap(*np.meshgrid(self.x, self.y), inverse=True)
 
     def update_shape(self, shape):
         self.shape = shape
@@ -46,6 +47,7 @@ class GridObject(object):
 
         self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1])
         self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0])
+        self.Lon, self.Lat = basemap(*np.meshgrid(self.x, self.y), inverse=True)
 
     def create_interper(self, array):
         if self.shape != array.T.shape:
