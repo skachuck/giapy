@@ -13,6 +13,6 @@ def gen_eustatic():
                          -78,  -85,   -110,  -113,
                         -117, -120, -122.5,  -125])
     
-    sealevel_curve = interp1d(times, meters)
+    sealevel_curve = interp1d(times, meters, bounds_error=False, fill_value=0)
 
     return sealevel_curve
