@@ -312,7 +312,7 @@ class EmergeData(object):
             
         return filtered
 
-    def plot_loc(self, map, kwarg={}):
+    def plot_loc(self, map, **kwarg):
         """Plot the locations of data on a map object"""
         x, y = map(*zip(*self.locs))
         map.plot(x, y, ls='None', **kwarg)

@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import inspect
 
 from scipy.optimize import leastsq
 
@@ -117,9 +118,6 @@ class GiaSim(object):
         if not self.datalist:
             raise StandardError('self.datalist is empty. Use self.attach_data.')
 
-        if self.old_params is not None:
-            self.old_params.append(self.earth.get_params())
-
         if arglist is None:
             self.earth.reset_params(*xs)
         else:
@@ -132,12 +130,17 @@ class GiaSim(object):
         for data in self.datalist:
             res.append(data.residual(self, verbose=verbose))
         
-        if self.priors:
+        if self.priors is not None:
             res.append((xs-self.priors[:,0])/self.priors[:,1])
 
         res = np.concatenate(res)
-        if self.old_chi2 is not None:
-            self.old_chi2.append(res.dot(res))
+
+        # If saving steps, save current step
+        if inspect.stack()[1][3] != 'jacobian':
+            if self.old_params is not None:
+                self.old_params.append(self.earth.get_params())
+            if self.old_chi2 is not None:
+                self.old_chi2.append(res.dot(res))
 
         return res
 
