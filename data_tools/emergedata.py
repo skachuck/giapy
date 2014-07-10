@@ -85,6 +85,14 @@ class EmergeData(object):
         else:
             return self.W.dot(res)
 
+    def findLocFromLongdata(self, num):
+        """Return location index and point index for index from self.long_data.
+        """
+        nums = np.array([len(loc['data_dict']['emerg']) for loc in self])
+        cumnums = nums.cumsum()
+        index = (np.arange(len(self))[cumnums < num]).max()
+        return index+1, num-cumnums[index]-1
+
     def import_from_file(self, filename):
         """Reads emergence data from a file where it is stored in the form...
         
