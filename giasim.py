@@ -124,7 +124,7 @@ class GiaSim(object):
              self.earth.reset_params_list(xs, arglist)
 
         self.perform_convolution()
-        if hasattr(self, 'esl'): self.mw_corr()
+        
         res = []
 
         for data in self.datalist:
@@ -184,6 +184,8 @@ class GiaSim(object):
                     (default is to use previously stored values).
         t_rel - the time relative to which uplift is considered (defaul present)
                 (None for no relative)
+        emergeCorr : Bool
+            Apply any attached corrections to uplift to get emergence
         """
         time_start = time.clock()
 
@@ -233,6 +235,10 @@ class GiaSim(object):
     
         # Correctly grid the uplift array by removing the fourier padding
         self.uplift = uplift[:, :shape[0], :shape[1]]
+
+        if emergeCorr:
+            # Perform meltwater correction
+            if hasattr(self, 'esl'): self.mw_corr()
 
         if verbose: print 'Convolution time: {0}s'.format(time.clock()-time_start)
 
