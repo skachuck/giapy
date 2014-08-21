@@ -50,6 +50,9 @@ class EmergeData(object):
         uplift = simobject.uplift
         out_times = simobject.out_times
         grid = simobject.grid
+        
+        # Use map coordinates from sim.grid.basemap for interpolation
+        x, y = grid.basemap(self.locs[:,0], self.locs[:,1])
 
         # interp_data will be an array of size (N_output_times, N_locations)
         # for use in interpolating the calculated emergence to the locations
@@ -59,7 +62,7 @@ class EmergeData(object):
         # to the data locations.
         for uplift_at_a_time in uplift:
             interp_func = grid.create_interper(uplift_at_a_time.T)
-            interp_data.append(interp_func.ev(self.locs[:,0], self.locs[:,1]))
+            interp_data.append(interp_func.ev(x, y))
         interp_data = np.array(interp_data).T
         
         calc_vector = []
