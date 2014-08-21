@@ -9,8 +9,19 @@ from scipy.stats import pearsonr
 class RLR(np.ndarray):
     """Download a Revised Local Reference for sea level from the PSMSL.
     
-    Data is stored as an ndarray
-    Data can be read from either monthly or annual records
+    Data is stored as an ndarray, with the first column ([:,0]) storing the
+    dates of the records (in yearly decimal format, e.g., 1947.23), the second
+    ([:,1]) the sea level records, and the third and fourth error information.
+
+    Missing data points are stored as -99999, and a list of the indices of
+    non-absent data are stored in RLR.ind.
+
+    Parameters
+    ----------
+    num : int
+        The unique locator code for the RLR data to download
+    typ : 'monthly' or 'annual'
+        Download either monthly or annual data
 
     Reference
     ---------
@@ -100,13 +111,16 @@ class RLR(np.ndarray):
         return 'RLR( {0}, {1} )'.format(self.metadata['sitename'],
                         self.metadata['type'])
 
-    def trend(self):
-        """Calculate the best linear fit for data, return at data times.
+    def trend(self, coeffs=False):
+        """Calculate the best linear fit for data, returns coeffs or line.
         """
         inds = self.inds
         A = np.array([self[inds,0], np.ones(len(inds))])
         w = np.linalg.lstsq(A.T, self[inds,1])[0]
-        return w[0]*self[:,0]+w[1]
+        if coeffs:
+            return w
+        else:
+            return w[0]*self[:,0]+w[1]
 
     def detrended(self):
         """Remove the linear trend from the RLR data.
@@ -187,6 +201,7 @@ class RLR(np.ndarray):
         return result
 
     def time_filter(self, tmin, tmax):
+        """Filter the data to a specific time window [tmin, tmax]"""
         filtinds = np.where(np.logical_and(self[:,0]>tmin, self[:,0]<=tmax))
         result = self[filtinds]
         # correct data not absent indices
@@ -195,6 +210,7 @@ class RLR(np.ndarray):
         return result
 
     def plot(self, ax, *args, **kwargs):
+        """Plots the data on ax, skipping missing points"""
         ax.plot(self[self.inds, 0], self[self.inds, 1], *args, **kwargs)
         return ax
 
