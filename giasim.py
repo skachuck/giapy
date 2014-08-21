@@ -144,10 +144,13 @@ class GiaSim(object):
 
         return res
 
-    def jacobian(self, xs, arglist=None, eps_f=5e-11):
+    def jacobian(self, xs, arglist=None, func=None, func_args=None,
+                    eps_f=5.e-5):
         """Calculate the jacobian associated with stored data sources and
         parameters xs, with function evaluation error eps_f (default 5e-11).
         """
+        func = func or self.residuals
+
         jac = []
         xs = np.asarray(xs)
         for i, x in enumerate(xs):
@@ -161,8 +164,8 @@ class GiaSim(object):
             # One-pt
             #f1 = rebound_2d_earth_res(xs...)
             # Two-pt
-            f1 = self.residuals(xs-h, arglist)
-            f2 = self.residuals(xs+h, arglist)
+            f1 = func(xs-h, arglist)
+            f2 = func(xs+h, arglist)
 
             # Difference
             # One-pt
@@ -172,9 +175,12 @@ class GiaSim(object):
 
         # put them together
         jac = np.asarray(jac)
+        # reset the function to initial value
+        trash = func(xs, arglist)
         return jac
 
-    def perform_convolution(self, out_times=None, t_rel=0, verbose=False):  
+    def perform_convolution(self, out_times=None, emergeCorr=True, 
+                            t_rel=0, verbose=False):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
