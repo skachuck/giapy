@@ -212,7 +212,8 @@ class EarthNLayer(FlatEarthBase):
 
     """
     
-    def __init__(self, u=None, d=None, fr23=10., g=9.8, rho=3.313):
+    def __init__(self, u=None, d=None, fr23=10., g=9.8, rho=3.313, N=None,
+                 viscLog=False):
         if u is None:
             self.u = np.array([1.,1.,1.,1.,1.,1.,1.,1.,1.,1.,0.018])
         else:
@@ -223,16 +224,18 @@ class EarthNLayer(FlatEarthBase):
         else:
             self.d = d
 
+        if viscLog: self.u = 10**(self.u-21)
         self.depths = (self.d[::-1].cumsum()/2.)[::-1]
             
         self.NLayers = len(self.u)
         self.fr23=fr23
         self.g=g
         self.rho=rho
+        self.N = N
 
     def __str__(self):
-        return 'Earth with {0} viscosity layers with average {1}e21 Pa s,/n\
-                and lithospheric thickness of {2}e23 N m.\
+        return 'Earth with {0} viscosity layers with average {1:.3f}e21 Pa s,\n\
+    and lithospheric thickness of {2}e23 N m.\
                 '.format(self.NLayers, self.u.mean(), self.fr23)
                 
     def reset_params_list(self, params, arglist, visclog=False):
@@ -243,9 +246,8 @@ class EarthNLayer(FlatEarthBase):
         us = ds = fr23 = N = None
         i=0
         if 'us' in arglist:
-            us = params[i:i+self.NLayers]
-            i += self.NLayers
-            if visclog: us = 10**us
+            us = np.array(params[i:i+self.NLayers])
+            i += self.NLayers 
         if 'ds' in arglist:
             ds = params[i:i+self.NLayers]
             i += self.NLayers
@@ -259,7 +261,7 @@ class EarthNLayer(FlatEarthBase):
         self.reset_params(us, ds, fr23, N)
     
     def reset_params(self, us=None, ds=None, fr23=None, N=None):       
-        if us is not None: self.u = us
+        if us is not None: self.u = 10.**(np.asarray(us)-21)
         if ds is not None: self.d = ds
         self.fr23 = fr23 or self.fr23
         N = N or self.N
@@ -327,11 +329,12 @@ class EarthTwoLayer(FlatEarthBase):
     ----------
     """
     
-    def __init__(self, u, fr23, g=9.8, rho=3.313):
+    def __init__(self, u, fr23, g=9.8, rho=3.313, N=None):
         self.u = u
         self.fr23 = fr23
         self.g = g
         self.rho = rho
+        self.N = N
 
     def __str__(self):
         return 'Two layer Earth with layer {0}e21 Pa mantle overlain by/n\
@@ -339,14 +342,17 @@ class EarthTwoLayer(FlatEarthBase):
                 '.format(self.u, self.fr23)
 
     def reset_params_list(self, params, arglist):
-        params = dict(zip(arglist, xs))
-        self.reset_params(params)
+        params = dict(zip(arglist, params))
+        self.reset_params(**params)
 
     def reset_params(self, u=None, fr23=None, N=None):
-        self.u = u or self.u
+        if u is not None: self.u = 10**(u-21.)
         self.fr23 = fr23 or self.fr23
         N = N or self.N
         self.calc_taus(N)
+
+    def get_params(self):
+        return [self.u, self.fr23]
 
     def calc_taus(self, N=None):
         """Generate and store a list of exponential decay constants.
@@ -408,13 +414,14 @@ class EarthThreeLayer(FlatEarthBase):
     lithosphere with flexural rigidty fr23.
     """
     
-    def __init__(self, u1, u2, fr23, h, g=9.8, rho=3.313):
+    def __init__(self, u1, u2, fr23, h, g=9.8, rho=3.313, N=None):
         self.g = g
         self.rho = rho
         self.u1 = u1
         self.u2 = u2
         self.fr23 = fr23
         self.h = h
+        self.N=N
 
     def __str__(self):
         return 'Three layer Earth with mantle of viscosity {0}e21 Pa s /n\
@@ -423,12 +430,12 @@ class EarthThreeLayer(FlatEarthBase):
                 '.format(self.u1, self.h, self.u2, self.fr23)
 
     def reset_params_list(self, params, arglist):
-        params = dict(zip(arglist, xs))
-        self.reset_params(params)
+        params = dict(zip(arglist, params))
+        self.reset_params(**params)
 
     def reset_params(self, u1=None, u2=None, fr23=None, h=None, N=None):
-        self.u1 = u1 or self.u1
-        self.u2 = u2 or self.u2
+        if u1 is not None: self.u1 = 10**(u1-21.)
+        if u2 is not None: self.u2 = 10**(u2-21.)
         self.fr23 = fr23 or self.fr23
         self.h = h or self.h
         N = N or self.N
