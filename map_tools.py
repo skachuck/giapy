@@ -4,6 +4,7 @@
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 from mpl_toolkits.basemap import Basemap
+from matplotlib.path import Path
 
 class GridObject(object):
     """Store and manipulate objects linked to map coordinates.
@@ -54,11 +55,11 @@ class GridObject(object):
 
         Parameters
         ----------
-        array : 
+        array : array to interpolate 
 
         Returns
         -------
-        RectBivariateSpline
+        RectBivariateSpline object
 
         Notes
         -----
@@ -68,8 +69,8 @@ class GridObject(object):
 
         Examples
         --------
-        tiltInterp = grid.create_interper(tilt)
-        tiltAtPoint = tiltInterp.ev(xp, yx)
+        >>> tiltInterp = grid.create_interper(tilt)
+        >>> tiltAtPoint = tiltInterp.ev(xp, yp)
         """
         if self.shape != array.T.shape:
             if self.shape == array.shape:
@@ -82,17 +83,46 @@ class GridObject(object):
 
     def interp(self, array, xs, ys, latlon=False):
         """Convenience function for interpolation on the map.
+
+        Parameters
+        ----------
+        array : array to interp (must be of shape grid.shape)
+        xs, ys : the x, y points at which to interpolate the array
+        latlon : boolean
+            indicates whether xs and ys are given in lat/lon or map coordinates
         
         Examples
         --------
-        tiltAtPoints = grid.interp(tilt, lons, lats, latlon=True)
+        >>> tiltAtPoints = grid.interp(tilt, lons, lats, latlon=True)
         """
         if latlon: xs, ys = self.basemap(xs, ys)
         interper = self.create_interper(array)
         return interper.ev(xs, ys)
 
+    def selectArea(self, ptlist, latlon=False):
+        """Select an area of the grid"""
+        ptlist = np.asarray(ptlist)
+        if latlon: 
+            ptlist[:,0], ptlist[:,1] = self.basemap(ptlist[:,0], ptlist[:,1])
+        # create the polygon
+        path = Path(ptlist)
+
+        X, Y = np.meshgrid(self.x, self.y)
+        # return array indices
+        areaind = path.contains_points(zip(X.flatten(), Y.flatten())).reshape(self.shape)
+        return areaind
+
+
+
 def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
     """Calculate the distance bewteen two sets of lat/lon pairs.
+
+    Parameters
+    ----------
+    lat1, lat2, lon1, lon2 : lat/lon points
+    r : radius of sphere
+    radians : boolean
+        indicates whether points are given in radians (as opposed to degrees)
     """
     if not radians:
         lat1, lat2, lon1, lon2 = np.radians([lat1, lat2, lon1, lon2])

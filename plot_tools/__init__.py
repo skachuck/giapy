@@ -2,11 +2,13 @@
 
 from mpl_toolkits.basemap import Basemap
 
+# SQUARE AREAS
 sval = {'latmin':76, 'latmax':81, 'lonmin':10, 'lonmax':30}
 nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}
 namc = {'latmin':30, 'latmax':50, 'lonmin':-80, 'lonmax':-50}
 eur = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}
 
+# MAP PARAMETERS
 # m = basemap.Basemap(**param_dict)
 eur_map_param = {'width':4900000,'height':4700000,
             'rsphere':(6378137.00,6356752.3142),\
@@ -34,3 +36,8 @@ glob_map_param = {'llcrnrlon':-180, 'llcrnrlat':-70,
             'urcrnrlon':180, 'urcrnrlat':80,
             'rsphere':(6378137.00,6356752.3142),
             'resolution':'l', 'area_thresh':1000., 'projection':'merc'}
+
+# GLACIER AREAS
+bar = [(-.78, 85.07), (80.07, 85.07), (80.7, 74.7), (75.8, 74.7), 
+       (47.7, 63.87), (39.6, 68.11), (29.52, 70.9), (23.78, 71.18),
+       (17.63, 70.29), (10.47, 68.57), (-0.78, 68.57)]
