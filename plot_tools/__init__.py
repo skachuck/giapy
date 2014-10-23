@@ -30,6 +30,10 @@ class MapParams(object):
                 'rsphere':(6378137.00,6356752.3142),\
                 'resolution':'i','area_thresh':250.,'projection':'lcc',\
                 'lat_0':80.5,'lon_0':57.}
+    bar = {'llcrnrlon':7,'llcrnrlat':70,'urcrnrlon':83,'urcrnrlat':84,\
+                'rsphere':(6378137.00,6356752.3142),\
+                'resolution':'i','area_thresh':250.,'projection':'merc',\
+                'lat_0':75.5,'lon_0':57.}
     namc = {'llcrnrlon':-80, 'llcrnrlat':30, 'urcrnrlon':-50, 'urcrnrlat':50,
                 'rsphere':(6378137.00,6356752.3142),
                 'resolution':'l', 'area_thresh':1000., 'projection':'merc'}

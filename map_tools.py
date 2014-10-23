@@ -1,4 +1,9 @@
-"""Methods and classes for calculations using map coordinates.
+"""
+map_tools.py
+
+    Methods and classes for calculations using map coordinates.
+
+    Author: Samuel B. Kachuck
 """
 
 import numpy as np
