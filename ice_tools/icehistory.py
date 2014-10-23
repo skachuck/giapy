@@ -109,6 +109,61 @@ class Ice2d(object):
             arealist += '\t {0}: {1}\n'.format(name, areaDict[prop])
         return arealist
 
+    def isGrounded(self, time, topo, interp=False):
+        """Generate a Boolean array indicating the location of grounded ice.
+
+        Grounded ice is ice which 
+        
+        Parameters
+        ----------
+        time : float
+            The stage at which to check. Must be in self.times if interp is
+            False.
+        topo : ndarray
+            The paleotopography at the stage of interest, must be shape
+            ice.shape.
+        interp : Boolean
+            Indicates whether interpolation between explicitly defined stages
+            is allowed.
+        """ 
+        if topo.shape != self.shape:
+            raise ValueError('Shapes are incompatible')
+
+        # Pull the ice at the desired time
+        if time in self.times:
+            icetime = self.heights[time==self.times]
+        elif interp:
+            #TODO implement this
+            raise NotImplementedError()
+        else:
+            raise ValueError('If interp==False, time must be in self.times')
+
+        return (icetime>topo*0.9)*np.sign(icetime)
+
+    def groundedReplace(self, time, topo, areaind):
+        """Replace the ice in a certain area with just-grounded ice.
+
+        Parameters
+        ----------
+        time : float
+            A time in self.times
+        topo : ndarray
+            The paleotopography at time
+        areaind : list
+            The indices defining the area. See GridObject.selectArea.
+        """
+        # Pull the ice at the desired time
+        if time in self.times:
+            icetime = self.heights[time==self.times]
+        else:
+            raise ValueError('time must be in self.times')
+        
+        # 1.666 = rho_asth * rho_w / rho_ice (rho_asth - rho_w)
+        #       ~ 3 * 1 / 0.9 (3-1) = 
+        # which accounts for 10% above water level, and a zero-order isostatic
+        # correction (assumes equilibrium).
+        return 1.666*topo[areaind]*(icetime[areaind]!=0)
+
 class IceHistory(object):
     """An object for loading and using large ice models."""
     def __init__(self):
