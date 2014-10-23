@@ -1,4 +1,5 @@
 import numpy as np
+import pymc as pm
 import time
 import inspect
 
@@ -178,6 +179,15 @@ class GiaSim(object):
         # reset the function to initial value
         trash = func(xs, arglist)
         return jac
+
+    def mcmc(self, N):
+        # priors
+
+        # observations
+        @pm.deterministic
+        def emerge(viscs):
+            return self.data_vec(viscs)
+        obs = pm.Normal('obs', emerge, observed=True)
 
     def perform_convolution(self, out_times=None, emergeCorr=True, 
                             t_rel=0, verbose=False):  
