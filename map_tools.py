@@ -55,6 +55,48 @@ class GridObject(object):
         self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0])
         self.Lon, self.Lat = basemap(*np.meshgrid(self.x, self.y), inverse=True)
 
+    def volume(self, array, km=True):
+        """Weight an area defined over the map by the area of the cells
+        """
+        try:
+            x = array.shape
+            if self.shape != array.shape:
+                raise ValueError('GridObject and array must have same shape')
+        except:
+            raise ValueError('provided array has no "shape" property')
+
+        dLon = np.abs(self.Lon[:-1,1:]-self.Lon[:-1,:-1])*np.pi/180
+        dLat = np.abs(self.Lat[1:,:-1]-self.Lat[:-1,:-1])*np.pi/180
+        
+        r = 6371 if km else 6371000
+
+        dA = (r**2)*np.sin(self.Lat[:-1, :-1]*np.pi/180)*dLat*dLon
+        dV = array[:-1,:-1]*dA
+
+        return dV
+
+    def integrate(self, array):
+        """Perform area integration of an array over the map area.
+        """
+        dV = self.volume(array)
+        return dV.sum()
+
+    def integrateArea(self, array, area, latlon=False):
+        """Integrate an array over a specific area."""
+        inds = self.selectArea(area, latlon=latlon)
+        dV = self.volume(array)
+        return dV[inds].sum()
+
+    def integrateAreas(self, array, areaDict):
+        """Integrate an array over areas stored in an AreaDict."""
+        dV = self.volume(array)
+        volDict = {'whole': dV.sum()}
+        for name, area in areaDict.iteritems():
+            inds = self.selectArea(area['verts'], latlon=area['latlon'])
+            volDict[name] = dV[inds].sum()
+            
+        return volDict
+
     def create_interper(self, array):
         """Return a 2D interpolation object on the map, in map coordinates.
 

@@ -64,7 +64,7 @@ class Ice2d(object):
         return truncfft
 
     def addArea(self, name, verts, prop, latlon=True):
-        """Add an area to the model to be altered proportionally by amout prop.
+        """Add an area to the model to be altered proportionally by amount prop.
 
         Parameters
         ----------
@@ -159,7 +159,7 @@ class Ice2d(object):
             raise ValueError('time must be in self.times')
         
         # 1.666 = rho_asth * rho_w / rho_ice (rho_asth - rho_w)
-        #       ~ 3 * 1 / 0.9 (3-1) = 
+        #       ~ 3 * 1 / 0.9 (3-1) 
         # which accounts for 10% above water level, and a zero-order isostatic
         # correction (assumes equilibrium).
         return 1.666*topo[areaind]*(icetime[areaind]!=0)
