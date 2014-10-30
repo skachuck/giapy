@@ -82,12 +82,21 @@ class Ice2d(object):
         New entry in self.alterDict under key 'name' with values 'verts' 
         and 'prop'.
         """
+        prop = np.asarray(prop)
+        if prop.shape != self.times.shape and prop.shape != ():
+            raise ValueError('prop must either be one number, or one for eac\
+                time in self.times')
         self._alterDict[name] = {'verts':verts, 'prop':prop, 'latlon':latlon}
 
-    def editArea(self, name, verts=None, prop=None):
+    def editArea(self, name, prop=None, verts=None):
         """Edit an area previously defined and named by addArea."""
         if verts is not None: self._alterDict[name]['verts'] = verts
-        if prop is not None: self._alterDict[name]['prop'] = prop
+        if prop is not None:
+            prop = np.asarray(prop)
+            if prop.shape != self.times.shape and prop.shape != ():
+                raise ValueError('prop must either be one number, or one for\
+                    each time in self.times')
+            self._alterDict[name]['prop'] = prop
 
     def alterAreas(self, grid):
         """Multiply the areas in self.heights by their props.
@@ -100,13 +109,17 @@ class Ice2d(object):
         grid.update_shape(self.shape)
         for areaDict in self._alterDict.values():
             areaind = grid.selectArea(areaDict['verts'], areaDict['latlon'])
-            self.heights[:, areaind] *= areaDict['prop'] 
+            if areaDict['prop'].shape == ():
+                self.heights[:, areaind] *= areaDict['prop']
+            else:
+                for icestage, prop in zip(self.heights, areaDict['prop']):
+                    icestage[areaind] *= prop
 
     def printAreas(self):
         """Print the list of alterations made to the ice model"""
         arealist = ''
         for name, areaDict in self._alterDict.iteritems():
-            arealist += '\t {0}: {1}\n'.format(name, areaDict[prop])
+            arealist += '\t {0}: {1}\n'.format(name, areaDict['prop'])
         return arealist
 
     def isGrounded(self, time, topo, interp=False):
@@ -163,6 +176,25 @@ class Ice2d(object):
         # which accounts for 10% above water level, and a zero-order isostatic
         # correction (assumes equilibrium).
         return 1.666*topo[areaind]*(icetime[areaind]!=0)
+
+    def printMW(self, grid, oceanarea=3.14e8):
+        """Print equivalent meters meltwater for the glaciers in _alterDict.
+
+        Parameters
+        ----------
+        grid : GridObject
+        oceanarea : float
+            the area of the ocean to convert volumes to heights, 
+            default = 3.14e8 km^2, current area.
+        """
+        for time, icestage in zip(self.times, self.heights):
+            print '{0} ka BP'.format(time)
+            print '------------------------------'
+            # Get the glacier volumes by integrating on the grid.
+            vols = grid.integrateAreas(icestage, self._alterDict)
+            for name, vol in vols.iteritems():
+                print '\t {0} : {1} mMW'.format(name, vol/3.14e8)
+            print ''
 
 class IceHistory(object):
     """An object for loading and using large ice models."""
