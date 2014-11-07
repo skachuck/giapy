@@ -228,13 +228,33 @@ class Ice2d(object):
             default = 3.14e8 km^2, current area.
         """
         for time, icestage in zip(self.times, self.heights):
-            print '{0} ka BP'.format(time)
+            print '\n{0} ka BP'.format(time)
             print '------------------------------'
             # Get the glacier volumes by integrating on the grid.
             vols = grid.integrateAreas(icestage, self._alterDict)
             for name, vol in vols.iteritems():
-                print '\t {0} : {1} mMW'.format(name, vol/3.14e8)
-            print ''
+                print '\t{0} : {1} mMW'.format(name, vol/oceanarea)
+
+    def calcMW(self, grid, arealist=None, oceanarea=3.61e8):
+        # Set up the dictionary for return - keys are area names, values are
+        # lists of MW in time.
+        if arealist is None:
+            returndict = {}
+            for name in self._alterDict.iterkeys():
+                returndict[name] = np.zeros(len(self.times))
+            returndict['whole'] = np.zeros(len(self.times))
+        pbar = ProgressBar(widgets=['Integrating: ', Percentage(), ' ', Bar(),
+        ' ', ETA()])
+        pbar.start()
+        for i, icestage in pbar(enumerate(self.heights)):
+            vols = grid.integrateAreas(icestage, self._alterDict)
+            for name, mwlist in returndict.iteritems():
+                mwlist[i] = vols[name]/oceanarea
+            pbar.update(i + 1)
+        pbar.finish()
+
+        return returndict
+
 
 class IceHistory(object):
     """An object for loading and using large ice models."""
