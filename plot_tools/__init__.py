@@ -9,6 +9,7 @@ class SquareAreas(object):
     nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}
     namc = {'latmin':30, 'latmax':50, 'lonmin':-80, 'lonmax':-50}
     eur = {'latmax': 82, 'latmin': 49, 'lonmax': 75, 'lonmin': -15}
+    bar = {'latmax': 85, 'latmin': 68, 'lonmax': 90, 'lonmin': 15}
 
 # MAP PARAMETERS
 # m = basemap.Basemap(**param_dict)
@@ -30,10 +31,14 @@ class MapParams(object):
                 'rsphere':(6378137.00,6356752.3142),\
                 'resolution':'i','area_thresh':250.,'projection':'lcc',\
                 'lat_0':80.5,'lon_0':57.}
-    bar = {'llcrnrlon':7,'llcrnrlat':70,'urcrnrlon':83,'urcrnrlat':84,\
+    bar = {'llcrnrlon':15,'llcrnrlat':68,'urcrnrlon':89,'urcrnrlat':80,\
                 'rsphere':(6378137.00,6356752.3142),\
-                'resolution':'i','area_thresh':250.,'projection':'merc',\
-                'lat_0':75.5,'lon_0':57.}
+                'resolution':'i','area_thresh':250.,'projection':'lcc',\
+                'lat_0':78,'lon_0':38.}
+    svalfjl = {'llcrnrlon':17,'llcrnrlat':75,'urcrnrlon':85,'urcrnrlat':83,\
+                'rsphere':(6378137.00,6356752.3142),\
+                'resolution':'i','area_thresh':250.,'projection':'lcc',\
+                'lat_1':70.,'lat_2':83,'lat_0':75.5,'lon_0':57}
     namc = {'llcrnrlon':-80, 'llcrnrlat':30, 'urcrnrlon':-50, 'urcrnrlat':50,
                 'rsphere':(6378137.00,6356752.3142),
                 'resolution':'l', 'area_thresh':1000., 'projection':'merc'}
