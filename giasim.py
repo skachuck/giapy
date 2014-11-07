@@ -85,7 +85,7 @@ class GiaSim(object):
     def set_out_times(self, out_times):
         self.out_times = out_times
         
-    def leastsq(self, x0, arglist=None, priors=None, 
+    def leastsq(self, x0, func=None, args=None, priors=None, 
                     save_params=False, save_chi2=False, **kwargs):
         """Calculate the least squares minimum from starting point x0.
 
@@ -99,12 +99,12 @@ class GiaSim(object):
         **kwargs - see kwargs for scipy.optimize.leastsq
         """
 
+        func = func or self.residualsEarth
         self.priors = priors
-
         self.old_params = [] if save_params else None
         self.old_chi2 = [] if save_chi2 else None
 
-        m = leastsq(self.residuals, x0, args=(arglist,), Dfun=self.jacobian, 
+        m = leastsq(func, x0, args=(args,), Dfun=self.jacobian, 
                     col_deriv=1, **kwargs)
         
         if save_params: self.old_params = np.asarray(self.old_params)
@@ -112,7 +112,7 @@ class GiaSim(object):
 
         return m
 
-    def residuals(self, xs, arglist=None, verbose=False):
+    def residualsEarth(self, xs, arglist=None, verbose=False):
         """Calculate the residuals associated with stored data sources and
         earth parameters xs.
         """
@@ -145,12 +145,39 @@ class GiaSim(object):
 
         return res
 
+    def residualsIce(self, xs, namelist=None, verbose=False):
+        if not self.datalist:
+            raise StandardError('self.datalist is empty. Use self.attach_data.')
+
+        # Ascertain size of alteration
+        
+        self.ice.updateAreas(xs)
+        self.perform_convolution()
+        res = []
+            
+        for data in self.datalist:
+            res.append(data.residual(self, verbose=verbose))
+        
+        if self.priors is not None:
+            res.append((xs-self.priors[:,0])/self.priors[:,1])
+
+        res = np.concatenate(res)
+
+        # If saving steps, save current step
+        if inspect.stack()[1][3] != 'jacobian':
+            if self.old_params is not None:
+                self.old_params.append(self.earth.get_params())
+            if self.old_chi2 is not None:
+                self.old_chi2.append(res.dot(res))
+
+        return res
+
     def jacobian(self, xs, arglist=None, func=None, func_args=None,
                     eps_f=5.e-5):
         """Calculate the jacobian associated with stored data sources and
         parameters xs, with function evaluation error eps_f (default 5e-11).
         """
-        func = func or self.residuals
+        func = func or self.residualsIce
 
         jac = []
         xs = np.asarray(xs)
@@ -219,7 +246,7 @@ class GiaSim(object):
             raise ValueError('t_rel must be in out_times')
         
         # Fourier transform the ice_hist
-        ice_stages = ice.fft(N)
+        ice_stages = ice.fft(N, self.grid)
         
         # Initialize the uplift array
         uplift_f = np.zeros((len(out_times), N, N), dtype=complex)

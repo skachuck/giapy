@@ -10,20 +10,36 @@ icehistory.py
 import numpy as np
 import cPickle as pickle
 
+from progressbar import ProgressBar, ETA, Percentage, Bar
+
 def load(filename):
     return pickle.load(open(filename, 'rb'))
 
 class Ice2d(object):
-    """Store and use a small ice model."""
+    """Store, use, and manipulate an ice model small enough to be stored in a
+    single array. (In practice, this means less than ...)
+    
+    Attributes
+    ----------
+    heights : array
+        3D array of ice heights with dimensions [stages, xdim, ydim]
+    shape : tuple
+        (xdim, ydim)
+    times : array
+        Times corresponding to the defined ice stages (in order)
+    N : int
+        The optimal order number for Fourier decomposition of the ice model.
+
+    >>> ice = Ice2D()
+    >>> ice.readice('./IceModels/Fullice_Aleksey.dat', 471, 491)
+    """
     def __init__(self):
         self.times = np.array([20, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8])
         self._alterDict = {}
         self._desc = ''
-        #icefile = '/Users/skachuck/Documents/Work Documents/GIA_Modeling/2d_model/Fullice_Aleksey.dat'
-        #Lat, Lon, ice_stages = icehistory.readice(icefile, 471, 491)
 
     def __str__(self):
-        return self._desc+self.printAreas()
+        return self._desc+'\n'+self.printAreas()
         
     def save(self, filename):
         pickle.dump(self, open(filename, 'wb'))
@@ -53,9 +69,11 @@ class Ice2d(object):
         self.N = 512
         self.shape = np.shape(self.heights[0,:,:])
         
-    def fft(self, N):
+    def fft(self, N, grid):
         """Return the truncated FFT of ice heights to order N."""
-        fullfft = np.fft.fft2(self.heights, s=[self.N,self.N])
+
+        heights = self.alterAreas(grid)
+        fullfft = np.fft.fft2(heights, s=[self.N,self.N])
         truncfft = np.zeros((11, N, N), dtype=complex)
         truncfft[:,:N/2,:N/2]=fullfft[:,          :N/2,           :N/2]
         truncfft[:,:N/2,N/2:]=fullfft[:,          :N/2, self.N-N/2:   ]
@@ -98,6 +116,25 @@ class Ice2d(object):
                     each time in self.times')
             self._alterDict[name]['prop'] = prop
 
+    def updateAreas(self, updatelist, namelist=None):
+        if namelist is None: namelist = self._alterDict.keys()
+        # Method uses list operations to parse updatelist into areas
+        updatelist = list(updatelist)
+        for name in namelist:
+            # need length of prop, but need to catch length 1
+            try: n = len(self._alterDict[name]['prop'])
+            except TypeError: n = 1
+            try:
+                # Take the appropriate numer of alterations out ...
+                props = updatelist[0] if n==1 else updatelist[:n]
+                # ... delete them from the list ...
+                del updatelist[:n]
+                # ... and use them to update that areas props.
+                self.editArea(name, prop=props)
+            except IndexError:
+                raise IndexError('updatelist had insufficient length for areas\
+                in namelist')
+
     def alterAreas(self, grid):
         """Multiply the areas in self.heights by their props.
 
@@ -107,13 +144,16 @@ class Ice2d(object):
             the map grid associated with the ice model            
         """
         grid.update_shape(self.shape)
+        alteredIce = self.heights.copy()
         for areaDict in self._alterDict.values():
             areaind = grid.selectArea(areaDict['verts'], areaDict['latlon'])
             if areaDict['prop'].shape == ():
-                self.heights[:, areaind] *= areaDict['prop']
+                alteredIce[:, areaind] *= areaDict['prop']
             else:
-                for icestage, prop in zip(self.heights, areaDict['prop']):
+                for icestage, prop in zip(alteredIce, areaDict['prop']):
                     icestage[areaind] *= prop
+
+        return alteredIce
 
     def printAreas(self):
         """Print the list of alterations made to the ice model"""
@@ -177,7 +217,7 @@ class Ice2d(object):
         # correction (assumes equilibrium).
         return 1.666*topo[areaind]*(icetime[areaind]!=0)
 
-    def printMW(self, grid, oceanarea=3.14e8):
+    def printMW(self, grid, oceanarea=3.61e8):
         """Print equivalent meters meltwater for the glaciers in _alterDict.
 
         Parameters
