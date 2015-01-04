@@ -33,7 +33,7 @@ class TiltData(object):
 
         return (calc_vector-self.long_data)/0.1
 
-def calc_tilts(uplift, Lon, Lat, r=6371):
+def calcTilts(uplift, Lon, Lat, r=6371):
     """Calculate the gradient magnitude of an uplift plane.
     
     Uses two-point central difference in the body and one-point difference
