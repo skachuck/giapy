@@ -16,3 +16,7 @@ def gen_eustatic():
     sealevel_curve = interp1d(times, meters, bounds_error=False, fill_value=0)
 
     return sealevel_curve
+
+def readEustatic(fname):
+    esl = np.loadtxt(fname)
+    return interp1d(esl[:,0]/1000., esl[:,1], bounds_error=False, fill_value=0)
