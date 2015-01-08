@@ -1,9 +1,17 @@
 import numpy as np
-import pymc as pm
+#import pymc as pm
 import time
 import inspect
 
+import spharm
+
 from scipy.optimize import leastsq
+
+try:
+    from progressbar import ProgressBar, Percentage, Bar, ETA
+except:
+    pass
+
 
 class GiaSim(object):
     """
@@ -291,3 +299,99 @@ class GiaSim(object):
             
         eslcorr = self.esl(self.out_times)
         self.uplift = self.uplift + eslcorr[:, np.newaxis, np.newaxis]   
+
+
+
+class GiaSimSphere(object):
+    def __init__(self, earth, ice, grid):
+        self.nlon, self.nlat = grid.shape
+        self.harmTrans = spharm.Spharmt(nlon, nlat, legfun='stored')
+
+    def perform_convolution(self, out_times=None, ntrunc=None, emergeCorr=True, 
+                             t_rel=0, verbose=False):  
+        """Convolve an ice load and an earth response model in fft space.
+        Calculate the uplift associated with stored earth and ice model.
+        
+        Parameters
+        ----------
+        out_times - an array of times at which to caluclate the convolution.
+                    (default is to use previously stored values).
+        ntrunc : int
+           The truncation number of the spherical harmonic expansion. Default
+           is from the earth model, must be <= ice model's and < grid.nlat
+        t_rel - the time relative to which uplift is considered (default present)
+                (None for no relative). Must be in out_times.
+        emergeCorr : Bool
+            Apply any attached corrections to uplift to get emergence
+        """
+        time_start = time.clock()
+ 
+        earth = self.earth
+        ice = self.ice
+ 
+        Nrem = 1                                # number of intermediate steps
+
+        # Resolution
+        ntrunc = ntrunc or ice.N
+        if ntrunc >= self.nlat:
+           raise ValueError('ntrunc must be < grid.nlat')
+        ms, ns = spharm.getspecindx(ntrunc)     # the list of degrees, m, and
+                                                # order numbers, n. Sizes of
+                                                # (ntrunc+1)*(ntrunc+2)/2
+
+        # Calculate earth response to correct order number
+        earth.calcResponse(ntrunc)
+        
+        # Store out_times
+        out_times = out_times or self.out_times
+        self.out_times = out_times
+        if out_times is None:
+           raise ValueError('out_times is not set')
+ 
+        # Make sure t_rel is in out_times
+        if t_rel is not None and t_rel not in out_times:
+            raise ValueError('t_rel must be in out_times')
+                
+        # Initialize the uplift array
+        uplift_f = np.zeros((len(out_times), N, N), dtype=complex)
+        
+        # Use progressbar to track calculation
+        if verbose:
+           try:
+               widgets = ['Convolution: ', Bar(), ' ', ETA()]
+               pbar = ProgressBar(widgets=widgets, maxval=len(ice.times)+1)
+               pbar.start()
+           except:
+               ImportError('progressbar not loaded')
+
+        # Convolve each ice stage to the each output time
+        for i, ice0, t0, ice1, t1 in\
+                enumerate(ice.pairIter(transform=self.harmTransns.grdtospec)):
+            delta_ice = (ice0 - ice1)/Nrem
+            for inter_time in np.linspace(t0, t1, Nrem, endpoint=False):
+                # Perform the time convolution for each output time
+                for t_out in out_times[out_times <= inter_time]:
+                    t_dur = (inter_time-t_out)
+                    respArray = earth.getRespAtTime(t_dur)
+                    # 0.3 accounts for density difference between ice and rock
+                    uplift_f[t_out == out_times, :, :] += 0.3 *\
+                               np.tile(delta_ice, (respArray.shape[1],1))*\
+                               respArray[ns]
+                               
+            if verbose: pbar.update(i+1)
+        if verbose: pbar.finish()
+             
+        # Calculate uplift relative to t_rel (default, present)
+        if t_rel is not None: 
+            uplift = uplift[np.where(out_times==t_rel)] - uplift 
+ 
+        self.grid.update_shape(shape)
+     
+        # Correctly grid the uplift array by removing the fourier padding
+        self.uplift = uplift[:, :shape[0], :shape[1]]
+ 
+        if emergeCorr:
+            # Perform meltwater correction
+            if hasattr(self, 'esl'): self.mw_corr()
+ 
+        if verbose: print 'Convolution time: {0}s'.format(time.clock()-time_start)
