@@ -9,6 +9,9 @@ icehistory.py
 
 import numpy as np
 import cPickle as pickle
+import os
+
+from giapy.map_tools import loadXYZGridData
 
 from progressbar import ProgressBar, ETA, Percentage, Bar
 
@@ -37,6 +40,7 @@ class Ice2d(object):
         self.times = np.array([20, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8])
         self._alterDict = {}
         self._desc = ''
+        self.stageOrder = None                       # Used for loading cycle
 
     def __str__(self):
         return self._desc+'\n'+self.printAreas()
@@ -79,7 +83,11 @@ class Ice2d(object):
         truncfft[:,:N/2,N/2:]=fullfft[:,          :N/2, self.N-N/2:   ]
         truncfft[:,N/2:,:N/2]=fullfft[:,self.N-N/2:   ,           :N/2]
         truncfft[:,N/2:,N/2:]=fullfft[:,self.N-N/2:   , self.N-N/2:   ]
-        return truncfft
+
+        if self.stageOrder is None:
+            return truncfft
+        else:
+            return truncfft[self.stageOrder]
 
     def addArea(self, name, verts, prop, latlon=True):
         """Add an area to the model to be altered proportionally by amount prop.
@@ -236,6 +244,8 @@ class Ice2d(object):
                 print '\t{0} : {1} mMW'.format(name, vol/oceanarea)
 
     def calcMW(self, grid, arealist=None, oceanarea=3.61e8):
+        """
+        """
         # Set up the dictionary for return - keys are area names, values are
         # lists of MW in time.
         if arealist is None:
@@ -243,10 +253,9 @@ class Ice2d(object):
             for name in self._alterDict.iterkeys():
                 returndict[name] = np.zeros(len(self.times))
             returndict['whole'] = np.zeros(len(self.times))
-        pbar = ProgressBar(widgets=['Integrating: ', Percentage(), ' ', Bar(),
-        ' ', ETA()])
+        pbar = ProgressBar(widgets=['Integrating: ',' ', Bar(), ' ', ETA()])
         pbar.start()
-        for i, icestage in pbar(enumerate(self.heights)):
+        for i, icestage in enumerate(self.heights):
             vols = grid.integrateAreas(icestage, self._alterDict)
             for name, mwlist in returndict.iteritems():
                 mwlist[i] = vols[name]/oceanarea
@@ -254,16 +263,199 @@ class Ice2d(object):
         pbar.finish()
 
         return returndict
+    
+    def appendLoadCycle(self, esl, tLGM=None):
+        """Identify glaciating stages with deglaciating stage of same ESL.
+
+        Parameters
+        ----------
+        esl : scipy.interp1d
+            Eustatic Sea Level interpolating object
+        tLGM : float
+            The time of Last Glacial Maximum in ka.
+
+        Results
+        -------
+        Appends the glaciation times to self.times and the matching stage
+        files to self.icefiles.
+        """
+        tLGM = tLGM or self.times[np.argwhere(esl.y == esl.y.min())]
+        # To split the esl curve into glaciation/deglaciation sections
+        iLGM = np.argmin(np.abs(esl.x - tLGM))
+
+        stageOrder = range(len(self.times))
+
+        tReturn = []
+        nReturn = []
+
+        for nStage, tStage in enumerate(self.times):
+            eslStage = esl(tStage)
+            # collect all indices where ESL passes through stage's ESL
+            indices = np.argwhere(esl.y[iLGM:]-eslStage >= 0)
+            iUps = indices[1:][indices[1:]-indices[:-1]>1]
+            for i in np.r_[[indices.min()], iUps]:
+                # Find the time and ESL just before match to ice stage
+                tDown = esl.x[iLGM:][i-1]
+                yDown = esl.y[iLGM:][i-1]
+                dt = esl.x[iLGM:][i] - tDown
+                dy = esl.y[iLGM:][i] - yDown
+                tReturn.append(tDown + dt/dy*(eslStage-yDown))
+                nReturn.append(nStage)
+
+        # Remove multiple stage additions?
+
+        # Append the load cycle
+        self.times = np.r_[tReturn, self.times]
+        self.stageOrder = np.r_[nReturn, stageOrder]
+
+        # Sort it all into decreasing order
+        sortInd = np.argsort(self.times)[::-1]
+        self.times = self.times[sortInd]
+        self.stageOrder = self.stageOrder[sortInd]
+        print('{0} stages added for the load cycle.'.format(len(nReturn)))
 
 
 class IceHistory(object):
-    """An object for loading and using large ice models."""
-    def __init__(self):
-        pass
+    """An object for loading and using large ice models.
+
+    Give the instance a path to the folder containing the individual stages to
+    interactively select the ice stage files and input their corresponding ages
+    in thousand years before present.
     
-    def singiter(self):
-        def singGenerator(self):
-            for f in self.filenames:
-                self.load_data(f)
-                yield self.heights
-        return singGenerator
+    Parameters
+    ----------
+    path : str
+        The path to the ice filenames
+    dataFormat : dict
+        A dictionary of options for np.loadtxt, used when loading a stage.
+    shape : tuple
+        The shape of each stage array. (Default assumes square array)
+
+    Attributes
+    ----------
+    times : array
+        Array of times at which ice heights are defined
+    fnames : list
+        list of filenames
+    path : str
+        The path to the ice filenames
+    dataFormat : dict
+        A dictionary of options for np.loadtxt, used when loading a stage.
+    shape : tuple
+        The shape of each stage array
+    Lon, Lat : NDarray
+        meshgrid representations of the Lon/Lat grids for the ice model.
+    """
+    def __init__(self, path=None, dataFormat={}, shape=None):
+        self.path = os.path.abspath(path)
+        self.dataFormat = dataFormat
+
+        self.fnames = []
+        self.times = []
+
+        for fname in os.listdir(self.path):
+            resp = raw_input('Include '+fname+'? [y/n/end] ')
+            if resp == 'y':
+                year = raw_input('\tTime of file (in ka bp): ')
+                self.fnames.append(fname)
+                self.times.append(float(year))
+            elif resp == 'end':
+                break
+            elif resp == 'n':
+                continue
+
+        # Extract shape, Lon, and Lat info from first file.
+        try:
+            trial = self.load(self.fnames[0], shape=shape, lonlat=True)
+            self.Lon = trial[0]
+            self.Lat = trial[1]
+            self.shape = self.Lon.shape
+            if shape is None: print('Shape assumed {0}'.format(self.shape))
+        except ValueError as e:
+            raise e
+
+    def load(self, fname, lonlat=False, dataFormat=None):
+        dataFormat = dataFormat or self.dataFormat
+        data =  loadXYZGridData(self.path+fname, shape=self.shape,\
+                                lonlat=lonlat, **dataFormat)
+        return data
+
+    def pairIter(self, transform=None):
+        """Iterate over consecutive pairs of ice stages, loading only one at
+        each iteration
+
+        Parameters
+        ----------
+        transform : transformation function
+            If the data are to be transformed
+        """
+        ice1, t1 = self.load(self.fnames[0]), self.times[0]
+        if transform is not None:
+            ice1 = transform(ice1)
+        
+        for time, fname in zip(self.times[1:], self.fnames[1:]):
+            ice0, t0 = ice1, t1
+            ice1, t1 = self.load(fname), time
+            yield ice0, t0, ice1, t1
+
+    def appendLoadCycle(self, esl, tLGM=None):
+        """Identify glaciating stages with deglaciating stage of same ESL.
+
+        Parameters
+        ----------
+        esl : scipy.interp1d
+            Eustatic Sea Level interpolating object
+        tLGM : float
+            The time of Last Glacial Maximum in ka.
+
+        Results
+        -------
+        Appends the glaciation times to self.times and the matching stage
+        files to self.icefiles.
+        """
+        tLGM = tLGM or self.times[np.argwhere(esl.y == esl.y.min())]
+        # To split the esl curve into glaciation/deglaciation sections
+        iLGM = np.argmin(np.abs(esl.x - tLGM))
+
+        tReturn = []
+        nReturn = []
+
+        for nStage, tStage in enumerate(self.times):
+            eslStage = esl(tStage)
+            # collect all indices where ESL passes through stage's ESL
+            indices = np.argwhere(esl.y[iLGM:]-eslStage >= 0)
+            iUps = indices[1:][indices[1:]-indices[:-1]>1]
+            for i in np.r_[[indices.min()], iUps]:
+                # Find the time and ESL just before match to ice stage
+                tDown = esl.x[iLGM:][i-1]
+                yDown = esl.y[iLGM:][i-1]
+                dt = esl.x[iLGM:][i] - tDown
+                dy = esl.y[iLGM:][i] - yDown
+                tReturn.append(tDown + dt/dy*(eslStage-yDown))
+                nReturn.append(nStage)
+
+        #TODO Remove repeated stage additions?
+
+        # Append the load cycle
+        self.times = np.r_[tReturn, self.times]
+        self.fnames = np.r_[self.fnames[nReturn], self.fnames]
+
+        # Sort it all into decreasing order
+        sortInd = np.argsort(self.times)[::-1]
+        self.times = self.times[sortInd]
+        self.fnames = self.fnames[sortInd]
+        print('{0} stages added for the load cycle.'.format(len(sortInd)))
+
+    def decimate(self, n, suf=''):
+        """Reduce an ice load by a power n of 2. Files are resaved with suffix
+            suf.
+        """
+        newfnames = []
+        for fname in self.filenames:
+            ice = self.load(fname)
+            ice = ice[::2**n,::2**n]
+            newfname = fname+suf
+            newfnames.append(newfname)
+            np.savetxt(newfname.format(2**n), ice)
+        self.fnames = newfnames
+        self.Lons, self.Lats = lons[::2**n,::2**n], lats[::2**n,::2**n]
