@@ -384,13 +384,13 @@ class SphericalEarthSolver(object):
         viscProfile = calcViscProfile()
         return vs
     
-    def timeEvolveBetter(self):
+    def timeEvolveBetter(self, n=2, tmax=150):
         # TODO Look up dynamic time-step optimization for saving profiles
         r = ode(f, jac)
         r.set_integrator()
         r.set_solout()
     
-        while r.successful() and r.t<150:
+        while r.successful() and r.t<tmax:
             r.integrate()
 
 
@@ -470,7 +470,7 @@ class SphericalEarthSolver(object):
             if t in times_write:
                 returnDict['vUpl'].append(uv[-1])
                 returnDict['eUpl'].append(eProf[0,-1])
-                returnDict['times'].append(t/secs_per_year)
+                returnDict['times'].append(t/secs_per_year/1e3)
                 returnDict['phi1'].append(eProf[4,-1])
                 returnDict['g1'].append(eProf[5,-1])
                 
@@ -524,8 +524,13 @@ class SphericalEarth(object):
     def reset_params(self):
         pass
         
-    def calcResponse(self):
-        pass
+    def calcResponse(self, nmax=100):
+        self.respDict = {}
+        solver = SphericalEarthSolver(self.params)
+        pbar = ProgressBar(widgets=['n = {0}:'.format(n), Bar(), Percentage()])
+        for n in pbar(range(nmax)):
+            prof = solver.timeEvolve(n)
+            self.respDict[n] = prof
 
 
 
