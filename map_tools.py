@@ -179,3 +179,30 @@ def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
                         np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2))
 
     return ds
+
+def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
+    """Load data on an evenly spaced grid from an XYZ format.
+
+    Parameters
+    ----------
+    fname : file or str
+        The path to the file to be loaded
+    shape : tuple
+        The shape of the grid. Default is square grid.
+    lonlat : boolean
+        Return lon, lat, data if True (default False).
+    **kwargs : see np.loadtxt documentation.
+    """
+    rawData = np.loadtxt(fname, **kwargs)
+    
+    if shape is not None:
+        nx, ny = shape[0], shape[1]
+        rawData = rawData.reshape((3, nx, ny))
+    else:
+        n = np.sqrt(rawData.shape[0])
+        rawData = rawData.reshape((3, n, n))
+
+    if lonlat:
+        return rawData
+    else:
+        return rawData[2]
