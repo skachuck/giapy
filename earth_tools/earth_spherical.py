@@ -11,6 +11,7 @@ import numpy as np
 from scipy.integrate import odeint, ode
 from scipy.interpolate import interp1d
 from progressbar import ProgressBar, Bar, Percentage
+import cPickle as pickle
 
 class EarthParams(object):
     def __init__(self):
@@ -71,7 +72,8 @@ class EarthParams(object):
         grav = np.array([1073.8,1010.2,995.8,995.8,998.7,998.7,995.5,995.5,983.2,983.2,983.2]) # cm/s^2
         shear = 1.e+12*np.array([2.954,2.555,1.837,1.837,1.462,1.396,.749,.697,.709,.709,.709]) # dyne/cm^2
         bulk = 1.e+12*np.array([6.349,5.407,3.490,3.490,2.665,2.698,1.836,1.706,1.017,1.017,1.017]) # dyne/cm^2
-        visc = 1.e+22*np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1., 1., 1]) # poise = g/cm.s
+        visc = 1.e+22*np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.,
+                                100., 100.]) # poise = g/cm.s
         
         zz = self.norms['r']-zz
         self.norms['mu'] = shear[0]
@@ -179,7 +181,7 @@ class SphericalEarthSolver(object):
 
     def calcElasProfile(self, n):
         """Solves for Ue, Ve, Pe, Qe, phi1, and g1 profiles as functions of
-        depth for spherical harmonic order number n.
+        depth for spherical harmonic order number n using a Shooting Method.
 
         Requires material parameters of the Earth (stored in earth) and a
             previously calculated viscous profile (for initial conditions)
@@ -198,10 +200,10 @@ class SphericalEarthSolver(object):
         rCore = self.earth.rCore
         muStar = self.earth.norms['mu']
 
-        uv = self.profs['uv'](self.earth.rCore)
+        uv = self.profs['uv'](rCore)
 
         # Four initial starting vectors at Core Mantle Boundary
-        params = self.earth.getParams(self.earth.rCore)
+        params = self.earth.getParams(rCore)
         lam = params['bulk']
         mu = params['shear']
         rho = params['den']
@@ -222,6 +224,23 @@ class SphericalEarthSolver(object):
         # Propogate solution to Surface
         y = np.asarray([odeint(self.derivativeElas, y0i, self.zarray, 
                         args=(n, ), h0 = 0.001) for y0i in y0])
+        """
+        y = []
+        z0 = rCore
+        for y0i in y0:
+            yi = [y0i]
+            integrator = ode(self.derivativeElas)
+            integrator.set_integrator('dopri5')
+            integrator.set_initial_value(y0i, z0).set_f_params(n)
+
+            for z in self.zarray[1:]:
+                integrator.integrate(z)
+                yi.append(integrator.y)
+
+            y.append(yi)
+
+        y = np.asarray(y)
+        """
         
         # convert solution to real units
         y[:,:,0:2] = y[:,:,0:2]*r/muStar   # the displacements u and v
@@ -244,8 +263,11 @@ class SphericalEarthSolver(object):
                 #        [y2.p, y2.q, y2.g1+(1+n)/rstar*y2.phi1+4\pi g \rho*y2.u]] 
         
         # b is a vector of the boundary values for p, q, and g1
-        b = np.array([-load, 0, -G*load/g-y[3, -1, 4]*(1+n)/r-\
-                            G*rho*y[3, -1, 0]])-y[3,-1,[2,3,5]] 
+        b = np.array([-load, 
+                      0, 
+                      -G*load/g-y[3, -1, 4]*(1+n)/r-G*rho*y[3, -1, 0]])
+        # Include the (known) core-mantle boundary starting vector
+        b -= y[3,-1,[2,3,5]] 
         coeffs = np.r_[np.linalg.solve(a.T, b), 1]
         
         # sum for the final solution together
@@ -338,18 +360,35 @@ class SphericalEarthSolver(object):
         eta = params['visc']
         rho = params['den']
         g = params['grav']
-    
+
         # initial conditions
         y0 = np.array([[etaStar/r, 0, 0, 0], 
                     [0, etaStar/r, 0, 0],
                     [0, 0, ((denCore-rho)*g*uv+denCore*phi1+denCore*g*ue),0]])
         if n==1:                    # Different initial conditions for n=1 case
-            y0[0] = array([0., 0., -1., 0.])
+            y0[0] = np.array([0., 0., -1., 0.])
         
         # solve for profile
         y = np.asarray([odeint(self.derivativeVisc, y0i, self.zarray, args=(n, ), 
                             h0 = 0.001) for y0i in y0])
         
+        """
+        y = []
+        z0 = rCore
+        for y0i in y0:
+            yi = [y0i]
+            integrator = ode(self.derivativeVisc)
+            integrator.set_integrator('dopri5')
+            integrator.set_initial_value(y0i, z0).set_f_params(n)
+
+            for z in self.zarray[1:]:
+                integrator.integrate(z)
+                yi.append(integrator.y)
+
+            y.append(yi)
+
+        y = np.asarray(y)
+        """
         # convert solution to real units
         y[:,:,0:2] = y[:,:,0:2]*r/etaStar   # the displacements u and v
 
@@ -368,14 +407,22 @@ class SphericalEarthSolver(object):
                                #        [y1.p, y1.q]
             
         b = np.array([load, 0]) - y[2,-1,[2,3]] # a vector of the boundary values
-                                             # for p, q, and g1
-        coeffs = np.r_[np.linalg.solve(a.T, b), 1]
+                                             # for p and q
+        
+        try:
+            coeffs = np.r_[np.linalg.solve(a.T, b), 1]
+        except np.linalg.LinAlgError as e:
+            print y
+            print a
+            print b
+            raise e
         
         # put the final solution together
         #profile = y[0,:,:]*coeffs[0]+y[1,:,:]*coeffs[1]+y[2,:,:]
         profile = y.T.dot(coeffs)
         
         return profile
+        
     
     def viscVelocity():
         # Solve elastic profile
@@ -401,13 +448,14 @@ class SphericalEarthSolver(object):
         # initialize earth model
         earth = self.earth
         paramSurf = self.earth.getParams(1.)
-        vislim = paramSurf['den']*paramSurf['grav']
+        vislim = 1./(paramSurf['den']*paramSurf['grav'])
 
     
         # Initialize hard-coded integration parameters
         #TODO Generalize/Optimize all this.
         # depths for profile
-        zarray = self.zarray = np.linspace(earth.rCore, 1., 50)
+        zarray = self.zarray = np.linspace(earth.rCore, 1., 30)
+        converged = False
     
         # initialize time integration parameters (in s)
         t = 0
@@ -435,6 +483,7 @@ class SphericalEarthSolver(object):
         # viscous deformation uv = $\int_0^t vis.u[\tau] d\tau$
         # for all depths in the depth range
         uv = np.zeros(len(zarray))
+        uh = np.zeros(len(zarray))
         self.profs['uv'] = interp1d(zarray, uv)
         self.profs['ue'] = None
         self.profs['ve'] = None
@@ -448,9 +497,12 @@ class SphericalEarthSolver(object):
         returnDict['vUpl'] = []
         returnDict['phi1'] = []
         returnDict['g1'] = []
+
+        returnArray = []
     
+        # initialize progress bar
         pbar = ProgressBar(widgets=['n = {0}:'.format(n), Bar(), Percentage()])
-        #while (t <= tmax): #and abs(1./3313.+uv[-1])>=1e-5):
+
         for i in pbar(range(len(dt))):
             # calculate the elastic part at the new time step
             # [Ue(z), Ve(z), Pe(z), Qe(z), phi1(z), g1(z)] @ time=t
@@ -462,33 +514,55 @@ class SphericalEarthSolver(object):
             # update the total viscous deformation
             # not done in cycle because it is time-step dependent
             uv = uv + vProf[0,:]*tstep
+            uh = uh + vProf[1,:]*tstep
             self.profs['uv'] = interp1d(zarray, uv)
                     
             # save at an adequate number of time steps
             #TODO Save at more dynamic times
             #TODO Save things better - observers?
+
+            # eUpl : eProf[0,-1]
+            # eHdf : eProf[1,-1]
+            # phi1 : eProf[4,-1]
+            # g1   : eProf[5,-1]
+            # vUpl : uv[-1]
+            # vHdf : uh[-1]
+            # tUpl : eProf[0,-1]+uv[-1]
+            # tHdf : eProf[1,-1]+uh[-1]
+
             if t in times_write:
                 returnDict['vUpl'].append(uv[-1])
                 returnDict['eUpl'].append(eProf[0,-1])
                 returnDict['times'].append(t/secs_per_year/1e3)
                 returnDict['phi1'].append(eProf[4,-1])
                 returnDict['g1'].append(eProf[5,-1])
+
+                returnArray.append([eProf[0,-1], uv[-1], eProf[4,-1],
+                                    eProf[5,-1], eProf[1,-1], uh[-1]])
                 
-            if (t>=tmax) or (1+uv[-1]*vislim<1e-5):
-                break
+                if converged:
+                    for tfill in times_write[times_write>t]:
+                        returnArray.append([0, -vislim, 0, 0, 0, uhconv])
+                    break
+                
+            if (t>=tmax) or (1+uv[-1]/vislim<1e-5):
+                converged = True
+                uhconv = uh[-1]
             t+=tstep
             tstep=dt.pop(0)
 
         for key, val in returnDict.iteritems():
             returnDict[key] = np.array(val)
+
+        returnArray = np.array(returnArray).reshape((len(times_write), 6))
         
-        return returnDict       
+        return returnArray, times_write/secs_per_year/1e3 
     
 
 class SphericalEarth(object):
     """A class for calculating, storing, and recalling 
 
-    Stores decay profiles for each spherical order number up to N for
+    Stores decay profiles for each spherical order number up to nmax for
         1) Surface Uplift
         2) Elastic Uplift
         3) Viscous Uplift Rate
@@ -500,37 +574,65 @@ class SphericalEarth(object):
         maximum spherical order number
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, params):
+        self.params = params
+        self.nmax = 0
+        self._desc = ''
 
     def __repr__(self):
         return self._desc
     
-    def get_resp(self, t_dur):
-        """Return an NDarray ((ntrunc+1)*(ntrunc+2)/2, 5) of the responses to a unit load applied for
+    def getResp(self, t_dur):
+        """Return an NDarray (nmax+1, 4) of the responses to a unit load applied for
         time t_dur.
         """
-        pass
+        return self.respInterp(t_dur)
     
-    def save(self):
-        pass
+    def save(self, fname):
+        #TODO use dill or klepto packages to serialize interp1d objects
+        # interp1d objects can't be pickled, so get rid of them for saving, and
+        # reinitialize them afterward.
+        self.respInterp = None
+        self.params._interpParams = None
+        pickle.dump(self, open(fname, 'w'))
+
+        self.params._interpParams = interp1d(self.params.zz,
+                                             self.params.paramArray)
+        self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
     def setDesc(self, string):
-        pass
-    
-    def reset_params_list(self, params, arglist, visclog=False):
-        pass
+        self._desc = string 
+            
+    def calcResponse(self, nmax=100, nstart=None):
+        """Calculate the response of the Earth to order numbers up to nmax.
+        """
+        #TODO Allow calculation of other order number ranges?
+        nstart = nstart or (self.nmax + 1)
 
-    def reset_params(self):
-        pass
-        
-    def calcResponse(self, nmax=100):
-        self.respDict = {}
+        respArray = []
         solver = SphericalEarthSolver(self.params)
-        pbar = ProgressBar(widgets=['n = {0}:'.format(n), Bar(), Percentage()])
-        for n in pbar(range(nmax)):
-            prof = solver.timeEvolve(n)
-            self.respDict[n] = prof
+        pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
+        for n in pbar(range(nstart, nmax+1)):
+            prof, ts = solver.timeEvolve(n)
+            respArray.append(prof)
 
+        respArray = np.array(respArray)
+        #TODO Consider n=0 response very carefully
+        if nstart == 1:
+            # Append n=0 zero response
+            self.respArray = np.r_[np.zeros((1,prof.shape[0], prof.shape[1])),
+                                    respArray]
+        else:
+            self.respArray = np.r_[self.respArray, respArray]
 
+        self.times=ts
+        self.nmax=nmax
+        self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
+def loadEarth(fname):
+    earth = pickle.load(open(fname, 'r'))
+    earth.params._interpParams = interp1d(earth.params.zz, 
+                                          earth.params.paramArray)
+    earth.respInterp = interp1d(earth.times, earth.respArray, axis=1)
+
+    return earth

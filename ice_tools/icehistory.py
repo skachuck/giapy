@@ -347,26 +347,33 @@ class IceHistory(object):
         meshgrid representations of the Lon/Lat grids for the ice model.
     """
     def __init__(self, path=None, dataFormat={}, shape=None):
-        self.path = os.path.abspath(path)
+        path = path or os.path.curdir
+        self.path = os.path.abspath(path)+'/'
         self.dataFormat = dataFormat
 
         self.fnames = []
         self.times = []
 
         for fname in os.listdir(self.path):
-            resp = raw_input('Include '+fname+'? [y/n/end] ')
-            if resp == 'y':
-                year = raw_input('\tTime of file (in ka bp): ')
+            resp = raw_input('Include '+fname+'? [Time (in ka bp)/n/end] ')
+            try:
+                year = float(resp)
                 self.fnames.append(fname)
-                self.times.append(float(year))
-            elif resp == 'end':
-                break
-            elif resp == 'n':
-                continue
+                self.times.append(year)
+            except:
+                if resp == 'end':
+                    break
+                elif resp == 'n':
+                    continue
+                else:
+                    'Did not understand. Add file using self.addFile'
+        # Sort files by decreasing time
+        self.sortByTime()
 
         # Extract shape, Lon, and Lat info from first file.
         try:
-            trial = self.load(self.fnames[0], shape=shape, lonlat=True)
+            trial = loadXYZGridData(self.fnames[0], shape=shape,
+                lonlat=True, **dataFormat)
             self.Lon = trial[0]
             self.Lat = trial[1]
             self.shape = self.Lon.shape
@@ -396,6 +403,8 @@ class IceHistory(object):
         for time, fname in zip(self.times[1:], self.fnames[1:]):
             ice0, t0 = ice1, t1
             ice1, t1 = self.load(fname), time
+            if transform is not None:
+                ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
 
     def appendLoadCycle(self, esl, tLGM=None):
@@ -441,21 +450,33 @@ class IceHistory(object):
         self.fnames = np.r_[self.fnames[nReturn], self.fnames]
 
         # Sort it all into decreasing order
+        self.sortByTime()
+
+        print('{0} stages added for the load cycle.'.format(len(nReturn)))
+
+    def sortByTime(self, dec=True):
+        """Sort the fnames by times, decreasing by default."""
         sortInd = np.argsort(self.times)[::-1]
-        self.times = self.times[sortInd]
-        self.fnames = self.fnames[sortInd]
-        print('{0} stages added for the load cycle.'.format(len(sortInd)))
+        self.times = np.asarray(self.times)[sortInd]
+        self.fnames = np.asarray(self.fnames)[sortInd]
 
     def decimate(self, n, suf=''):
         """Reduce an ice load by a power n of 2. Files are resaved with suffix
             suf.
         """
+        #TODO add a way of keeping load cycle fnames separate.
         newfnames = []
-        for fname in self.filenames:
+        for fname in self.fnames:
             ice = self.load(fname)
             ice = ice[::2**n,::2**n]
-            newfname = fname+suf
+            # Append the decimated filename, putting the suffix behind the
+            # extension.
+            f, ext = os.path.splitext(fname)
+            newfname = f+suf+ext
             newfnames.append(newfname)
-            np.savetxt(newfname.format(2**n), ice)
+            # Save the deicmated file
+            np.savetxt(newfname, ice.flatten())
         self.fnames = newfnames
-        self.Lons, self.Lats = lons[::2**n,::2**n], lats[::2**n,::2**n]
+        self.Lon = self.Lon[::2**n,::2**n]
+        self.Lat = self.Lat[::2**n,::2**n]
+        self.shape = self.Lon.shape
