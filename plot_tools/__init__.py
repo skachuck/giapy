@@ -46,8 +46,8 @@ class MapParams(object):
     nam = {'llcrnrlon':-110, 'llcrnrlat':20, 'urcrnrlon':-50, 'urcrnrlat':60,
                 'rsphere':(6378137.00,6356752.3142),
                 'resolution':'l', 'area_thresh':1000., 'projection':'merc'}
-    glob = {'llcrnrlon':-180, 'llcrnrlat':-70, 
-                'urcrnrlon':180, 'urcrnrlat':80,
+    glob = {'llcrnrlon':-180, 'llcrnrlat':-90, 
+                'urcrnrlon':180, 'urcrnrlat':90,
                 'rsphere':(6378137.00,6356752.3142),
                 'resolution':'l', 'area_thresh':1000., 'projection':'merc'}
 

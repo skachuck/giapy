@@ -70,7 +70,9 @@ class GridObject(object):
         
         r = 6371 if km else 6371000
 
-        dA = (r**2)*np.sin(self.Lat[:-1, :-1]*np.pi/180)*dLat*dLon
+        # formula needs colatitude
+        CoLat = self.Lat+90
+        dA = (r**2)*np.sin(CoLat[:-1, :-1]*np.pi/180)*dLat*dLon
         dV = array[:-1,:-1]*dA
 
         return dV
@@ -194,15 +196,22 @@ def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
     **kwargs : see np.loadtxt documentation.
     """
     rawData = np.loadtxt(fname, **kwargs)
+
+    if len(rawData.shape) == 1:
+        XY = False
+    else:
+        XY = True
     
     if shape is not None:
         nx, ny = shape[0], shape[1]
-        rawData = rawData.reshape((3, nx, ny))
+        shape = (3, nx, ny) if XY else (nx, ny)
     else:
         n = np.sqrt(rawData.shape[0])
-        rawData = rawData.reshape((3, n, n))
+        shape = (3, n, n) if XY else (n, n)
 
-    if lonlat:
-        return rawData
+    if not XY:
+        return rawData.reshape(shape)
+    elif lonlat:
+        return rawData.T.reshape(shape)
     else:
-        return rawData[2]
+        return rawData.T.reshape(shape)[2]
