@@ -94,6 +94,7 @@ def transect_with_inset_context(X, Y, Z, **kw):
     insetax = fig.add_axes([0.15, 0.60, 0.25, 0.25])
     insetax.contourf(X, Y, Z)
     insetax.plot(path.xs, path.ys)
+    return plt.gca()
 
 def point2line(xp, x0, x1):
     """Project points xp onto a line defined by endpoints x0 and x1
