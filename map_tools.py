@@ -8,6 +8,7 @@ map_tools.py
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import root
 from mpl_toolkits.basemap import Basemap
 from matplotlib.path import Path
 
@@ -60,10 +61,10 @@ class GridObject(object):
         """
         try:
             x = array.shape
-            if self.shape != array.shape:
-                raise ValueError('GridObject and array must have same shape')
         except:
             raise ValueError('provided array has no "shape" property')
+        if self.shape != array.shape:
+            raise ValueError('GridObject and array must have same shape')
 
         dLon = np.abs(self.Lon[:-1,1:]-self.Lon[:-1,:-1])*np.pi/180
         dLat = np.abs(self.Lat[1:,:-1]-self.Lat[:-1,:-1])*np.pi/180
@@ -77,10 +78,10 @@ class GridObject(object):
 
         return dV
 
-    def integrate(self, array):
+    def integrate(self, array, km=True):
         """Perform area integration of an array over the map area.
         """
-        dV = self.volume(array)
+        dV = self.volume(array, km)
         return dV.sum()
 
     def integrateArea(self, array, area, latlon=False):
@@ -215,3 +216,48 @@ def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
         return rawData.T.reshape(shape)
     else:
         return rawData.T.reshape(shape)[2]
+
+
+
+
+def eustaticChange(h, topo):
+    """Computes ocean depth changes for eustatic chage h, consistent with
+    sloping topographies."""
+
+    if h > 0:
+        hw = (h - np.maximum(0, topo)) * (h > topo)
+    elif h < 0:
+        hw = np.maximum(topo, h) * (topo < 0)
+    else:
+        raise ValueError('h cannot be equal to 0')
+
+    return hw
+
+def eustaticChangeByVolume(V, topo, grid):
+    """Find the eustatic change that alters the ocean's volume by V.
+
+    Because of changing coastlines, a eustatic increase (decrease) of h will
+    generally change the volume of the ocean by more (less) than with a
+    'bathtub' ocean model. This function uses a Newton method with an initial
+    guess based on the 'bathtub' model.
+    """
+    # Get first guess of eustatic h.
+    h0 = V / grid.integrate(topo < 0, km=False)
+
+    diff = lambda h: V - grid.integrate(eustaticChange(h, topo), km=False)
+    h = root(diff, h0)
+
+    return h['x'][0]
+
+def rectifyMassBalance(dIceWequiv, topo, grid):
+    """Calculate the ocean load change associated with a continental ice
+    change.
+    """
+    # Calculate the water equivalent volume of the ice change.
+    Vequiv = grid.integrate(dIceWequiv, km=False)
+    # Calculate the eustatic change, consistent with changing shorelines.
+    he = eustaticChangeByVolume(Vequiv, topo, grid)
+    # Get the ocean load of that eustatic change.
+    hw = eustaticChange(he, topo)
+    # Add it to the load and return.
+    return dIceWequiv + hw

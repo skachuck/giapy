@@ -12,6 +12,8 @@ try:
 except:
     pass
 
+from giapy.map_tools import GridObject, rectifyMassBalance
+
 
 class GiaSim(object):
     """
@@ -298,22 +300,28 @@ class GiaSim(object):
         self.esl = esl or self.esl
             
         eslcorr = self.esl(self.out_times)
-        self.uplift = self.uplift + eslcorr[:, np.newaxis, np.newaxis]   
-
-
+        self.uplift = self.uplift + eslcorr[:, np.newaxis, np.newaxis]
 
 class GiaSimGlobal(object):
-    def __init__(self, earth, ice, grid):
+    def __init__(self, earth, ice, grid=None):
 
         self.earth = earth
         self.ice = ice
-        self.grid = grid
 
         self.nlon, self.nlat = ice.shape
+        
+        # The grid used is a cylindrical projection (equispaced lat/lon grid
+        # unless otherwise specified)
+        if grid is not None:
+            self.grid = grid
+        else:
+            self.grid = GridObject(mapparam={'projection': 'cyl'}, 
+                                    shape=ice.shape)
+
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
-    def performConvolution(self, out_times=None, ntrunc=None, emergeCorr=True, 
-                             t_rel=0, verbose=False):  
+    def performConvolution(self, out_times=None, ntrunc=None, topo=None,
+                             paleotopo=False, verbose=False):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -365,23 +373,37 @@ class GiaSimGlobal(object):
                widgets = ['Convolution: ', Bar(), ' ', ETA()]
                pbar = ProgressBar(widgets=widgets, maxval=len(ice.times)+1)
                pbar.start()
-           except:
+           except NameError:
                ImportError('progressbar not loaded')
 
-        # Convolve each ice stage to the each output time
+        # Convolve each ice stage to the each output time.
+        # Primary loop: over ice load changes.
         i=0
-        for ice0, t0, ice1, t1 in\
-                ice.pairIter(transform=self.harmTrans.grdtospec):
-            #TODO Consider this carefully. Maybe include check?
-            # Get rid of n=0 ...
-            if np.abs(ice0[0]) >= 1e-10:
-                print "Ice at time {0} doesn't conserve mass. n=0 component\
-                set to zero. Consider revising ice load.".format(t0)
-                ice0[0]=0
-                ice1[0]=0
-            # More explanation of this: the n=0 load should be zero in cases of
-            # glacial isostasy, as mass is conserved.
-            delta_ice = (ice0 - ice1)/Nrem
+        for ice0, t0, ice1, t1 in ice.pairIter():
+            # Find ice change between stages.
+            dice = ice1 - ice0
+
+            # Take/put water equiv ice change from/into ocean as water un/load.
+            if topo is not None:
+                # Construct paleo-ocean surface at t1 for mass redistribution.
+                if paleotopo:
+                    self.harmTrans.spectogrid(uplift_f[t1 == out_times, :])
+                    # Add uplift and geoid to get ocean surface right.
+                    paleo = topo + upl + geo
+                else:
+                    paleo = topo
+            dice = rectifyIceMassBalance(dice*0.9, self.grid, paleo)
+
+            # Transform load change into spherical harmonics.
+            loadChangeSpec = self.harmTrans.gridtospec(dice)/Nrem
+            
+            # Check for mass conservation.
+            if np.abs(dice[0]/dice.max()) >= 0.01:
+                print("Ice change at time {0} doesn't conserve mass.".format(t0))
+            # N.B. the n=0 load should be zero in cases of glacial isostasy, as 
+            # mass is conserved during redistribution.
+
+            # Secondary loop: over output times.
             for inter_time in np.linspace(t0, t1, Nrem, endpoint=False):
                 # Perform the time convolution for each output time
                 for t_out in out_times[out_times <= inter_time]:
@@ -393,25 +415,12 @@ class GiaSimGlobal(object):
                     respArray = respArray[:,4]+respArray[:,5]
                     # 0.3 accounts for density difference between ice and rock
                     uplift_f[t_out == out_times, :] += 0.3 *\
-                               delta_ice * respArray[ns]
+                               loadChangeSpec * respArray[ns]
                                #np.tile(delta_ice, (respArray.shape[1],1))*\
                                #respArray[ns]
                                
             if verbose: pbar.update(i+1)
             i+=1
         if verbose: pbar.finish()
-             
-        # Calculate uplift relative to t_rel (default, present)
-        #if t_rel is not None: 
-        #    uplift = uplift[np.where(out_times==t_rel)] - uplift 
- 
-        #self.grid.update_shape(shape)
-     
-        # Correctly grid the uplift array by removing the fourier padding
-        # self.uplift = uplift[:, :shape[0], :shape[1]]
- 
-        if emergeCorr:
-            # Perform meltwater correction
-            if hasattr(self, 'esl'): self.mw_corr()
  
         return uplift_f 
