@@ -65,6 +65,9 @@ class EarthParams(object):
         z = prem[1:,0]/prem[-1, 0]              # Normalized depths in mantle.
         prem[1:, [2,3]] /= prem[1, 3]           # Normalized elastic props by
                                                 # shear modulus.
+        # Convert the bulk modulus to the first lame parameter.
+        #TODO Do we want first lame parameter or bulk modulus?
+        prem[1:, 2] = prem[1:, 2]-2./3.*prem[1:, 3]
 
         # Create density gradient, g/cc.earthRadii
         dend = np.gradient(prem[1:,1])/np.gradient(z)
@@ -98,6 +101,9 @@ class EarthParams(object):
                                  [1.0       , 1.0        ]])
         self.addViscosity(visArray)
 
+        # Flexural rigidity is assumed 0 (no lithosphere)
+        self.D = 0
+
     def __call__(self, z, depth=False):
         return self.getParams(z, depth)
 
@@ -115,12 +121,43 @@ class EarthParams(object):
     def addViscosity(self, visArray, muStar=1e22):
         """visArray is an 2xN array of depths zi and viscosities at those
            depths."""
+        visArray = np.asarray(visArray)
         visArray[1] /= visArray[1,0]        # Normalize viscosities
         self.alterColumn(6, visArray)
 
 
     def addNonadiabatic(self, z, nonad):
         self.alterColumn(5, nonad)
+
+    def addLithosphere(self, D=None, H=None):
+        """Append a lithosphere with flexural rigidity D (N m) or of thickness
+        H (km)
+        """
+        if D is not None:
+            self.D = D
+        else:
+            if H is not None:
+                paramSurf = self(1.)
+                lam = paramSurf['bulk']*1e9
+                mu = paramSurf['shear']*1e9
+                pois = lam/(2*(lam+mu))
+                young = mu*(3*lam + 2*mu)/(mu + lam)
+                self.D = young * H**3 / (12*(1-pois**2))
+            else:
+                raise ValueError('Muse specify either D (in N m) or H (in km)')
+
+    def getLithFilter(self, k=None, n=None):
+        """Return the Lithospheric filter value for loads and rates.
+        """
+        if k is None:
+            if n is None:
+                raise ValueError('Must specify k or n.')
+            else:
+                k =  (n + 0.5)/self.norms['r']*1e2
+        paramSurf = self(1.)
+        rho = paramSurf['den']
+        g = paramSurf['grav']
+        return 1 + k**4 * self.D / (rho * g * 10)
 
     def alterColumn(self, col, zy):
         z = zy[0]
@@ -140,7 +177,7 @@ class EarthParams(object):
 
 
 def locateDiscontinuities(z, eps=None):
-    eps = eps or z.max()*1e-5
+    eps = eps or z.max()*1e-8
     trash, uniqueInds = np.unique(z, return_inverse=True)
     i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0)
     zDisc = z[i]

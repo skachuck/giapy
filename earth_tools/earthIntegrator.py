@@ -49,7 +49,7 @@ from giapy.numTools.solvde import Solvde
 
         
 
-def integrateRelaxationScipy(f, out):
+def integrateRelaxationScipy(f, out, eps=1e-10):
     """Use Scipy ode for surface response to harmonic load.
 
     Parameters
@@ -60,7 +60,7 @@ def integrateRelaxationScipy(f, out):
     """
     earth = f.earthparams
     paramSurf = earth.getParams(1.)
-    vislim = 1./(paramSurf['den']*paramSurf['grav'])
+    vislim = 1./(paramSurf['den']*paramSurf['grav']*f.alpha)
 
     r = ode(f).set_integrator('vode', method='adams')
     r.set_initial_value(y=np.zeros(len(f.zarray)), t=0)
@@ -71,7 +71,7 @@ def integrateRelaxationScipy(f, out):
         r.integrate(r.t+dt)
         out.out(r.t, r.y[-1], f)
         
-        if (1+r.y[-1]/vislim<1e-5):
+        if eps is not None and (vislim+r.y[-1]<eps):
             out.converged()
             break
             
@@ -81,7 +81,7 @@ def integrateRelaxationScipy(f, out):
         # TODO LOOK INTO THIS!!!
 
 
-def integrateRelaxationDirect(f, out):
+def integrateRelaxationDirect(f, out, eps=1e-10):
     """Directly integrate ode for surface response to harmonic load.
 
     Parameters
@@ -94,7 +94,7 @@ def integrateRelaxationDirect(f, out):
     # initialize earth model
     earth = f.earthparams
     paramSurf = earth.getParams(1.)
-    vislim = 1./(paramSurf['den']*paramSurf['grav'])
+    vislim = 1./(paramSurf['den']*paramSurf['grav']*f.alpha)
 
     # Initialize hard-coded integration parameters
     secs_per_year = 3.1536e+7  # seconds in a year
@@ -135,7 +135,7 @@ def integrateRelaxationDirect(f, out):
         # N.B. need to check for convergence because of apparent bouncing in
         # the solution. The surface oscillates due to numerical error.
         # TODO LOOK INTO THIS!!!
-        if (t>=tmax) or (1+uv[-1]/vislim<1e-5):
+        if (t>=tmax) or (eps is not None and vislim+uv[-1]<eps):
             converged = True
 
         t += tstep
@@ -258,6 +258,8 @@ class SphericalEarthRelaxer(object):
                                 self.commProfs)
         self.difeqVisc = SphericalViscSMat(n, zarray, earthparams,
                                 self.commProfs)
+
+        self.alpha = earthparams.getLithFilter(n=n)
         
     def __call__(self, t, uv, verbose=False):
         self.updateUvProfs(uv, dim=False)
@@ -292,7 +294,9 @@ class SphericalEarthRelaxer(object):
             self.yEt0 = self.yE.copy()
             self.yVt0 = self.yV.copy()
 
-        return  velfac*solvde.y[0,:]
+        # All the rates are converted back to real units and accelerated by the
+        # elastic (and gravitational) energy stored by the lithosphere.
+        return  velfac*solvde.y[0,:]*self.alpha
 
     def changeOrder(self, n):
         """Change order number to n.
@@ -403,10 +407,12 @@ class SphericalElasSMat(object):
 
         self.mpt = len(self.z)
         self.updateProps()
+        self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
     def updateProps(self, n=None):
         if n is None: n = self.n
         self.n = n
+        self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
         zmids = 0.5*(self.z[1:]+self.z[:-1])
         self.A, self.b = propMatElas(zmids, self.n, self.earthparams, self.commProf)
@@ -473,8 +479,11 @@ class SphericalElasSMat(object):
                 ue, ve, phi1, g1, uvSurf = self.commProf(1.)
             else:
                 uvSurf = 0.
-
-            load = (1. + rhoSurf*gSurf*uvSurf)
+            
+            # The load is applied directly to the top of the viscoelastic
+            # mantle (i.e., the bottom of the lithosphere), which means only
+            # the load unsupported by the lithosphere (1/alpha) is applied.
+            load = (self.alpha_i + rhoSurf*gSurf*uvSurf)
 
             rstar = self.earthparams.norms['r']
             mustar = self.earthparams.norms['mu']
@@ -531,10 +540,12 @@ class SphericalViscSMat(object):
 
         self.mpt = len(self.z)
         self.updateProps()
+        self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
     def updateProps(self, n=None):
         if n is None: n = self.n
         self.n = n
+        self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
         zmids = 0.5*(self.z[1:]+self.z[:-1])
         self.A, self.b = propMatVisc(zmids, self.n, self.earthparams, self.commProf)
@@ -545,8 +556,6 @@ class SphericalViscSMat(object):
             paramsCore = self.earthparams(rCore)
             rhoCore = paramsCore['den']
             gCore = paramsCore['grav']
-        If instructed to redimensionalize values (True by default), values are 
-        dimensionalized. For internal use.
 
             ueCore, ve, phi1Core, g1, uvCore = self.commProf(rCore)
             
@@ -577,8 +586,11 @@ class SphericalViscSMat(object):
             G = self.earthparams.G
             
             ue, ve, phi1, g1, uvSurf = self.commProf(1.)
-
-            load = (1. + rhoSurf*gSurf*uvSurf)
+            
+            # The load is applied directly to the top of the viscoelastic
+            # mantle (i.e., the bottom of the lithosphere), which means only
+            # the load unsupported by the lithosphere (1/alpha) is applied.
+            load = (self.alpha_i + rhoSurf*gSurf*uvSurf)
 
             # Radial stress on surface.
             s[0, 4+indexv[0]] = 0.
@@ -658,6 +670,7 @@ class SphericalEarthShooter(object):
         self.earthparams = earthparams
         self.initProfs(zarray)
         self.n = n
+        self.alpha = earthparams.getLithFilter(n=n)
 
     def __call__(self, t, uv):
         self.commArray[:,4] = uv
@@ -668,7 +681,7 @@ class SphericalEarthShooter(object):
         # feed the new elastic solution to recalculate velocities
         # [Uv(z), Vv(z), Pv(z), Qv(z)] @ time=t
         self.vProf = self.calcViscProfile(self.n)
-        return self.vProf[0,:]
+        return self.vProf[0,:]*self.alpha
     
     def derivativeElas(self, y, z, n):
         """
@@ -752,8 +765,12 @@ class SphericalEarthShooter(object):
         g = params['grav']
 
         tmp, tmp, tmp, tmp, uv = self.profs(1.)
-        # update load = 1 dyne redistributed plus amount that has relaxed
-        load = 1+rho*uv*g
+        # Update load = 1 dyne redistributed plus amount that has relaxed.
+        # The load is applied directly to the top of the viscoelastic
+        # mantle (i.e., the bottom of the lithosphere), which means only
+        # the load unsupported by the lithosphere (1/alpha) is applied.
+
+        load = 1./self.alpha+rho*uv*g
         
         # initialize the boundary solver: a*x=b
         a = y[0:3,-1,[2,3,5]]  # an array of the boundary elements from each soln vector
@@ -840,7 +857,10 @@ class SphericalEarthShooter(object):
 
         # update load
         tmp, tmp, tmp, tmp, uv = self.profs(1.)
-        load = -1-rho*g*uv
+        # The load is applied directly to the top of the viscoelastic
+        # mantle (i.e., the bottom of the lithosphere), which means only
+        # the load unsupported by the lithosphere (1/alpha) is applied.
+        load = -1./self.alpha-rho*g*uv
         
         # initialize the boundary solver: a*x=b
         a = y[0:2,-1,[2,3]]  # an array of the boundary elements from each soln vector

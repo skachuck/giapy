@@ -1,7 +1,9 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from progressbar import ProgressBar, Bar, Percentage
-import giapy.earth_tools.earthIntegrator as earthIntegrator
+
+from .earthIntegrator import SphericalEarthOutput, SphericalEarthShooter,\
+        SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect
 
 def depthArray(self, npts=30, trunc=True, frac=2/3, n=None, safe=0.9):
     if trunc:
@@ -65,9 +67,14 @@ class SphericalEarth(object):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
 
+        if self.nmax >= nmax:
+            nstart = 0
+        else:
+            nstart = self.nmax
+
         respArray = []
         pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
-        for n in pbar(range(1, nmax+1)):
+        for n in pbar(range(nstart, nmax+1)):
             out = self.timeEvolve(n, zarray)
             respArray.append(out.outArray)
 
@@ -83,18 +90,18 @@ class SphericalEarth(object):
         self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
     def timeEvolve(self, n, zarray):
-        out = earthIntegrator.SphericalEarthOutput()
+        out = SphericalEarthOutput()
         if n == 1:
-            f = earthIntegrator.SphericalEarthShooter(self.params, zarray, 1)
-            earthIntegrator.integrateRelaxationDirect(f, out)
+            f = SphericalEarthShooter(self.params, zarray, 1)
+            integrateRelaxationDirect(f, out)
         elif n == 2:
-            yE0, yV0 = earthIntegrator.get_t0_guess(self.params, zarray, n=2)
-            self.relaxer = earthIntegrator.SphericalEarthRelaxer(self.params, 
+            yE0, yV0 = get_t0_guess(self.params, zarray, n=2)
+            self.relaxer = SphericalEarthRelaxer(self.params, 
                                 zarray, yE0, yV0, 2)
-            earthIntegrator.integrateRelaxationDirect(self.relaxer, out)
+            integrateRelaxationScipy(self.relaxer, out)
         else:
             self.relaxer.changeOrder(n)
-            earthIntegrator.integrateRelaxationDirect(self.relaxer, out)
+            integrateRelaxationScipy(self.relaxer, out)
         return out   
 
 
