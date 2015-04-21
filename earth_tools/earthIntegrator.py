@@ -61,17 +61,18 @@ def integrateRelaxationScipy(f, out, eps=1e-10):
     earth = f.earthparams
     paramSurf = earth.getParams(1.)
     vislim = 1./(paramSurf['den']*paramSurf['grav']*f.alpha)
+    nz = len(f.zarray)
 
     r = ode(f).set_integrator('vode', method='adams')
-    r.set_initial_value(y=np.zeros(len(f.zarray)), t=0)
+    r.set_initial_value(y=np.zeros(2*nz), t=0)
     timeswrite = out.times
     dts = timeswrite[1:]-timeswrite[:-1]
 
     for dt in dts:
         r.integrate(r.t+dt)
-        out.out(r.t, r.y[-1], f)
+        out.out(r.t, r.y[nz-1], r.y[2*nz-1], f)
         
-        if eps is not None and (vislim+r.y[-1]<eps):
+        if eps is not None and (vislim+r.y[nz-1]<eps):
             out.converged()
             break
             
@@ -112,17 +113,18 @@ def integrateRelaxationDirect(f, out, eps=1e-10):
     tstep = dt.pop(0)
 
     t = 0
-    uv = np.zeros(len(f.zarray))
+    nz = len(f.zarray)
+    disps = np.zeros(2*nz)
     converged = False
 
     for i in range(len(dt)):
-        vv = f(t, uv)
+        vels = f(t, disps)
 
         # Step the total viscous deformation
-        uv = uv + vv*tstep
+        disps = disps + vels*tstep
 
         if t in out.times:
-            out.out(t, uv[-1], f)
+            out.out(t, disps[nz-1], disps[2*nz-1], f)
             
 
             if converged:
@@ -135,7 +137,7 @@ def integrateRelaxationDirect(f, out, eps=1e-10):
         # N.B. need to check for convergence because of apparent bouncing in
         # the solution. The surface oscillates due to numerical error.
         # TODO LOOK INTO THIS!!!
-        if (t>=tmax) or (eps is not None and vislim+uv[-1]<eps):
+        if (t>=tmax) or (eps is not None and vislim+disps[nz-1]<eps):
             converged = True
 
         t += tstep
@@ -174,14 +176,14 @@ class SphericalEarthOutput(object):
         #   Ue  Uv  Ve  Vv  phi1    g1  
         self.outArray = np.zeros((len(self.times), 6))
 
-    def out(self, t, uv, f):
+    def out(self, t, uv, vv, f):
         ind = np.argwhere(self.times == t)
         self.maxind = ind[0][0]
         Ue, Ve, phi1, g1 = f.solout()
         self.outArray[ind, 0] = Ue
         self.outArray[ind, 1] = uv
         self.outArray[ind, 2] = Ve
-        self.outArray[ind, 3] = 0
+        self.outArray[ind, 3] = vv
         self.outArray[ind, 4] = phi1
         self.outArray[ind, 5] = g1
 
@@ -252,6 +254,7 @@ class SphericalEarthRelaxer(object):
         self.yV = yVt0.copy()
         self.earthparams = earthparams
         self.zarray = zarray
+        self.nz = len(zarray)
         self.initCommProfs(zarray)
 
         self.difeqElas = SphericalElasSMat(n, zarray, earthparams,
@@ -261,8 +264,8 @@ class SphericalEarthRelaxer(object):
 
         self.alpha = earthparams.getLithFilter(n=n)
         
-    def __call__(self, t, uv, verbose=False):
-        self.updateUvProfs(uv, dim=False)
+    def __call__(self, t, disps, verbose=False):
+        self.updateUvProfs(disps[:self.nz], dim=False)
         slowc = 1
         #TODO make scales adaptive
         scalvElas = np.array([1, 0.1, 1, 0.2, 0.1, 0.2])
@@ -296,7 +299,8 @@ class SphericalEarthRelaxer(object):
 
         # All the rates are converted back to real units and accelerated by the
         # elastic (and gravitational) energy stored by the lithosphere.
-        return  velfac*solvde.y[0,:]*self.alpha
+        vels = velfac*solvde.y[[0,1],:]*self.alpha
+        return vels.flatten()
 
     def changeOrder(self, n):
         """Change order number to n.
@@ -669,11 +673,12 @@ class SphericalEarthShooter(object):
     def __init__(self, earthparams, zarray, n):
         self.earthparams = earthparams
         self.initProfs(zarray)
+        self.nz = len(zarray)
         self.n = n
         self.alpha = earthparams.getLithFilter(n=n)
 
-    def __call__(self, t, uv):
-        self.commArray[:,4] = uv
+    def __call__(self, t, disps):
+        self.commArray[:,4] = disps[:self.nz]
         self.profs = interp1d(self.zarray, self.commArray.T)
         # calculate the elastic part at the new time step
         # [Ue(z), Ve(z), Pe(z), Qe(z), phi1(z), g1(z)] @ time=t
@@ -681,7 +686,8 @@ class SphericalEarthShooter(object):
         # feed the new elastic solution to recalculate velocities
         # [Uv(z), Vv(z), Pv(z), Qv(z)] @ time=t
         self.vProf = self.calcViscProfile(self.n)
-        return self.vProf[0,:]*self.alpha
+        vels = self.vProf[[0,1],:]*self.alpha
+        return vels.flatten()
     
     def derivativeElas(self, y, z, n):
         """
