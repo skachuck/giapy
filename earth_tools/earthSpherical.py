@@ -1,9 +1,11 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from progressbar import ProgressBar, Bar, Percentage
+import cPickle as pickle
 
 from .earthIntegrator import SphericalEarthOutput, SphericalEarthShooter,\
-        SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect
+        SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
+        integrateRelaxationScipy
 
 def depthArray(self, npts=30, trunc=True, frac=2/3, n=None, safe=0.9):
     if trunc:
@@ -36,7 +38,7 @@ class SphericalEarth(object):
 
     def __init__(self, params):
         self.params = params
-        self.nmax = 0
+        self.nmax = None
         self._desc = ''
 
     def __repr__(self):
@@ -66,9 +68,11 @@ class SphericalEarth(object):
     def calcResponse(self, zarray, nmax=100, nstart=None):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
-
-        if self.nmax >= nmax:
-            nstart = 0
+        
+        if self.nmax is None:
+            nstart = 1
+        elif self.nmax >= nmax:
+            nstart = 1
         else:
             nstart = self.nmax
 
@@ -85,8 +89,8 @@ class SphericalEarth(object):
                                 out.outArray.shape[1])), respArray]
 
 
-        self.times=out.times
-        self.nmax=nmax
+        self.times = out.times / 3.1536e10  # convert to thousand years
+        self.nmax = nmax
         self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
     def timeEvolve(self, n, zarray):

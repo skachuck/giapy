@@ -49,7 +49,7 @@ from giapy.numTools.solvde import Solvde
 
         
 
-def integrateRelaxationScipy(f, out, eps=1e-10):
+def integrateRelaxationScipy(f, out, eps=1e-7):
     """Use Scipy ode for surface response to harmonic load.
 
     Parameters
@@ -82,7 +82,7 @@ def integrateRelaxationScipy(f, out, eps=1e-10):
         # TODO LOOK INTO THIS!!!
 
 
-def integrateRelaxationDirect(f, out, eps=1e-10):
+def integrateRelaxationDirect(f, out, eps=1e-7):
     """Directly integrate ode for surface response to harmonic load.
 
     Parameters
