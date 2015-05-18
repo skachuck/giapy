@@ -264,49 +264,51 @@ class Ice2d(object):
 
         return returndict
     
-    def appendLoadCycle(self, esl, tLGM=None):
+    def appendLoadCycle(self, esl):
         """Identify glaciating stages with deglaciating stage of same ESL.
 
         Parameters
         ----------
         esl : scipy.interp1d
-            Eustatic Sea Level interpolating object
-        tLGM : float
-            The time of Last Glacial Maximum in ka.
+            Eustatic Sea Level interpolating object.
 
         Results
         -------
         Appends the glaciation times to self.times and the matching stage
         files to self.icefiles.
         """
-        tLGM = tLGM or self.times[np.argwhere(esl.y == esl.y.min())]
         # To split the esl curve into glaciation/deglaciation sections
-        iLGM = np.argmin(np.abs(esl.x - tLGM))
-
-        stageOrder = range(len(self.times))
+        iLGM = np.argmin(esl.y)
+        glaTimes = esl.x[iLGM:]
+        glaESLs = esl.y[iLGM:]
 
         tReturn = []
         nReturn = []
 
         for nStage, tStage in enumerate(self.times):
-            eslStage = esl(tStage)
-            # collect all indices where ESL passes through stage's ESL
-            indices = np.argwhere(esl.y[iLGM:]-eslStage >= 0)
-            iUps = indices[1:][indices[1:]-indices[:-1]>1]
-            for i in np.r_[[indices.min()], iUps]:
-                # Find the time and ESL just before match to ice stage
-                tDown = esl.x[iLGM:][i-1]
-                yDown = esl.y[iLGM:][i-1]
-                dt = esl.x[iLGM:][i] - tDown
-                dy = esl.y[iLGM:][i] - yDown
-                tReturn.append(tDown + dt/dy*(eslStage-yDown))
-                nReturn.append(nStage)
+            # Collect all indices before ESL passes through esl(tStage)
+            switches = np.sign(glaESLs - esl(tStage))
+            switchInd = np.argwhere((switches[1:]-switches[:-1]) != 0)
 
-        # Remove multiple stage additions?
+            # Interpolate to times at which ESL = esl(tStage)
+            tUp = np.array([glaTimes[i+1] for i in switchInd])
+            yUp = np.array([glaESLs[i+1] for i in switchInd])
+            dt = tUp - glaTimes[switchInd]
+            dy = yUp - glaESLs[switchInd]
+            glaStageTimes = glaTimes[switchInd] + \
+                                dt/dy*(esl(tStage) - glaESLs[switchInd])
 
-        # Append the load cycle
+            # Check for ESL load redundencies - keep only first
+            if np.any([i in tReturn for i in glaStageTimes]):
+                continue
+
+            # Fill in lists.
+            tReturn.extend(glaStageTimes.flatten())
+            nReturn.extend(np.repeat(nStage, len(glaStageTimes)))
+
+        # Append the load cycle to unloading times
         self.times = np.r_[tReturn, self.times]
-        self.stageOrder = np.r_[nReturn, stageOrder]
+        self.stageOrder = np.r_[nReturn, range(len(self.times))]
 
         # Sort it all into decreasing order
         sortInd = np.argsort(self.times)[::-1]
@@ -372,7 +374,7 @@ class IceHistory(object):
 
         # Extract shape, Lon, and Lat info from first file.
         try:
-            trial = loadXYZGridData(self.fnames[0], shape=shape,
+            trial = loadXYZGridData(path+self.fnames[0], shape=shape,
                 lonlat=True, **dataFormat)
             self.Lon = trial[0]
             self.Lat = trial[1]
@@ -380,6 +382,8 @@ class IceHistory(object):
             if shape is None: print('Shape assumed {0}'.format(self.shape))
         except ValueError as e:
             raise e
+
+        self.stageOrder = range(len(self.times))
 
     def load(self, fname, lonlat=False, dataFormat=None):
         dataFormat = dataFormat or self.dataFormat
@@ -394,64 +398,73 @@ class IceHistory(object):
         Parameters
         ----------
         transform : transformation function
-            If the data are to be transformed
+            If the data are to be transformed before yielding.
         """
-        ice1, t1 = self.load(self.fnames[0]), self.times[0]
+        stage0 = self.stageOrder[0]
+        ice1, t1 = self.load(self.fnames[stage0]), self.times[0]
         if transform is not None:
             ice1 = transform(ice1)
         
-        for time, fname in zip(self.times[1:], self.fnames[1:]):
+        #for time, fname in zip(self.times[1:], self.fnames[1:]):
+        for i, stage in enumerate(self.stageOrder[1:], start=1):
+            time = self.times[i]
+            fname = self.fnames[stage]
             ice0, t0 = ice1, t1
             ice1, t1 = self.load(fname), time
             if transform is not None:
                 ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
 
-    def appendLoadCycle(self, esl, tLGM=None):
+    def appendLoadCycle(self, esl):
         """Identify glaciating stages with deglaciating stage of same ESL.
 
         Parameters
         ----------
         esl : scipy.interp1d
-            Eustatic Sea Level interpolating object
-        tLGM : float
-            The time of Last Glacial Maximum in ka.
+            Eustatic Sea Level interpolating object.
 
         Results
         -------
         Appends the glaciation times to self.times and the matching stage
         files to self.icefiles.
         """
-        tLGM = tLGM or self.times[np.argwhere(esl.y == esl.y.min())]
         # To split the esl curve into glaciation/deglaciation sections
-        iLGM = np.argmin(np.abs(esl.x - tLGM))
+        iLGM = np.argmin(esl.y)
+        glaTimes = esl.x[iLGM:]
+        glaESLs = esl.y[iLGM:]
 
         tReturn = []
         nReturn = []
 
         for nStage, tStage in enumerate(self.times):
-            eslStage = esl(tStage)
-            # collect all indices where ESL passes through stage's ESL
-            indices = np.argwhere(esl.y[iLGM:]-eslStage >= 0)
-            iUps = indices[1:][indices[1:]-indices[:-1]>1]
-            for i in np.r_[[indices.min()], iUps]:
-                # Find the time and ESL just before match to ice stage
-                tDown = esl.x[iLGM:][i-1]
-                yDown = esl.y[iLGM:][i-1]
-                dt = esl.x[iLGM:][i] - tDown
-                dy = esl.y[iLGM:][i] - yDown
-                tReturn.append(tDown + dt/dy*(eslStage-yDown))
-                nReturn.append(nStage)
+            # Collect all indices before ESL passes through esl(tStage)
+            switches = np.sign(glaESLs - esl(tStage))
+            switchInd = np.argwhere((switches[1:]-switches[:-1]) != 0)
 
-        #TODO Remove repeated stage additions?
+            # Interpolate to times at which ESL = esl(tStage)
+            tUp = np.array([glaTimes[i+1] for i in switchInd])
+            yUp = np.array([glaESLs[i+1] for i in switchInd])
+            dt = tUp - glaTimes[switchInd]
+            dy = yUp - glaESLs[switchInd]
+            glaStageTimes = glaTimes[switchInd] + \
+                                dt/dy*(esl(tStage) - glaESLs[switchInd])
 
-        # Append the load cycle
+            # Check for ESL load redundencies - keep only first
+            if np.any([i in tReturn for i in glaStageTimes]):
+                continue
+
+            # Fill in lists.
+            tReturn.extend(glaStageTimes.flatten())
+            nReturn.extend(np.repeat(nStage, len(glaStageTimes)))
+
+        # Append the load cycle to unloading times
         self.times = np.r_[tReturn, self.times]
-        self.fnames = np.r_[self.fnames[nReturn], self.fnames]
+        self.stageOrder = np.r_[nReturn, range(len(self.times))]
 
         # Sort it all into decreasing order
-        self.sortByTime()
-
+        sortInd = np.argsort(self.times)[::-1]
+        self.times = self.times[sortInd]
+        self.stageOrder = self.stageOrder[sortInd]
         print('{0} stages added for the load cycle.'.format(len(nReturn)))
 
     def sortByTime(self, dec=True):
