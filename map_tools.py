@@ -221,7 +221,7 @@ def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
 
 
 def eustaticChange(h, topo):
-    """Computes ocean depth changes for eustatic chage h, consistent with
+    """Computes ocean depth changes for eustatic change h, consistent with
     sloping topographies."""
 
     if h > 0:
@@ -241,6 +241,8 @@ def eustaticChangeByVolume(V, topo, grid):
     'bathtub' ocean model. This function uses a Newton method with an initial
     guess based on the 'bathtub' model.
     """
+    if V == 0:
+        return 0
     # Get first guess of eustatic h.
     h0 = V / grid.integrate(topo < 0, km=False)
 
@@ -249,15 +251,28 @@ def eustaticChangeByVolume(V, topo, grid):
 
     return h['x'][0]
 
-def rectifyMassBalance(dIceWequiv, topo, grid):
+def rectifyMassBalance(wLoad0, wLoad1, topo, grid):
     """Calculate the ocean load change associated with a continental ice
     change.
     """
+    # Calculate the current eustatic level
+    Vequiv0 = grid.integrate(wLoad0, km=False)
+    # 74 accounts for ESL equivalent of remaining present day ice.
+    #TODO Generalize this.
+    he = eustaticChangeByVolume(-Vequiv0, topo, grid) + 74
+    if he == 0:
+        hw = 0
+    else:
+        hw = eustaticChange(he, topo)
+
+    dLoad = wLoad1-wLoad0
     # Calculate the water equivalent volume of the ice change.
-    Vequiv = grid.integrate(dIceWequiv, km=False)
+    dVequiv = grid.integrate(dLoad, km=False)
     # Calculate the eustatic change, consistent with changing shorelines.
-    he = eustaticChangeByVolume(Vequiv, topo, grid)
+    dhe = eustaticChangeByVolume(-dVequiv, topo-hw, grid)
+    if dhe == 0:
+        return dLoad
     # Get the ocean load of that eustatic change.
-    hw = eustaticChange(he, topo)
+    dhw = eustaticChange(dhe, topo-hw)
     # Add it to the load and return.
-    return dIceWequiv + hw
+    return dLoad + dhw
