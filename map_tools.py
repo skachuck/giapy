@@ -162,6 +162,10 @@ class GridObject(object):
         areaind = path.contains_points(zip(X.flatten(), Y.flatten())).reshape(self.shape)
         return areaind
 
+    def pcolormesh(self, Z, **kwargs):
+        p = self.basemap.pcolormesh(self.Lon, self.Lat, Z, **kwargs)
+        return p 
+
 
 
 def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
