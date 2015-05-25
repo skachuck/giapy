@@ -224,20 +224,20 @@ def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
 
 
 
-def eustaticChange(h, topo):
+def eustaticChange(h, topo, upl=0):
     """Computes ocean depth changes for eustatic change h, consistent with
     sloping topographies."""
 
     if h > 0:
-        hw = (h - np.maximum(0, topo)) * (h > topo)
+        hw = (h - np.maximum(0, topo) - upl) * (h > topo + upl)
     elif h < 0:
-        hw = np.maximum(topo, h) * (topo < 0)
+        hw = (np.maximum(topo, h) - upl) * (topo + upl < 0)
     else:
         raise ValueError('h cannot be equal to 0')
 
     return hw
 
-def eustaticChangeByVolume(V, topo, grid):
+def eustaticChangeByVolume(V, topo, grid, upl=0):
     """Find the eustatic change that alters the ocean's volume by V.
 
     Because of changing coastlines, a eustatic increase (decrease) of h will
@@ -250,33 +250,54 @@ def eustaticChangeByVolume(V, topo, grid):
     # Get first guess of eustatic h.
     h0 = V / grid.integrate(topo < 0, km=False)
 
-    diff = lambda h: V - grid.integrate(eustaticChange(h, topo), km=False)
+    diff = lambda h: V - grid.integrate(eustaticChange(h, topo, upl), km=False)
     h = root(diff, h0)
 
     return h['x'][0]
 
-def rectifyMassBalance(wLoad0, wLoad1, topo, grid):
-    """Calculate the ocean load change associated with a continental ice
-    change.
-    """
-    # Calculate the current eustatic level
+#def rectifyMassBalance(wLoad0, wLoad1, topo, grid):
+#    """Calculate the ocean load change associated with a continental ice
+#    change.
+#    """
+#    # Calculate the current eustatic level
+#    Vequiv0 = grid.integrate(wLoad0, km=False)
+#    # 74 accounts for ESL equivalent of remaining present day ice.
+#    #TODO Generalize this.
+#    he = eustaticChangeByVolume(-Vequiv0, topo, grid) + 74
+#    if he == 0:
+#        hw = 0
+#    else:
+#        hw = eustaticChange(he, topo)
+#
+#    dLoad = wLoad1-wLoad0
+#    # Calculate the water equivalent volume of the ice change.
+#    dVequiv = grid.integrate(dLoad, km=False)
+#    # Calculate the eustatic change, consistent with changing shorelines.
+#    dhe = eustaticChangeByVolume(-dVequiv, topo-hw, grid)
+#    if dhe == 0:
+#        return dLoad
+#    # Get the ocean load of that eustatic change.
+#    dhw = eustaticChange(dhe, topo-hw)
+#    # Add it to the load and return.
+#    return dLoad + dhw
+
+def rectifyMassBalance(wLoad0, wLoad1, upl0, upl1, topo, grid):
+    # Calculate topography and esl at t0.
+    topop = topo + upl0 + wLoad0            # Topographic changes.
     Vequiv0 = grid.integrate(wLoad0, km=False)
-    # 74 accounts for ESL equivalent of remaining present day ice.
-    #TODO Generalize this.
-    he = eustaticChangeByVolume(-Vequiv0, topo, grid) + 74
+    he = eustaticChangeByVolume(-Vequiv0, topop, grid) + 74
     if he == 0:
         hw = 0
     else:
-        hw = eustaticChange(he, topo)
+        hw = eustaticChange(he, topop)
+    topop -= hw                             # Topography refelcts eustasy.
 
-    dLoad = wLoad1-wLoad0
-    # Calculate the water equivalent volume of the ice change.
+    dLoad = wLoad1 - wLoad0
+    dUpl = upl1 - upl0
     dVequiv = grid.integrate(dLoad, km=False)
-    # Calculate the eustatic change, consistent with changing shorelines.
-    dhe = eustaticChangeByVolume(-dVequiv, topo-hw, grid)
+    dhe = eustaticChangeByVolume(-dVequiv, topop, grid, dUpl)
     if dhe == 0:
         return dLoad
-    # Get the ocean load of that eustatic change.
-    dhw = eustaticChange(dhe, topo-hw)
-    # Add it to the load and return.
+    dhw = eustaticChange(dhe, topop, dUpl)
     return dLoad + dhw
+
