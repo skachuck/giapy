@@ -189,7 +189,8 @@ class SphericalEarthOutput(object):
 
     def converged(self):
         n = len(self.times)-self.maxind
-        self.outArray[self.maxind:] = np.tile(self.outArray[self.maxind][:,np.newaxis], n).T
+        self.outArray[self.maxind:] = np.tile(
+            [0, self.outArray[n, 1], 0, self.outArray[n,3], 0, 0], n).T
 
 
 ############################## RELAXATION METHOD ##############################
