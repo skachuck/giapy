@@ -411,7 +411,7 @@ class GiaSimGlobal(object):
                 else:
                     paleo = topo + ice1
                     dice = rectifyMassBalance(ice0*DENICE/DENWAT,
-                                    ice1*DENICE/DENWAT, paleo, self.grid)
+                                    ice1*DENICE/DENWAT, 0, 0, paleo, self.grid)
             else:
                 dice = (ice1-ice0)*DENICE/DENWAT
 
