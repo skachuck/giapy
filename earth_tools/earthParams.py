@@ -38,11 +38,12 @@ np.array([[ 3480.    ,  9.90349  ,   644.1   ,     0.    ,    1068.23],
           [ 6221.    ,  3.3671   ,   128.7   ,    66.5   ,     987.83],
           [ 6291.    ,  3.37471  ,   130.3   ,    67.4   ,     985.53],
           [ 6291.    ,  3.37471  ,   130.3   ,    67.4   ,     985.53],
-          [ 6346.6   ,  3.38076  ,   131.5   ,    68.2   ,     983.94],
-          [ 6346.6   ,  2.900    ,    75.3   ,    44.1   ,     983.94],
-          [ 6356.    ,  2.900    ,    75.3   ,    44.1   ,     983.32],
-          [ 6356.    ,  2.600    ,    52.    ,    26.6   ,     983.32],
-          [ 6371.    ,  2.600    ,    52.    ,    26.6   ,     982.22]])
+          [ 6371.    ,  3.38076  ,   131.5   ,    68.2   ,     983.94]])
+         #[ 6346.6   ,  3.38076  ,   131.5   ,    68.2   ,     983.94],
+         #[ 6346.6   ,  2.900    ,    75.3   ,    44.1   ,     983.94],
+         #[ 6356.    ,  2.900    ,    75.3   ,    44.1   ,     983.32],
+         #[ 6356.    ,  2.600    ,    52.    ,    26.6   ,     983.32],
+         #[ 6371.    ,  2.600    ,    52.    ,    26.6   ,     982.22]])
 
 class EarthParams(object):
     """Store and interpolate Earth's material parameters.
@@ -72,6 +73,7 @@ class EarthParams(object):
         # Create density gradient, g/cc.earthRadii
         dend = np.gradient(prem[1:,1])/np.gradient(z)
 
+        # Fillers for nonadiabatic density gradients and visocisity.
         filler = np.zeros((len(z), 1))
 
         # Make interpolation array
@@ -158,6 +160,14 @@ class EarthParams(object):
         rho = paramSurf['den']
         g = paramSurf['grav']
         return 1 + k**4 * self.D / (rho * g * 10)
+
+    def effectiveElasticThickness(self):
+        paramSurf = self(1.)
+        lam = paramSurf['bulk']*1e9
+        mu = paramSurf['shear']*1e9
+        pois = lam/(2*(lam+mu))
+        young = mu*(3*lam + 2*mu)/(mu + lam)
+        return (12 * (1-pois**2) * self.D / young)**(0.333)
 
     def alterColumn(self, col, zy):
         z = zy[0]
