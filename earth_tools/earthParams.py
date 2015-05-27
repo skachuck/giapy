@@ -45,20 +45,25 @@ np.array([[ 3480.    ,  9.90349  ,   644.1   ,     0.    ,    1068.23],
          #[ 6356.    ,  2.600    ,    52.    ,    26.6   ,     983.32],
          #[ 6371.    ,  2.600    ,    52.    ,    26.6   ,     982.22]])
 
+############# UNITS ############
+# 1 dyne = 1 g cm / s^2 = 1e-5 N = 1e-5 kg m / s^2
+# 1 GPa  = 1e9 Pa = 1e9 N/m^2
+# 1 GPa = 1e-10 dyne / cm^2
+
 class EarthParams(object):
     """Store and interpolate Earth's material parameters.
 
     Uses PREM (Dziewonski & Anderson 1981) for density and elastic parameters.
-    if visArray is None, assumes a uniform 1e21 Pa s mantle.
+    If visArray is None, assumes a uniform 1e21 Pa s mantle.
 
     visArray should be a 2xN array or depths and viscosities.
     """
     def __init__(self, visArray=None):        
         self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
         
-        self.norms = {'r'  :     6.371e+8,      # cm
-                      'eta':     1e+22   ,      # poise = g/cm.s    
-                      'mu' :     2.938e12}      # dyne/cm^2
+        self.norms = {'r'  :     6.371e+8 ,     # cm
+                      'eta':     1e+22    ,     # poise = g/cm.s    
+                      'mu' :     293.8e+10}     # dyne/cm^2
 
         self.rCore = prem[0,0]/prem[-1,0]       # earth radii
         self.denCore = prem[0,1]                # g/cc
@@ -93,7 +98,6 @@ class EarthParams(object):
 
         zDisc = locateDiscontinuities(z)        # Save discontinuities.
         self.z = np.union1d(z, zDisc)
-
         self._paramArray = self._interpParams(self.z)
         self._interpParams = interp1d(self.z, self._paramArray)
 
@@ -137,37 +141,43 @@ class EarthParams(object):
         """
         if D is not None:
             self.D = D
+        elif H is not None:
+            # The lithosphere's elastic parameters are taken from the last row
+            # in the PREM model above (commented out).
+            lam = 34.3 * 1e+10 # dyne / cm^2
+            mu =  26.6 * 1e+10 # dyne / cm^2
+            pois = lam/(2*(lam+mu))
+            young = mu*(3*lam + 2*mu)/(mu + lam)
+            # 1e8 converts km^3 dyne / cm^2 to N m
+            self.D = young * H**3 / (12*(1-pois**2))*1e8
         else:
-            if H is not None:
-                paramSurf = self(1.)
-                lam = paramSurf['bulk']*1e9
-                mu = paramSurf['shear']*1e9
-                pois = lam/(2*(lam+mu))
-                young = mu*(3*lam + 2*mu)/(mu + lam)
-                self.D = young * H**3 / (12*(1-pois**2))
-            else:
-                raise ValueError('Muse specify either D (in N m) or H (in km)')
+            raise ValueError('Muse specify either D (in N m) or H (in km)')
 
     def getLithFilter(self, k=None, n=None):
         """Return the Lithospheric filter value for loads and rates.
         """
-        if k is None:
-            if n is None:
-                raise ValueError('Must specify k or n.')
-            else:
-                k =  (n + 0.5)/self.norms['r']*1e2
+        if k is not None:
+            pass
+        elif n is not None:
+            k =  (n + 0.5)/self.norms['r']*1e2  # m
+        else:
+            raise ValueError('Must specify k (m^-1)  or n.')
+
         paramSurf = self(1.)
         rho = paramSurf['den']
         g = paramSurf['grav']
-        return 1 + k**4 * self.D / (rho * g * 10)
+        # 1e1 converts rho*g in dyne/cm^3 to N/m^3
+        return 1 + k**4 * self.D / (rho * g * 1e1)
 
     def effectiveElasticThickness(self):
-        paramSurf = self(1.)
-        lam = paramSurf['bulk']*1e9
-        mu = paramSurf['shear']*1e9
+        # The lithosphere's elastic parameters are taken from the last row
+        # in the PREM model above (commented out).
+        lam = 34.3 * 1e+10 # dyne / cm^2
+        mu =  26.6 * 1e+10 # dyne / cm^2
         pois = lam/(2*(lam+mu))
         young = mu*(3*lam + 2*mu)/(mu + lam)
-        return (12 * (1-pois**2) * self.D / young)**(0.333)
+        # 1e-8 converts (N m) / (dyne / cm^2) to km^3
+        return (12 * (1-pois**2) * self.D / young *1e-8)**(0.333)
 
     def alterColumn(self, col, zy):
         z = zy[0]

@@ -341,7 +341,7 @@ class GiaSimGlobal(object):
         DENWAT      = 0.999          # g/cc
         DENSEA      = 1.029          # g/cc
         GSURF       = 982.2          # cm/s^2
-        DYNEperCM   = DENWAT*GSURF
+        DYNEperM    = DENWAT*GSURF*1e2
         NREM        = 1              # number of intermediate steps
 
 
@@ -436,7 +436,7 @@ class GiaSimGlobal(object):
                     respArray = earth.getResp(inter_time-t_out)
                     for o in observerDict.values():
                         o.respStageUpdate(t_out, respArray, 
-                                            DYNEperCM*loadChangeSpec)
+                                            DYNEperM*loadChangeSpec)
                                
             if verbose: pbar.update(i+1)
             i+=1
