@@ -188,9 +188,10 @@ class SphericalEarthOutput(object):
         self.outArray[ind, 5] = g1
 
     def converged(self):
-        n = len(self.times)-self.maxind
-        self.outArray[self.maxind:] = np.tile(
-            [0, self.outArray[n, 1], 0, self.outArray[n,3], 0, 0], n).T
+        n = len(self.times)-self.maxind-1
+        self.outArray[self.maxind+1:] = np.tile(
+            [0, self.outArray[self.maxind, 1], 0, 
+                self.outArray[self.maxind, 3], 0, 0], (n,1))
 
 
 ############################## RELAXATION METHOD ##############################
@@ -217,6 +218,8 @@ class SphericalEarthRelaxer(object):
     uv : array of viscous radial displacements at all depth points.
     verbose : Bool
         Relaxation method will report errors while converging.
+    stepmax : int
+        The number of steps Solvde is allowed to take (default 10).
 
     Call Returns
     ------------
@@ -265,7 +268,7 @@ class SphericalEarthRelaxer(object):
 
         self.alpha = earthparams.getLithFilter(n=n)
         
-    def __call__(self, t, disps, verbose=False):
+    def __call__(self, t, disps, verbose=False, stepmax=10):
         self.updateUvProfs(disps[:self.nz], dim=False)
         slowc = 1
         #TODO make scales adaptive
@@ -277,16 +280,24 @@ class SphericalEarthRelaxer(object):
         # Update propagators for elastic relaxation
         self.difeqElas.updateProps()
         # Solve for elastic variables using relaxation method.
-        solvde = Solvde(20, 1e-14, slowc, scalvElas, [3,4,0,1,5,2], 3, self.yE,
-                            self.difeqElas, verbose)
+        if self.difeqElas.n == 1: 
+            indexv = [0,4,3,1,5,2]
+        else:
+            indexv = [3,4,0,1,5,2]
+        solvde = Solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3, 
+                            self.yE, self.difeqElas, verbose)
         self.yE = solvde.y              # Store results for next initial guess.
         self.updateElProfs(solvde)      # Update communication profiles.
 
         # Update propagators for viscous relaxation
         self.difeqVisc.updateProps()
         # Solve for viscous variables using relaxation method.
-        solvde = Solvde(20, 1e-14, slowc, scalvVisc, [2,3,0,1], 2, self.yV,
-                            self.difeqVisc, verbose)
+        if self.difeqVisc.n == 1:
+            indexv = [0,3,2,1]
+        else:
+            indexv = [2,3,0,1]
+        solvde = Solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2, 
+                            self.yV, self.difeqVisc, verbose)
         self.yV = solvde.y              # Store results for next initial guess.
 
         rstar   = self.earthparams.norms['r']
@@ -444,14 +455,24 @@ class SphericalElasSMat(object):
                     (denCore-rhoCore)*\
                     uvCore/(2*self.n+1)
 
-            # Radial stress on the core.
-            s[3, 6+indexv[0]] = -denCore*gCore*rstar/mustar
-            s[3, 6+indexv[1]] = 0.
-            s[3, 6+indexv[2]] = 1.
-            s[3, 6+indexv[3]] = 0.
-            s[3, 6+indexv[4]] = -denCore    
-            s[3, 6+indexv[5]] = 0.          
-            s[3, jsf] = (y[2,0] - denCore*gCore*rstar/mustar*y[0,0] - \
+            if self.n == 1:
+                # Radial displacement of CMB.
+                s[3, 6+indexv[0]] = 1.
+                s[3, 6+indexv[1]] = 0.
+                s[3, 6+indexv[2]] = 0.
+                s[3, 6+indexv[3]] = 0.
+                s[3, 6+indexv[4]] = 0.
+                s[3, 6+indexv[5]] = 0.
+                s[3, jsf] = y[0,0]
+            else:
+                # Radial stress on the core.
+                s[3, 6+indexv[0]] = -denCore*gCore*rstar/mustar
+                s[3, 6+indexv[1]] = 0.
+                s[3, 6+indexv[2]] = 1.
+                s[3, 6+indexv[3]] = 0.
+                s[3, 6+indexv[4]] = -denCore    
+                s[3, 6+indexv[5]] = 0.          
+                s[3, jsf] = (y[2,0] - denCore*gCore*rstar/mustar*y[0,0] - \
                                 difden*gCore*uvCore - \
                                 denCore*(y[4,0] + phi1_v))
                                             
@@ -568,12 +589,20 @@ class SphericalViscSMat(object):
             difden = denCore-rhoCore
             G = self.earthparams.G
 
-            # Radial stress on the core.
-            s[2, 4+indexv[0]] = 0.
-            s[2, 4+indexv[1]] = 0.
-            s[2, 4+indexv[2]] = 1.
-            s[2, 4+indexv[3]] = 0.
-            s[2, jsf] = (y[2,0] - denCore*gCore*ueCore - \
+            if self.n == 1:
+                # Radial displacement of CMB.
+                s[2, 4+indexv[0]] = 1.
+                s[2, 4+indexv[1]] = 0.
+                s[2, 4+indexv[2]] = 0.
+                s[2, 4+indexv[3]] = 0.
+                s[2, jsf] = y[0,0]
+            else:
+                # Radial stress on the core.
+                s[2, 4+indexv[0]] = 0.
+                s[2, 4+indexv[1]] = 0.
+                s[2, 4+indexv[2]] = 1.
+                s[2, 4+indexv[3]] = 0.
+                s[2, jsf] = (y[2,0] - denCore*gCore*ueCore - \
                                 difden*gCore*uvCore - \
                                 denCore*phi1Core)
             

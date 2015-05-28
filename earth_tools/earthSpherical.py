@@ -69,9 +69,7 @@ class SphericalEarth(object):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
         
-        if self.nmax is None:
-            nstart = 1
-        elif self.nmax >= nmax:
+        if self.nmax is None or self.nmax >= nmax:
             nstart = 1
         else:
             nstart = self.nmax
@@ -79,33 +77,43 @@ class SphericalEarth(object):
         respArray = []
         pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
         for n in pbar(range(nstart, nmax+1)):
-            out = self.timeEvolve(n, zarray)
+            out = self.timeEvolve(n, zarray, nstart)
             respArray.append(out.outArray)
 
         respArray = np.array(respArray)
 
-        # Append n=0 zero response
-        self.respArray = np.r_[np.zeros((1,out.outArray.shape[0],
-                                out.outArray.shape[1])), respArray]
+        if nstart == 1:
+            # Append n=0 zero response
+            self.respArray = np.r_[np.zeros((1,out.outArray.shape[0],
+                                    out.outArray.shape[1])), respArray]
 
 
         self.times = out.times / 3.1536e10  # convert to thousand years
         self.nmax = nmax
         self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
-    def timeEvolve(self, n, zarray):
+    def timeEvolve(self, n, zarray, nstart=None):
         out = SphericalEarthOutput()
-        if n == 1:
-            f = SphericalEarthShooter(self.params, zarray, 1)
-            integrateRelaxationDirect(f, out)
-        elif n == 2:
-            yE0, yV0 = get_t0_guess(self.params, zarray, n=2)
+        
+        if n == nstart or nstart is None:
+            # For the first one, set up the relaxer and initial guess.
+            yE0, yV0 = get_t0_guess(self.params, zarray, n=n)
             self.relaxer = SphericalEarthRelaxer(self.params, 
-                                zarray, yE0, yV0, 2)
-            integrateRelaxationScipy(self.relaxer, out)
+                                zarray, yE0, yV0, n)
+            integrateRelaxationScipy(self.relaxer, out) 
         else:
+            # Subsequent calculations use n-1, t~0 as initial guess.
             self.relaxer.changeOrder(n)
-            integrateRelaxationScipy(self.relaxer, out)
+            try:
+                integrateRelaxationScipy(self.relaxer, out)
+            except:
+                # If Solvde takes too many steps, use shooting method to
+                # generate new guess and continue.
+                print 'Reguessing: n={0}'.format(n)
+                yE0, yV0 = get_t0_guess(self.params, zarray, n=n)
+                self.relaxer = SphericalEarthRelaxer(self.params, 
+                                    zarray, yE0, yV0, n)
+                integrateRelaxationScipy(self.relaxer, out)
         return out   
 
 
