@@ -3,31 +3,54 @@ This module includes procedures for importing and manipulating emergence data.
 """
 
 import numpy as np
-import cPickle as pickle
 import time
 
-from scipy.interpolate import interp1d
+from .yearcalib import uncalib_bloom, c14corr
+from .abstractDataClasses import AbsGeoTimeSeries, AbsGeoTimeSeriesContainer
 
-import giapy.data_tools as data_tools
-from  giapy.data_tools.yearcalib import uncalib_bloom
+from .. import timestamp
 
-class EmergeData(object):
+
+def calcEmergence(sim, emergedata):
+    #TODO This function shouldn't have to know what's inside any object, let
+    # alone a complicated one, like sim. Consider calculating rsl first and
+    # passing it and calculated times in (ts, rsl, emergedata).
+    # To reference to present day
+    u0 = sim.inputs.harmTrans.spectogrd(sim['upl'][-1])
+
+    uAtLocs = []
+    for ut in sim['upl']:
+        ut = u0 - sim.inputs.harmTrans.spectogrd(ut)
+        interpfunc = sim.inputs.grid.create_interper(ut.T)
+        uAtLocs.append(interpfunc.ev(emergedata.lons, emergedata.lats))
+
+    uAtLocs = np.array(uAtLocs).T
+
+    data = {}
+    for uAtLoc, loc in zip(uAtLocs, emergedata):
+        timeseries = np.array([loc.ts, 
+                    np.interp(loc.ts, sim.inputs.out_times, uAtLoc)]).T
+        data[loc.recnbr] = EmergeDatum(timeseries, 
+                                        lat=loc.lat, 
+                                        lon=loc.lon,
+                                        desc=loc.desc,
+                                        recnbr=loc.recnbr)
+
+    return EmergeData(data)
+
+class EmergeDatum(AbsGeoTimeSeries):
+    def __repr__(self):
+        return self.desc
+
+class EmergeData(AbsGeoTimeSeriesContainer):
     """
     """
-    def __init__(self, data=[]):
+    def __init__(self, data={}):
         self.data = data
         self.form_long_vectors()
         self.W = None
+        self.TIMESTAMP = timestamp()
         
-    def __getitem__(self, key):
-        return self.data.__getitem__(key)
-        
-    def __iter__(self):
-        return self.data.__iter__()
-
-    def __len__(self):
-        return len(self.data)
-
     def transform_locs(self, basemap, inverse=False):
         xs, ys = basemap(self.locs[:,0], self.locs[:,1], inverse=inverse)
         self.locs[:,0], self.locs[:,1] = xs, ys
@@ -69,7 +92,7 @@ class EmergeData(object):
         # Interpolate the calculated uplifted at each time and data location
         # to the times of the data location.
         for interp, loc in zip(interp_data, self.data):
-            calc_vector.append(np.interp(loc['data_dict']['times'],
+            calc_vector.append(np.interp(loc[:,0],
             out_times[::-1], interp[::-1]))
         
         # flatten the array    
@@ -91,147 +114,10 @@ class EmergeData(object):
     def findLocFromLongdata(self, num):
         """Return location index and point index for index from self.long_data.
         """
-        nums = np.array([len(loc['data_dict']['emerg']) for loc in self])
+        nums = np.array([len(loc) for loc in self])
         cumnums = nums.cumsum()
         index = (np.arange(len(self))[cumnums < num]).max()
-        return index+1, num-cumnums[index]-1
-
-    def import_from_file(self, filename):
-        """Reads emergence data from a file where it is stored in the form...
-        
-        Stores the emergence data in a list self.data of dictionaries with keys:
-                lat
-                lon
-                year      (of publication)
-                desc      (of dataset)
-                comm      (ent)
-                auth      (ors of publication)
-                tect      (key for tectonic activity, 1 or 0)
-                tectup    (the magnitude of tectonic uplift)
-                age       (some sort of age)
-                recnbr    (the unique reference number)
-                data_dict (a dictionary with keys 'times' and 'emerg' for ordered
-                            lists of the data)
-        
-        Stores the locations in a list [[lon, lat]]
-        Stores all the data in the form 
-                            
-        Parameters
-        ----------
-        filename - the file containing the data to be imported
-        """
-        
-        self.data = []                         # Initialize the array,
-        self.long_data = []
-        self.long_time = []
-        self.locs = []
-        
-        # A list of bad points
-        badpts = [137, 41, 203, 232, 234, 230, 231, 228, 229, 235, 236, 310,
-                        200, 183, 318, 319, 320, 295, 296,
-                        203, # Sabine high islands - uncertain age, high scatter
-                        300 # Malaysia - uncertain calibration
-                        ]
-
-        # Generate the c14 corrector
-        c14array = np.loadtxt(data_tools.C14TABLE, delimiter=',')
-        ind = np.argsort(c14array[:,1])
-        c14corr = interp1d(c14array[ind,1], c14array[ind,0])
-        
-        f = open(filename, 'r')                 # open the file,
-        line = f.readline()                     # read the first line to initiate
-        while line:                             # the while loop.
-            # read off the metadata for the location
-            lat, lon, year, num = np.array(line.split('\t')[:4]).astype(np.float)
-            unit, sign, typ, ageky, tect, tectup, recnbr = np.array(
-                                    f.readline().split('\t')[:7]).astype(np.float)
-            auth = f.readline().split('\t')[0]
-            desc = f.readline().split('\t')[0]
-            comm = f.readline().split('\t')[0]
-            
-            if 100 <= recnbr < 400:         # apply a correction for misentered
-                comm, desc = desc, comm     # data.
-            
-            times = []                      # initiate the data_dict
-            emerg = []
-            data = {}
-            if recnbr < 400 or recnbr >= 500:
-                ncol = 2
-                ecol = 1
-            else:
-                # Newer data were given time bounds to read in as well (we're 
-                # skipping them for now and reading in the most-likely time).
-                ncol = 5
-                ecol = 3
-
-            for i in range(int(num)):
-                line = np.array(f.readline().split('\t')[:ncol]).astype(np.float)
-                if line[0] in times:
-                    pass
-                else:
-                    times.append(line[0])
-                    self.long_time.append(line[0])
-                    emerg.append(line[ecol])
-                    self.long_data.append(line[ecol])
-
-            emerg = np.asarray(emerg)
-            times = np.asarray(times)
-            
-            if int(recnbr) in badpts:
-                line = f.readline()
-                continue
-
-            # Post processing of data based on metadata
-            if unit == 2: emerg = emerg*0.3048          # ft -> m
-            if sign >=10: 
-                times = times/1000.
-                sign = sign/10
-            if sign == 1: times = -1*times
-           
-                # Correction for time calibration
-            #if ageky == 1:
-            #    pass
-            #elif ageky == 2:
-            #    try:
-            #        times = c14corr(times*1000.)/1000.
-            #    except:
-            #        print desc, recnbr, times
-            #        raise
-            #elif ageky == 5:
-            #    times = uncalib_bloom(times*1000.)/1000.
-            #    times = c14corr(times*1000.)/1000.
-            
-            data['times']=times
-            data['emerg']=emerg
-            data['error']=[]  
-            
-
-            # ignore bad pts
-            if int(recnbr) in badpts: 
-                pass
-            # and pts whose locations are already in
-            elif [lon, lat] in self.locs:
-                dupnbr = [loc['recnbr'] for loc in self.data 
-                            if loc['lon']==lon and loc['lat']==lat]
-                dupyr = [loc['year'] for loc in self.data 
-                            if loc['lon']==lon and loc['lat']==lat]
-                print ('Recnbr {0} at [{1}, {2}] is a duplicate loc with {3}'\
-                        .format(recnbr, lon, lat, dupnbr))
-                print ('    pubdates are {0} and {1}').format(year, dupyr)
-            else:
-                # Form the dictionary entry for this location
-                self.data.append(dict(zip(['lat', 'lon', 'year', 'desc', 'comm', 
-                                            'auth', 'tect', 'tectup', 'ageky', 
-                                            'recnbr', 'data_dict'], 
-                                            [lat, lon, int(year), desc, comm, 
-                                            auth, int(tect), tectup, int(ageky), 
-                                            int(recnbr), data])))
-                self.locs.append([lon, lat])
-            line = f.readline()                 # step on.
-            
-        self.locs = np.array(self.locs)
-        self.form_long_vectors()
-        f.close()
+        return index+1, num-cumnums[index]-1 
         
     def form_long_vectors(self):
         """Update the long lists: long_data, long_time, and locs with currently
@@ -244,89 +130,132 @@ class EmergeData(object):
         every iteration of an inversion.
         """
         
-        self.long_data = []
-        self.long_time = []
-        self.locs = []
-        for loc in self.data:
-            self.locs.append([loc['lon'], loc['lat']])
-            for point in loc['data_dict']['emerg']:
-                self.long_data.append(point)
-            for point in loc['data_dict']['times']:
-                self.long_time.append(point)
-        self.locs = np.array(self.locs)
-        
-    def save(self, filename):
-        """Save the EmergeData interface object, with empty data list
-        
-        Parameters
-        ----------
-        filename (str) - path to the file to save
-        """
-        pickle.dump(self, open(filename, "wb"))
+        self.long_data = np.array([None, None])
+        self.long_time = np.array([None, None])
+        self.locs = np.array([None, None])
+        for loc in self:
+            self.locs = np.vstack((self.locs, loc.loc))
+            self.long_time = np.concatenate((self.long_time, loc.ts))
+            self.long_data = np.concatenate((self.long_data, loc.ys))
+        self.long_data = self.long_data[1:]
+        self.long_time = self.long_time[1:]
+        self.locs = self.locs[1:]
 
-    def by_time(self, time, scale=1):
-        """Yield locations whose data bounds a certain time, for interpolation 
-        of emergence.
-        
-        Parameters
-        ----------
-        time - the time to locate
-        scale - if the data and time are not in the same units (cal years / ka)   
-        """
-        for loc in self.data:
-            if ( max(loc['data_dict']['times']) > time/scale
-                and min(loc['data_dict']['times']) < time/scale):
-                yield loc
-                
-    def by_loc(self, latmin=-90, latmax=90, lonmin=-180, lonmax=180):
-        """Yield locations whose locations are within a lat/lon box
-        
-        Parameters
-        ----------
-        latmin / latmax / lonmin / lonmax - the lat/lon bounding box
-        """
-        for loc in self.data:
-            if ((latmin <= loc['lat'] <= latmax) 
-                and (lonmin <= loc['lon'] <= lonmax)):
-                yield loc
-        
-    def by_recnbr(self, nbrs):
-        """Yield locations identified by provided recordnumbers.
-        
-        Parameters
-        ----------
-        nbrs - a list of record numbers to select (ADD ABILITY TO SELECT ONLY
-                ONE NUMBER).
-        """
-        for loc in self.data:
-            if loc['recnbr'] in nbrs:
-                yield loc
+def importEmergeDataFromFile(filename):
+    """Reads emergence data from a file where it is stored in the form...
+    
+    Stores the emergence data in a list self.data of dictionaries with keys:
+            lat
+            lon
+            year      (of publication)
+            desc      (of dataset)
+            comm      (ent)
+            auth      (ors of publication)
+            tect      (key for tectonic activity, 1 or 0)
+            tectup    (the magnitude of tectonic uplift)
+            age       (some sort of age)
+            recnbr    (the unique reference number)
+            data_dict (a dictionary with keys 'times' and 'emerg' for ordered
+                        lists of the data)
+    
+    Stores the locations in a list [[lon, lat]]
+    Stores all the data in the form 
+                        
+    Parameters
+    ----------
+    filename - the file containing the data to be imported
+    """
+    
+    data = {}                         # Initialize the array,
+    
+    # A list of bad points
+    badpts = [137, 41, 203, 232, 234, 230, 231, 228, 229, 235, 236, 310,
+                    200, 183, 318, 319, 320, 295, 296,
+                    203, # Sabine high islands - uncertain age, high scatter
+                    300 # Malaysia - uncertain calibration
+                    ]
 
-    def filter(self, func, args, filename=None):
-        """Filter data and return a new EmergeData object with the new data.
+
+
+    locs = []
+    
+    f = open(filename, 'r')                 # open the file,
+    line = f.readline()                     # read the first line to initiate
+    while line:                             # the while loop.
+        # read off the metadata for the location
+        lat, lon, year, num = np.array(line.split('\t')[:4]).astype(np.float)
+        unit, sign, typ, ageky, tect, tectup, recnbr = np.array(
+                                f.readline().split('\t')[:7]).astype(np.float)
+        auth = f.readline().split('\t')[0]
+        desc = f.readline().split('\t')[0]
+        comm = f.readline().split('\t')[0]
         
-        Parameters
-        ----------
-        func (str) - the name of the filtering method. Options include: 
-                    by_time, by_loc, by_recnbr. See documentation for those 
-                    methods for details.
-        args - arguments to provide to the procedure (see documentation)
-        filename - to save new data immediately, provide a filename. Filtered
-                    data can be saved later by name.save(filename)
-        """
-        filtered = EmergeData([loc for loc in 
-                                        self.__getattribute__(func)(**args)])
-        filtered.form_long_vectors()
-                
-        if filename is not None:
-            filtered.save(filename)
-            
-        return filtered
+        if 100 <= recnbr < 400:         # apply a correction for misentered
+            comm, desc = desc, comm     # data.
+        
+        locs.append([lon, lat])
+        timeseries = np.zeros((num, 2))     # initialize the time series array.
+        if recnbr < 400 or recnbr >= 500:
+            ncol = 2
+            ecol = 1
+        else:
+            # Newer data were given time bounds to read in as well (we're 
+            # skipping them for now and reading in the most-likely time).
+            ncol = 5
+            ecol = 3
 
-    def plot_loc(self, map, **kwarg):
-        """Plot the locations of data on a map object"""
-        x, y = map(*zip(*self.locs))
-        map.plot(x, y, ls='None', **kwarg)
+        for i in range(int(num)):
+            line = np.array(f.readline().split('\t')[:ncol]).astype(np.float)
+            if line[0] in timeseries[:,0]:
+                pass
+            else:
+                timeseries[i] = [line[0], line[ecol]]
+        
 
-def load(filename):
-    return pickle.load(open(filename, 'r'))
+        # Post processing of data based on metadata
+        if unit == 2: timeseries[:,1] = timeseries[:,1]*0.3048      # ft -> m
+        if sign >=10: 
+            timeseries[:,0] = timeseries[:,0]/1000.
+            sign = sign/10
+        if sign == 1: timeseries[:,0] = -1*timeseries[:,0]
+       
+            # Correction for time calibration
+        #if ageky == 1:
+        #    pass
+        #elif ageky == 2:
+        #    try:
+        #        times = c14corr(times*1000.)/1000.
+        #    except:
+        #        print desc, recnbr, times
+        #        raise
+        #elif ageky == 5:
+        #    times = uncalib_bloom(times*1000.)/1000.
+        #    times = c14corr(times*1000.)/1000.        
+
+        # Ignore bad pts
+        if int(recnbr) in badpts: 
+            pass
+        # and pts whose locations are already in
+        #elif [lon, lat] in locs:
+        #    dupnbr = [loc.recnbr for loc in data 
+        #                if loc.lon==lon and loc.lat==lat]
+        #    dupyr = [loc.year for loc in data 
+        #                if loc.lon==lon and loc.lat==lat]
+        #    print ('Recnbr {0} at [{1}, {2}] is a duplicate loc with {3}'\
+        #            .format(recnbr, lon, lat, dupnbr))
+        #    print ('    pubdates are {0} and {1}').format(year, dupyr)
+        else:
+            # Form the dictionary entry for this location
+            data[int(recnbr)] = EmergeDatum(timeseries, lat=lat, lon=lon,
+                                    year=int(year), desc=unicode(desc,
+                                    errors='ignore'), comm=comm,
+                                    auth=auth, tect=int(tect), tectup=tectup,
+                                    ageky=int(ageky), recnbr=recnbr)
+
+        line = f.readline()                 # Step on.
+    f.close()                               # Close the file.
+
+    emergeData = EmergeData(data)
+        
+    emergeData.form_long_vectors()
+    return emergeData

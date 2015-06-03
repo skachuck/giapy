@@ -13,7 +13,7 @@ except:
     pass
 
 from giapy.map_tools import GridObject, rectifyMassBalance
-
+from . import GITVERSION, timestamp
 
 class GiaSim(object):
     """
@@ -126,6 +126,8 @@ class GiaSim(object):
         """Calculate the residuals associated with stored data sources and
         earth parameters xs.
         """
+        raise NotImplemented()
+        #TODO Get residual calculations out of data containers
         if not self.datalist:
             raise StandardError('self.datalist is empty. Use self.attach_data.')
 
@@ -218,6 +220,7 @@ class GiaSim(object):
         return jac
 
     def mcmc(self, N):
+        raise NotImplemented()
         # priors
 
         # observations
@@ -362,24 +365,17 @@ class GiaSimGlobal(object):
         if out_times is None:
            raise ValueError('out_times is not set')
                  
-        # Initialize the uplift observer
+        # Initialize the return object
         uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
         horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
         loadObserver = LoadObserver(ice.times, ice.shape)
         eslUplObserver = TotalUpliftObserver(ice.times, ntrunc, ns)
 
-        observerDict = {'upl':uplObserver,
-                        'hor':horObserver,
-                        'load':loadObserver, 
-                        'eslUpl':eslUplObserver}
-        # Initialize observers
-        #for o in observerList:
-        #    o.initialize(out_times, ntrunc)
-
-        #if paleotopo:
-        #    iceUpl
-        #    observerList.append(TotalUpliftObserver())
-
+        observerDict = GiaSimOutput(self)
+        observerDict.addObserver('upl'   , uplObserver)
+        observerDict.addObserver('hor'   , horObserver)
+        observerDict.addObserver('load'  , loadObserver)
+        observerDict.addObserver('eslUpl', eslUplObserver)
 
         # Use progressbar to track calculation
         if verbose:
@@ -415,7 +411,7 @@ class GiaSimGlobal(object):
             else:
                 dice = (ice1-ice0)*DENICE/DENWAT
 
-            for o in observerDict.values():
+            for o in observerDict:
                 o.loadStageUpdate(t0, dice)
 
             # Transform load change into spherical harmonics.
@@ -434,7 +430,7 @@ class GiaSimGlobal(object):
                 # Perform the time convolution for each output time
                 for t_out in out_times[out_times <= inter_time]:
                     respArray = earth.getResp(inter_time-t_out)
-                    for o in observerDict.values():
+                    for o in observerDict:
                         o.respStageUpdate(t_out, respArray, 
                                             DYNEperM*loadChangeSpec)
                                
@@ -442,18 +438,31 @@ class GiaSimGlobal(object):
             i+=1
         if verbose: pbar.finish()
 
-        del observerDict['eslUpl']
+        # Don't keep the intermediate uplift stages for water redistribution
+        observerDict.removeObserver('eslUpl')
 
         return observerDict
 
 
+class GiaSimOutput(object):
+    def __init__(self, inputs):
+        self.GITVERSION = GITVERSION
+        self.TIMESTAMP = timestamp()
+        self.inputs = inputs
+        self._observerDict = {}
 
+    def __getitem__(self, key):
+        return self._observerDict.__getitem__(key)
 
+    def __iter__(self):
+        return self._observerDict.itervalues() 
 
-#An observer is a wrapper for an array that holds a specific kind of response
-#Each one needs an update function.
-#Each one needs a way to untransform.
-#Each one needs a way to find the response at a specific time.
+    def addObserver(self, name, observer):
+        self._observerDict[name] = observer
+
+    def removeObserver(self, name):
+        del self._observerDict[name]
+
 
 class AbstractGiaSimObserver(object):
     """The GiaSimObserver mediates between an earth model's respons function
@@ -461,6 +470,12 @@ class AbstractGiaSimObserver(object):
     """
     def __init__(self):
         pass
+
+    def __getitem__(self, key):
+        return self.array.__getitem__(key)
+        
+    def __iter__(self):
+        return self.array.__iter__()
     
     @property
     def shape(self):
@@ -487,10 +502,9 @@ class AbstractGiaSimObserver(object):
             raise ValueError('time not in self.outTimes')
         return np.argwhere(self.outTimes == time)[0][0]
 
-class TotalUpliftObserver(AbstractGiaSimObserver):
+class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
     def __init__(self, outTimes, ntrunc, ns):
         self.initialize(outTimes, ntrunc, ns)
-
     def initialize(self, outTimes, ntrunc, ns):
         self.array = np.zeros((len(outTimes), 
                                 (ntrunc+1)*(ntrunc+2)/2), dtype=complex)
@@ -504,32 +518,31 @@ class TotalUpliftObserver(AbstractGiaSimObserver):
         if tout not in self.outTimes:
             return
         n = self.locateByTime(tout)
-        self.array[n] += (respArray[self.ns,0] + respArray[self.ns,1])*dLoad
+        resp = self.isolateRespArray(respArray)
+        self.array[n] += resp * dLoad
 
     def isolateRespArray(self, respArray):
-        return respArray[:,0] + respArray[:,1]
+        raise NotImplemented()
 
-class TotalHorizontalObserver(AbstractGiaSimObserver):
-    def __init__(self, outTimes, ntrunc, ns):
-        self.initialize(outTimes, ntrunc, ns)
-
-    def initialize(self, outTimes, ntrunc, ns):
-        self.array = np.zeros((len(outTimes), 
-                                (ntrunc+1)*(ntrunc+2)/2), dtype=complex)
-        self.outTimes = outTimes
-        self.ns = ns
-
-    def respStageUpdate(self, *args, **kwargs):
-        self.update(*args, **kwargs)
-
-    def update(self, tout, respArray, dLoad):
-        if tout not in self.outTimes:
-            return
-        n = self.locateByTime(tout)
-        self.array[n] += (respArray[self.ns,2] + respArray[self.ns,3])*dLoad
-
+class TotalUpliftObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
-        return respArray[:,0] + respArray[:,1]
+        # 1/100 makes the response in m uplift / m ice
+        return (respArray[self.ns,0] + respArray[self.ns,1])/100
+
+class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
+    def isolateRespArray(self, respArray):
+        # 1/100 makes the response in m displacement / m ice
+        return (respArray[self.ns,2] + respArray[self.ns,3])/100
+
+class GeoidObserver(AbstractEarthGiaSimObserver):
+    def isolateRespArray(self, respArray):
+        return respArray[self.ns,5]
+
+class MOIObserver(AbstractEarthGiaSimObserver):
+    pass
+
+class AngularMomentumObserver(AbstractEarthGiaSimObserver):
+    pass
 
 class LoadObserver(AbstractGiaSimObserver):
     def __init__(self, outTimes, iceShape):
@@ -548,20 +561,3 @@ class LoadObserver(AbstractGiaSimObserver):
             return
         n = self.locateByTime(tout)
         self.array[n] = load
-
-
-    def isolateRespArray(self, respArray):
-        return respArray[:,0] + respArray[:,1]
-
-class GeoidObserver(AbstractGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        return respArray[:,5]
-
-class MOIObserver(AbstractGiaSimObserver):
-    pass
-
-class AngularMomentumObserver(AbstractGiaSimObserver):
-    pass
-
-
-
