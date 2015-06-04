@@ -187,9 +187,9 @@ def importEmergeDataFromFile(filename):
         lat, lon, year, num = np.array(line.split('\t')[:4]).astype(np.float)
         unit, sign, typ, ageky, tect, tectup, recnbr = np.array(
                                 f.readline().split('\t')[:7]).astype(np.float)
-        auth = f.readline().split('\t')[0]
-        desc = f.readline().split('\t')[0]
-        comm = f.readline().split('\t')[0]
+        auth = f.readline().split('\t')[0].strip('\' \" ')
+        desc = f.readline().split('\t')[0].strip('\' \" ')
+        comm = f.readline().split('\t')[0].strip('\' \" ')
         
         if 100 <= recnbr < 400:         # apply a correction for misentered
             comm, desc = desc, comm     # data.

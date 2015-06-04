@@ -41,3 +41,12 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
             transform=ax.transAxes, va='center', fontsize=12)
 
     return plt.gca()
+
+def plotLocTimeseries(data, calc, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(1,1)
+    ax.plot(data.ts, data.ys, marker='+', color='k', alpha=0.75,
+            ms=15, ls='None')
+    ax.plot(calc.ts, calc.ys)
+    ax.set_title(str(data))
+    return plt.gca()
