@@ -29,7 +29,8 @@ def calcEmergence(sim, emergedata):
     data = {}
     for uAtLoc, loc in zip(uAtLocs, emergedata):
         timeseries = np.array([loc.ts, 
-                    np.interp(loc.ts, sim.inputs.out_times, uAtLoc)]).T
+                    np.interp(loc.ts, 
+                                sim.inputs.out_times[::-1], uAtLoc[::-1])]).T
         data[loc.recnbr] = EmergeDatum(timeseries, 
                                         lat=loc.lat, 
                                         lon=loc.lon,
