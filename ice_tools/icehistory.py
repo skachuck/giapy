@@ -289,6 +289,13 @@ class Ice2d(object):
             # Collect all indices before ESL passes through esl(tStage)
             switches = np.sign(glaESLs - esl(tStage))
             switchInd = np.argwhere((switches[1:]-switches[:-1]) != 0)
+            # Two sign changes occur is ESL at deglaciation stage is same as ESL
+            # during load cycle to append. Find any actual zeros and take only
+            # one index.
+            zeroInd = np.argwhere(switches == 0) - 1
+            for k in zeroInd:
+                keep = np.logical_and(switchInd!=k, switchInd!=k+1)
+                switchInd = np.r_[switchInd[keep].flatten(), k]
 
             # Interpolate to times at which ESL = esl(tStage)
             tUp = np.array([glaTimes[i+1] for i in switchInd])
@@ -385,6 +392,9 @@ class IceHistory(object):
 
         self.stageOrder = range(len(self.times))
 
+    def __getitem__(self, key):
+        return self.load(self.fnames[self.stageOrder[key]])
+
     def load(self, fname, lonlat=False, dataFormat=None):
         dataFormat = dataFormat or self.dataFormat
         data =  loadXYZGridData(self.path+fname, shape=self.shape,\
@@ -409,8 +419,7 @@ class IceHistory(object):
         for i, stage in enumerate(self.stageOrder[1:], start=1):
             time = self.times[i]
             fname = self.fnames[stage]
-            ice0, t0 = ice1, t1
-            ice1, t1 = self.load(fname), time
+            ice0, t0, ice1, t1 = ice1, t1, self.load(fname), time
             if transform is not None:
                 ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
@@ -440,6 +449,13 @@ class IceHistory(object):
             # Collect all indices before ESL passes through esl(tStage)
             switches = np.sign(glaESLs - esl(tStage))
             switchInd = np.argwhere((switches[1:]-switches[:-1]) != 0)
+            # Two sign changes occur is ESL at deglaciation stage is same as ESL
+            # during load cycle to append. Find any actual zeros and take only
+            # one index.
+            zeroInd = np.argwhere(switches == 0) - 1
+            for k in zeroInd:
+                keep = np.logical_and(switchInd!=k, switchInd!=k+1)
+                switchInd = np.r_[switchInd[keep].flatten(), k]
 
             # Interpolate to times at which ESL = esl(tStage)
             tUp = np.array([glaTimes[i+1] for i in switchInd])

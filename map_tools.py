@@ -43,8 +43,10 @@ class GridObject(object):
                                 paramaters.')
 
         self.shape = shape or (50, 50)
-        self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1])
-        self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0])
+        self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1],
+                                endpoint=False)
+        self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0],
+                                endpoint=True)
         self.Lon, self.Lat = basemap(*np.meshgrid(self.x, self.y), inverse=True)
 
     def update_shape(self, shape):
@@ -52,8 +54,10 @@ class GridObject(object):
 
         basemap = self.basemap
 
-        self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1])
-        self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0])
+        self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1],
+                                endpoint=False)
+        self.y = np.linspace(basemap.ymin, basemap.ymax, self.shape[0],
+                                endpoint=True)
         self.Lon, self.Lat = basemap(*np.meshgrid(self.x, self.y), inverse=True)
 
     def volume(self, array, km=True):
