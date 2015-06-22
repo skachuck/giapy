@@ -63,6 +63,10 @@ def integrateRelaxationScipy(f, out, eps=1e-7):
     vislim = 1./(paramSurf['den']*paramSurf['grav']*f.alpha)
     nz = len(f.zarray)
 
+    # Get the t=0 response elastic, and save it
+    f(0, np.zeros(2*nz))
+    out.out(0, 0, 0, f)
+
     r = ode(f).set_integrator('vode', method='adams')
     r.set_initial_value(y=np.zeros(2*nz), t=0)
     timeswrite = out.times
@@ -116,6 +120,10 @@ def integrateRelaxationDirect(f, out, eps=1e-7):
     nz = len(f.zarray)
     disps = np.zeros(2*nz)
     converged = False
+
+    # Get the t=0 response elastic, and save it
+    f(0, np.zeros(2*nz))
+    out.out(0, 0, 0, f)
 
     for i in range(len(dt)):
         vels = f(t, disps)

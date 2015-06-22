@@ -12,7 +12,9 @@ try:
 except:
     pass
 
-from giapy.map_tools import GridObject, rectifyMassBalance
+from .map_tools import GridObject, redistributeOcean, sealevelChangeByMelt,\
+                    volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad
+
 from . import GITVERSION, timestamp
 
 class GiaSim(object):
@@ -325,7 +327,7 @@ class GiaSimGlobal(object):
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
     def performConvolution(self, out_times=None, ntrunc=None, topo=None,
-                             paleotopo=False, verbose=False):  
+                            verbose=False, eliter=5):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -344,12 +346,13 @@ class GiaSimGlobal(object):
         DENWAT      = 0.999          # g/cc
         DENSEA      = 1.029          # g/cc
         GSURF       = 982.2          # cm/s^2
-        DYNEperM    = DENWAT*GSURF*1e2
+        DYNEperM    = DENSEA*GSURF*1e2
         NREM        = 1              # number of intermediate steps
 
 
         earth = self.earth
         ice = self.ice
+        grid = self.grid
 
         # Resolution
         ntrunc = ntrunc or ice.nlat-1
@@ -364,18 +367,35 @@ class GiaSimGlobal(object):
         self.out_times = out_times
         if out_times is None:
            raise ValueError('out_times is not set')
+        
+        # Calculate times of intermediate removal stages.
+        diffs = np.diff(ice.times)
+        addRemovalTimes = []
+        for i in range(1, NREM+1):
+            addRemovalTimes.append(ice.times[:-1]+i*diffs/NREM)
+        addRemovalTimes = np.array(addRemovalTimes).flatten()
+        remTimes = np.union1d(ice.times, addRemovalTimes)[::-1]
+        calcTimes = np.union1d(remTimes, out_times)[::-1]
                  
         # Initialize the return object
         uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
         horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
-        loadObserver = LoadObserver(ice.times, ice.shape)
-        eslUplObserver = TotalUpliftObserver(ice.times, ntrunc, ns)
+        loadObserver = LoadObserver(remTimes, ice.shape)
+        eslUplObserver = TotalUpliftObserver(remTimes, ntrunc, ns)
+        eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
+        topoObserver = TopoObserver(remTimes, ice.shape)
+        eslObserver = EslObserver(remTimes)
 
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
         observerDict.addObserver('hor'   , horObserver)
         observerDict.addObserver('load'  , loadObserver)
         observerDict.addObserver('eslUpl', eslUplObserver)
+        observerDict.addObserver('eslGeo', eslGeoObserver)
+        observerDict.addObserver('topo'  , topoObserver)
+        observerDict.addObserver('esl'   , eslObserver)
+
+        #out_times = np.union1d(remTimes, out_times)[::-1]
 
         # Use progressbar to track calculation
         if verbose:
@@ -386,49 +406,110 @@ class GiaSimGlobal(object):
            except NameError:
                raise ImportError('progressbar not loaded')
 
+        for o in observerDict:
+            o.loadStageUpdate(ice.times[0], topo=topo)
+
+        esl = 0
+
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
         i=0     # i counts loop number for ProgressBar.
-        for ice0, t0, ice1, t1 in ice.pairIter():
+        for icea, ta, iceb, tb in ice.pairIter():
             # Find ice change between stages.
 
             # Take/put water equiv ice change from/into ocean as water un/load.
             if topo is not None:
-                # Construct paleo-ocean surface at t1 for mass redistribution.
-                if paleotopo:
-                    nt0 = observerDict['eslUpl'].locateByTime(t0)
-                    upl0 = observerDict['eslUpl'].array[nt0]
-                    upl0 = self.harmTrans.spectogrd(upl0)
-                    upl1 = observerDict['eslUpl'].array[nt0+1]
-                    upl1 = self.harmTrans.spectogrd(upl1)
-                    dice = rectifyMassBalance(ice0*DENICE/DENWAT,
-                                    ice1*DENICE/DENWAT, upl0, upl1, topo,
-                                    self.grid)
-                else:
-                    paleo = topo + ice1
-                    dice = rectifyMassBalance(ice0*DENICE/DENWAT,
-                                    ice1*DENICE/DENWAT, 0, 0, paleo, self.grid)
+                # Get index for starting time.
+                nta = observerDict['eslUpl'].locateByTime(ta)
+                # Collect the topography at the beginning of the step.
+                Ta = observerDict['topo'].array[nta] + iceb - icea
+
+                # Make the ocean volume change based on the ice change.
+                dM = (iceb - icea) * DENICE/DENSEA
+                dhwBarI = sealevelChangeByMelt(-grid.integrate(dM, km=False), 
+                            Ta, grid)
+                dhwI = volumeChangeLoad(dhwBarI, Ta)
+
+                # First correction to topography is applied.
+                Tb = Ta - dhwBarI
+                esl += dhwBarI
+
+                # First load is ice change and melt change.
+                dLoad = dM + dhwI
+
+                if eliter:
+                    # Redistribute ocean by change in ocean floor.
+                    upla = observerDict['eslUpl'].array[nta]
+                    uplb = observerDict['eslUpl'].array[nta+1]
+                    geoa = observerDict['eslGeo'].array[nta]
+                    geob = observerDict['eslGeo'].array[nta+1]
+                    dU = self.harmTrans.spectogrd(uplb-upla)
+                    dG = self.harmTrans.spectogrd(geob-geoa)
+                    dhwBarU = sealevelChangeByUplift(dU, Tb, grid)
+                    dhwU = oceanUpliftLoad(dhwBarU, Tb, dU)
+
+                    # Correct topography and load with uplift.
+                    Tb = Tb + dU - dhwBarU
+                    esl += dhwBarU
+                    dLoad = dLoad + dhwU
+
+                    # Get elastic response to the meltwater and uplift load.
+                    elResp = earth.getResp(0.0)[ns,0]/100
+
+                    # Find the elastic uplift in response to stage's load
+                    # redistribution.
+                    dUel = self.harmTrans.spectogrd(DYNEperM*elResp*\
+                                self.harmTrans.grdtospec(dLoad))
+                    dhwBarUel = sealevelChangeByUplift(dUel, Tb, grid)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUel)
+
+                    Tb = Tb + dUel - dhwBarUel
+                    esl += dhwBarUel
+                    dLoad = dLoad + dhwUel
+
+                # Iterate elastic responses until they are sufficiently small.
+                for i in range(eliter):
+                    # Need to save elastic uplift at each iteration to compare
+                    # to previous steps for convergence.
+                    dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
+                                self.harmTrans.grdtospec(dhwUel))
+                    dhwBarUel = sealevelChangeByUplift(dUelp, Tb, grid)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp)
+
+                    # Correct topography
+                    Tb = Tb + dUelp - dhwBarUel
+                    esl += dhwBarUel
+                    dLoad = dLoad + dhwUel
+
+                    if np.mean(np.abs(dUelp))/np.mean(np.abs(dUel)) <= 1e-2:
+                        break
+                    else:
+                        dUel = dUel + dUelp
+                        continue
+
             else:
-                dice = (ice1-ice0)*DENICE/DENWAT
+                dLoad = (iceb-icea)*DENICE/DENSEA
+                Tb = None
 
             for o in observerDict:
-                o.loadStageUpdate(t0, dice)
+                # Topography and load for time tb are updated and saved.
+                o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl)
 
             # Transform load change into spherical harmonics.
-            loadChangeSpec = self.harmTrans.grdtospec(dice)/NREM
+            loadChangeSpec = self.harmTrans.grdtospec(dLoad)/NREM
             
             # Check for mass conservation.
             massConCheck = np.abs(loadChangeSpec[0]/loadChangeSpec.max())
             if  massConCheck>= 0.01:
-                print("Load at {0} doesn't conserve mass: {1}.".format(t0,
+                print("Load at {0} doesn't conserve mass: {1}.".format(ta,
                                                                 massConCheck))
             # N.B. the n=0 load should be zero in cases of glacial isostasy, as 
             # mass is conserved during redistribution.
 
             # Secondary loop: over output times.
-            for inter_time in np.linspace(t0, t1, NREM, endpoint=False):
+            for inter_time in np.linspace(tb, ta, NREM, endpoint=False)[::-1]:
                 # Perform the time convolution for each output time
-                for t_out in out_times[out_times <= inter_time]:
+                for t_out in calcTimes[calcTimes <= inter_time]:
                     respArray = earth.getResp(inter_time-t_out)
                     for o in observerDict:
                         o.respStageUpdate(t_out, respArray, 
@@ -553,11 +634,47 @@ class LoadObserver(AbstractGiaSimObserver):
                                 iceShape[0], iceShape[1]))
         self.outTimes = outTimes
 
-    def loadStageUpdate(self, *args, **kwargs):
-        self.update(*args, **kwargs)
+    def loadStageUpdate(self, tout, **kwargs):
+        if 'dLoad' in kwargs.keys():
+            self.update(tout, kwargs['dLoad'])
 
     def update(self, tout, load):
         if tout not in self.outTimes:
             return
         n = self.locateByTime(tout)
         self.array[n] = load
+
+class TopoObserver(AbstractGiaSimObserver):
+    def __init__(self, outTimes, shape):
+        self.initialize(outTimes, shape)
+
+    def initialize(self, outTimes, shape):
+        self.array = np.zeros((len(outTimes), 
+                                shape[0], shape[1]))
+        self.outTimes = outTimes
+
+    def loadStageUpdate(self, tout, **kwargs):
+        if 'topo' in kwargs.keys():
+            self.update(tout, kwargs['topo'])
+
+    def update(self, tout, topo):
+        if tout not in self.outTimes:
+            return
+        n = self.locateByTime(tout)
+        self.array[n] = topo
+
+class EslObserver(AbstractGiaSimObserver):
+    def __init__(self, outTimes):
+        self.array = np.zeros(len(outTimes))
+        self.outTimes = outTimes
+
+    def loadStageUpdate(self, tout, **kwargs):
+        if 'esl' in kwargs.keys():
+            self.update(tout, kwargs['esl'])
+
+    def update(self, tout, esl):
+        if tout not in self.outTimes:
+            return
+        n = self.locateByTime(tout)
+        self.array[n] = esl
+
