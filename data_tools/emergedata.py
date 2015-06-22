@@ -16,11 +16,12 @@ def calcEmergence(sim, emergedata):
     # alone a complicated one, like sim. Consider calculating rsl first and
     # passing it and calculated times in (ts, rsl, emergedata).
     # To reference to present day
-    u0 = sim.inputs.harmTrans.spectogrd(sim['upl'][-1])
+    #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
+    u0 = sim['topo'][-1]
 
     uAtLocs = []
-    for ut in sim['upl']:
-        ut = u0 - sim.inputs.harmTrans.spectogrd(ut)
+    for ut in sim['topo']:
+        ut = u0 - ut
         interpfunc = sim.inputs.grid.create_interper(ut.T)
         uAtLocs.append(interpfunc.ev(emergedata.lons, emergedata.lats))
 
@@ -28,8 +29,8 @@ def calcEmergence(sim, emergedata):
 
     data = {}
     for uAtLoc, loc in zip(uAtLocs, emergedata):
-        timeseries = np.array([loc.ts, 
-                    np.interp(loc.ts, 
+        timeseries = np.array([np.sort(loc.ts), 
+                    np.interp(np.sort(loc.ts), 
                                 sim.inputs.out_times[::-1], uAtLoc[::-1])]).T
         data[loc.recnbr] = EmergeDatum(timeseries, 
                                         lat=loc.lat, 
