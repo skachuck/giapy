@@ -403,7 +403,7 @@ class EarthTwoLayer(FlatEarthBase):
                                                 
         # Turn the Lithosphere filter and taus into a matrix that matches the 
         # frequencey matrix from an NxN fft.
-        self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
+        #self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
 
 class EarthThreeLayer(FlatEarthBase):
     """Return the isostatic response of a flat earth with three layers.
