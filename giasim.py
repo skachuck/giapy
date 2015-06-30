@@ -261,6 +261,7 @@ class GiaSim(object):
             raise ValueError('t_rel must be in out_times')
         
         # Fourier transform the ice_hist
+        #TODO Use pyfftw instead.
         ice_stages = ice.fft(N, self.grid)
         
         # Initialize the uplift array
@@ -617,7 +618,7 @@ class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
 
 class GeoidObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
-        return respArray[self.ns,5]
+        return respArray[self.ns,4]
 
 class MOIObserver(AbstractEarthGiaSimObserver):
     pass

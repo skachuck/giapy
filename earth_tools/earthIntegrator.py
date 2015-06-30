@@ -439,7 +439,8 @@ class SphericalElasSMat(object):
         self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
         zmids = 0.5*(self.z[1:]+self.z[:-1])
-        self.A, self.b = propMatElas(zmids, self.n, self.earthparams, self.commProf)
+        self.A, self.b = propMatElas(zmids, self.n, 
+                                        self.earthparams, self.commProf)
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
         if k == k1:      # Core-Mantle boundary conditions.
@@ -582,7 +583,8 @@ class SphericalViscSMat(object):
         self.alpha_i = 1./self.earthparams.getLithFilter(n=n)
 
         zmids = 0.5*(self.z[1:]+self.z[:-1])
-        self.A, self.b = propMatVisc(zmids, self.n, self.earthparams, self.commProf)
+        self.A, self.b = propMatVisc(zmids, self.n, 
+                                        self.earthparams, self.commProf)
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
         if k == k1:      # Core-Mantle boundary conditions.
@@ -803,7 +805,7 @@ class SphericalEarthShooter(object):
         y[:,:,0:2] = y[:,:,0:2]*r/muStar   # the displacements u and v
         y[:,:,5] = y[:,:,5]/r                     # gravity perturbation field
         
-        # Apply Surface conditions
+        # Apply Surface conditions.
         params = self.earthparams.getParams(1.)
         rho = params['den']
         g = params['grav']
@@ -816,15 +818,16 @@ class SphericalEarthShooter(object):
 
         load = 1./self.alpha+rho*uv*g
         
-        # initialize the boundary solver: a*x=b
-        a = y[0:3,-1,[2,3,5]]  # an array of the boundary elements from each soln vector
+        # Initialize the boundary solver: a*x=b.
+        a = y[0:3,-1,[2,3,5]]  # An array of the boundary elements from 
+                               # each soln vector.
         a[:,2] += y[0:3, -1, 4]*(1+n)/r + G*rho*y[0:3, -1, 0]
-                # taking the surface value of p (2), q (3), and g1 (5)
-                # shape: [y0.p, y0.q, y0.g1+(1+n)/rstar*y0.phi1+4\pi G \rho*y0.u]
-                #        [y1.p, y1.q, y1.g1+(1+n)/rstar*y1.phi1+4\pi G \rho*y1.u]]
-                #        [y2.p, y2.q, y2.g1+(1+n)/rstar*y2.phi1+4\pi G \rho*y2.u]] 
+            # taking the surface value of p (2), q (3), and g1 (5)
+            # shape: [y0.p, y0.q, y0.g1+(1+n)/rstar*y0.phi1+4\pi G \rho*y0.u]
+            #        [y1.p, y1.q, y1.g1+(1+n)/rstar*y1.phi1+4\pi G \rho*y1.u]]
+            #        [y2.p, y2.q, y2.g1+(1+n)/rstar*y2.phi1+4\pi G \rho*y2.u]] 
         
-        # b is a vector of the boundary values for p, q, and g1
+        # b is a vector of the boundary values for p, q, and g1.
         b = np.array([-load, 
                       0, 
                       -G*load/g-y[3, -1, 4]*(1+n)/r-G*rho*y[3, -1, 0]])
