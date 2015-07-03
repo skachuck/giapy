@@ -202,7 +202,6 @@ class Solvde(object):
             s[iz1:iz2, jmf] -= s[iz1:iz2, j]*vx
         self.s = s
 
-
 ################### EXAMPLE OF USE ######################
 def main_sfroid(n, mm):
     M = 40; MM = 4
