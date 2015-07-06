@@ -66,22 +66,7 @@ def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False):
         bksub(ne, nb, ne-nb, k1, k2, c)      # Backsubstitution.
 
         # Convergence check, accumulate average error.
-        err = 0
-        ermax = np.zeros(ne)
-        kmax = np.zeros(ne)
-        for j in range(ne):
-            jv = indexv[j]
-            errj = 0.0; vmax = 0.0
-            km = 0
-            for k in range(k1, k2):
-                vz = np.abs(c[jv, 0, k])
-                if vz > vmax:
-                    vmax = vz
-                    km = k+1
-                errj += vz
-            err += errj/scalv[j]
-            ermax[j] = c[jv, 0, km-1]/scalv[j]
-            kmax[j] = km
+        err = errest(ne, k1, k2, indexv, scalv, c)
         err = err/nvars
 
         # Reduce correction when error is large.
@@ -212,3 +197,21 @@ def red(iz1, iz2, jz1, jz2, jm1, jm2, jmf, ic1, jc1, jcf, kc, s, c):
         #Pythonic: s[iz1:iz2, jmf] -= s[iz1:iz2, j]*vx
         for i in range(iz1, iz2):
             s[i, jmf] -= s[i, j]*vx
+
+@jit(float64(int64, int64, int64, int64[:], 
+        float64[:], float64[:,:,:]), nopython=True)
+def errest(ne, k1, k2, indexv, scalv, c):
+    err = 0.
+    for j in range(ne):
+        jv = indexv[j]
+        errj = 0.0; vmax = 0.0;
+        km = 0
+        for k in range(k1, k2):
+            vz = np.abs(c[jv, 0, k])
+            if vz > vmax:
+                vmax = vz
+                km = k+1
+            errj += vz
+        err += errj/scalv[j]
+    return err
+
