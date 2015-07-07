@@ -46,12 +46,12 @@ from scipy.interpolate import interp1d
 from scipy.integrate import ode, odeint
 from numba import jit, void, int64, float64
 
-from giapy.numTools.solvde import Solvde
+#from giapy.numTools.solvde import solvde
 from giapy.numTools.solvdeJit import solvde
 
         
 
-def integrateRelaxationScipy(f, out, eps=1e-7):
+def integrateRelaxationScipy(f, out, atol=1e-6, rtol=1e-5):
     """Use Scipy ode for surface response to harmonic load.
 
     Parameters
@@ -78,8 +78,8 @@ def integrateRelaxationScipy(f, out, eps=1e-7):
         r.integrate(r.t+dt)
         out.out(r.t, r.y[nz-1], r.y[2*nz-1], f)
         
-        if eps is not None and (vislim+r.y[nz-1]<eps):
-            out.converged()
+        if (vislim+r.y[nz-1]<(atol+rtol*abs(r.y[nz-1]))):
+            out.converged(-vislim)
             break
             
         # Check for convergence, but continue until next write step.
@@ -197,10 +197,11 @@ class SphericalEarthOutput(object):
         self.outArray[ind, 4] = phi1
         self.outArray[ind, 5] = g1
 
-    def converged(self):
+    def converged(self, vislim=None):
         n = len(self.times)-self.maxind-1
+        vislim = vislim or self.outArray[self.maxind, 1]
         self.outArray[self.maxind+1:] = np.tile(
-            [0, self.outArray[self.maxind, 1], 0, 
+            [0, vislim, 0, 
                 self.outArray[self.maxind, 3], 0, 0], (n,1))
 
 
