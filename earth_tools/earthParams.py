@@ -128,7 +128,7 @@ class EarthParams(object):
         """visArray is an 2xN array of depths zi and viscosities at those
            depths."""
         visArray = np.asarray(visArray)
-        visArray[1] /= visArray[1,0]        # Normalize viscosities
+        #visArray[1] /= visArray[1,0]        # Normalize viscosities
         self.alterColumn(6, visArray)
 
 
