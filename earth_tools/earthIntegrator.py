@@ -44,12 +44,14 @@ earthIntegrator.py
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.integrate import ode, odeint
+from numba import jit, void, int64, float64
 
-from giapy.numTools.solvde import Solvde
+#from giapy.numTools.solvde import solvde
+from giapy.numTools.solvdeJit import solvde
 
         
 
-def integrateRelaxationScipy(f, out, eps=1e-7):
+def integrateRelaxationScipy(f, out, atol=1e-6, rtol=1e-5):
     """Use Scipy ode for surface response to harmonic load.
 
     Parameters
@@ -76,8 +78,8 @@ def integrateRelaxationScipy(f, out, eps=1e-7):
         r.integrate(r.t+dt)
         out.out(r.t, r.y[nz-1], r.y[2*nz-1], f)
         
-        if eps is not None and (vislim+r.y[nz-1]<eps):
-            out.converged()
+        if (vislim+r.y[nz-1]<(atol+rtol*abs(r.y[nz-1]))):
+            out.converged(-vislim)
             break
             
         # Check for convergence, but continue until next write step.
@@ -195,10 +197,11 @@ class SphericalEarthOutput(object):
         self.outArray[ind, 4] = phi1
         self.outArray[ind, 5] = g1
 
-    def converged(self):
+    def converged(self, vislim=None):
         n = len(self.times)-self.maxind-1
+        vislim = vislim or self.outArray[self.maxind, 1]
         self.outArray[self.maxind+1:] = np.tile(
-            [0, self.outArray[self.maxind, 1], 0, 
+            [0, vislim, 0, 
                 self.outArray[self.maxind, 3], 0, 0], (n,1))
 
 
@@ -289,24 +292,28 @@ class SphericalEarthRelaxer(object):
         self.difeqElas.updateProps()
         # Solve for elastic variables using relaxation method.
         if self.difeqElas.n == 1: 
-            indexv = [0,4,3,1,5,2]
+            indexv = np.array([0,4,3,1,5,2])
         else:
-            indexv = [3,4,0,1,5,2]
-        solvde = Solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3, 
+            indexv = np.array([3,4,0,1,5,2])
+        #solvde = Solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3, 
+        #                    self.yE, self.difeqElas, verbose)
+        #self.yE = solvde.y              # Store results for next initial guess.
+        self.yE = solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3,
                             self.yE, self.difeqElas, verbose)
-        self.yE = solvde.y              # Store results for next initial guess.
-        self.updateElProfs(solvde)      # Update communication profiles.
+        self.updateElProfs(self.yE)      # Update communication profiles.
 
         # Update propagators for viscous relaxation
         self.difeqVisc.updateProps()
         # Solve for viscous variables using relaxation method.
         if self.difeqVisc.n == 1:
-            indexv = [0,3,2,1]
+            indexv = np.array([0,3,2,1])
         else:
-            indexv = [2,3,0,1]
-        solvde = Solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2, 
+            indexv = np.array([2,3,0,1])
+        #solvde = Solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2, 
+        #                    self.yV, self.difeqVisc, verbose)
+        #self.yV = solvde.y              # Store results for next initial guess.
+        self.yV = solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2,
                             self.yV, self.difeqVisc, verbose)
-        self.yV = solvde.y              # Store results for next initial guess.
 
         rstar   = self.earthparams.norms['r']
         etastar = self.earthparams.norms['eta']
@@ -319,7 +326,7 @@ class SphericalEarthRelaxer(object):
 
         # All the rates are converted back to real units and accelerated by the
         # elastic (and gravitational) energy stored by the lithosphere.
-        vels = velfac*solvde.y[[0,1],:]*self.alpha
+        vels = velfac*self.yV[[0,1],:]*self.alpha
         return vels.flatten()
 
     def changeOrder(self, n):
@@ -345,7 +352,7 @@ class SphericalEarthRelaxer(object):
 
         self.commProfs = interp1d(self.zarray, self.commArray.T)
 
-    def updateElProfs(self, solvdeobj, dim=True):
+    def updateElProfs(self, y, dim=True):
         """Update the functions that communicate elastic values to the viscous
         equations. 
         
@@ -357,10 +364,10 @@ class SphericalEarthRelaxer(object):
         disfac = rstar/mustar if dim else 1.
         gfac   = 1./rstar if dim else 1.
 
-        self.commArray[:,0] = disfac*solvdeobj.y[0,:]
-        self.commArray[:,1] = disfac*solvdeobj.y[1,:]
-        self.commArray[:,2] = solvdeobj.y[4,:]
-        self.commArray[:,3] = gfac*solvdeobj.y[5,:]
+        self.commArray[:,0] = disfac*y[0,:]
+        self.commArray[:,1] = disfac*y[1,:]
+        self.commArray[:,2] = y[4,:]
+        self.commArray[:,3] = gfac*y[5,:]
         self.commProfs = interp1d(self.zarray, self.commArray.T)
         # Also update profiles in finite difference classes
         self.difeqElas.commProf = self.commProfs
@@ -553,16 +560,15 @@ class SphericalElasSMat(object):
                             G*load*rstar/gSurf)
 
         else:           # Finite differences.
-            A = self.A[k-1]
-            b = self.b[k-1]
             zsep = (self.z[k] - self.z[k-1])
-
-            s[:6, indexv] = -np.eye(6) - 0.5*zsep*A
-            s[:6, 6+indexv] = np.eye(6) - 0.5*zsep*A
-
-            s[:, jsf] =  (y[:, k] - y[:,k-1] - \
-                            zsep*(0.5*A.dot(y[:, k]+y[:,k-1]) + b))
+            A = 0.5*zsep*self.A[k-1]
+            b = zsep*self.b[k-1]
+            interior_smatrix_fast(6, k, jsf, A, b, y, indexv, s) 
             
+            #s[:6, indexv] = -np.eye(6) - A
+            #s[:6, 6+indexv] = np.eye(6) - A
+            #s[:, jsf] =  (y[:, k] - y[:,k-1] - \
+            #                A.dot(y[:, k]+y[:,k-1]) - b)            
         return s
 
 class SphericalViscSMat(object):
@@ -651,17 +657,33 @@ class SphericalViscSMat(object):
             s[1, jsf] = y[3, self.mpt-1]
 
         else:       # Finite differences.
-            A = self.A[k-1]
-            b = self.b[k-1]
             zsep = (self.z[k] - self.z[k-1])
+            A = 0.5*zsep*self.A[k-1]
+            b = zsep*self.b[k-1]
+            interior_smatrix_fast(4, k, jsf, A, b, y, indexv, s)
 
-            s[:4, indexv] = -np.eye(4) - 0.5*zsep*A
-            s[:4, 4+indexv] = np.eye(4) - 0.5*zsep*A
-
-            s[:, jsf] =  (y[:, k] - y[:,k-1] - \
-                            zsep*(0.5*A.dot(y[:, k]+y[:,k-1]) + b))
+            #s[:4, indexv] = -np.eye(4) - 0.5*zsep*A
+            #s[:4, 4+indexv] = np.eye(4) - 0.5*zsep*A
+            #s[:, jsf] =  (y[:, k] - y[:,k-1] - \
+            #                zsep*(0.5*A.dot(y[:, k]+y[:,k-1]) + b))
             
         return s
+
+@jit(void(int64, int64, int64, float64[:,:], float64[:], 
+    float64[:,:], int64[:], float64[:,:]), nopython=True)
+def interior_smatrix_fast(n, k, jsf, A, b, y, indexv, s):
+    for i in range(n):
+        rgt = 0.
+        for j in range(n):
+            if i==j:
+                s[i, indexv[j]]   = -1. - A[i,j]
+                s[i, n+indexv[j]] =  1. - A[i,j]
+            else:
+                s[i, indexv[j]]   = -A[i,j]
+                s[i, n+indexv[j]] = -A[i,j]
+            rgt += A[i,j] * (y[j, k] + y[j, k-1])
+        s[i, jsf] = y[i, k] - y[i, k-1] - rgt - b[i]
+
 
 ##############################  SHOOTING METHOD  ##############################
 

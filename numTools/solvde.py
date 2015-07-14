@@ -14,7 +14,7 @@ import numpy as np
 
 from scipy.special import lpmv
 
-class Solvde(object):
+class solvde(object):
     """Driver routine for solution of two-point boundary value problems by
     relaxation."""
 
@@ -70,8 +70,6 @@ class Solvde(object):
 
             # Convergence check, accumulate average error.
             err = 0
-            ermax = np.zeros(ne)
-            kmax = np.zeros(ne)
             for j in range(ne):
                 jv = indexv[j]
                 errj = 0.0; vmax = 0.0
@@ -83,8 +81,6 @@ class Solvde(object):
                         km = k+1
                     errj += vz
                 err += errj/scalv[j]
-                ermax[j] = self.c[jv, 0, km-1]/scalv[j]
-                kmax[j] = km
             err = err/nvars
 
             # Reduce correction when error is large.
@@ -103,10 +99,15 @@ class Solvde(object):
 
             if err < conv: 
                 self.y = y
-                return 
+                return
 
         raise ValueError('Too many iterations in solvde')
-                
+    def __getitem__(self, key):
+        return self.y.__getitem__(key)
+    def __iter__(self):
+        return self.y.__iter__()
+    def copy(self):
+        return self.y.copy()
 
     def pinvs(self, ie1, ie2, je1, jsf, jc1, k):
         """Diagonalize the square subsection of the s matrix, and store the
@@ -201,7 +202,6 @@ class Solvde(object):
             vx=self.c[ic,jcf,kc-1]
             s[iz1:iz2, jmf] -= s[iz1:iz2, j]*vx
         self.s = s
-
 
 ################### EXAMPLE OF USE ######################
 def main_sfroid(n, mm):
