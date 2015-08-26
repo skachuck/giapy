@@ -17,13 +17,14 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
 
     datamax = np.max(np.abs(ses))
     datamag = np.floor(np.log10(datamax))
-    vmax = (10**datamag)*np.floor(datamax/(10**datamag)/2)
+    vmax = (10**datamag)*np.max(
+            np.floor(datamax/(10**datamag)/2), 1.)
     vmin=-vmax
 
 
     basemap.drawcoastlines(color=(1,1,1,1), ax=ax, zorder=0)
     p = basemap.scatter(lons, lats, c=ses, s=s, 
-                        vmin=-100, vmax=100, cmap='RdYlBu_r', 
+                        vmin=vmin, vmax=vmax, cmap='RdYlBu_r', 
                         ax=ax, edgecolor='None', alpha=0.5)
     ax.set_axis_bgcolor((0,0,0,0.2))
     divider = make_axes_locatable(ax)
@@ -35,7 +36,7 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
         samplept = int(5*10**(np.floor(np.log10(max(numPts)))-1))
         basemap.scatter([0.05], [0.1], c='k', alpha=0.75, 
                         s=500*samplept/float(max(numPts)),
-                        vmin=-100, vmax=100, ax=ax,
+                        vmin=vmin, vmax=vmax, ax=ax,
                         edgecolor='None', transform=ax.transAxes)
         ax.text(0.065, 0.1, '- {0:d} observations at site'.format(samplept),
             transform=ax.transAxes, va='center', fontsize=12)
