@@ -45,8 +45,8 @@ class SphericalEarth(object):
         return self._desc
     
     def getResp(self, t_dur):
-        """Return an NDarray (nmax+1, 4) of the responses to a unit load applied for
-        time t_dur.
+        """Return an NDarray (nmax+1, 4) of the responses to a one dyne load applied
+        for time t_dur.
         """
         return self.respInterp(t_dur)
     
@@ -65,7 +65,7 @@ class SphericalEarth(object):
     def setDesc(self, string):
         self._desc = string 
             
-    def calcResponse(self, zarray, nmax=100, nstart=None):
+    def calcResponse(self, zarray, nmax=100, nstart=None, prog_track=False):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
         
@@ -75,7 +75,10 @@ class SphericalEarth(object):
             nstart = self.nmax
 
         respArray = []
-        pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
+        if prog_track:
+            pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
+        else:
+            pbar = lambda x: x
         for n in pbar(range(nstart, nmax+1)):
             out = self.timeEvolve(n, zarray, nstart)
             respArray.append(out.outArray)

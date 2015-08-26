@@ -104,7 +104,7 @@ class EarthParams(object):
         # Set up viscosity profile with uniform viscosity
         if visArray is None:
             visArray = np.array([[z[0]      , z[-1]      ],
-                                 [1.0       , 1.0        ]])
+                                 [1e22      , 1e22       ]])
         self.addViscosity(visArray)
 
         # Flexural rigidity is assumed 0 (no lithosphere)
@@ -124,11 +124,13 @@ class EarthParams(object):
 
         return dict(zip(self._paramNames, vals))
 
-    def addViscosity(self, visArray, muStar=1e22):
+    def addViscosity(self, visArray, etaStar=None):
         """visArray is an 2xN array of depths zi and viscosities at those
            depths."""
+        if etaStar is not None:
+            self.norms['eta']
         visArray = np.asarray(visArray)
-        #visArray[1] /= visArray[1,0]        # Normalize viscosities
+        visArray[1] /= self.norms['eta']        # Normalize viscosities
         self.alterColumn(6, visArray)
 
 

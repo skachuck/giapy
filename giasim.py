@@ -361,7 +361,7 @@ class GiaSimGlobal(object):
            raise ValueError('ntrunc must be < grid.nlat')
         ms, ns = spharm.getspecindx(ntrunc)     # the list of degrees, m, and
                                                 # order numbers, n. Sizes of
-                                                # (ntrunc+1)*(ntrunc+2)/2
+                                                # (ntrunc+1)*(ntrunc+2)/2.
         
         # Store out_times
         out_times = out_times or self.out_times
@@ -391,14 +391,14 @@ class GiaSimGlobal(object):
         observerDict.addObserver('upl'   , uplObserver)
         observerDict.addObserver('hor'   , horObserver)
         observerDict.addObserver('load'  , loadObserver)
+
         observerDict.addObserver('eslUpl', eslUplObserver)
         observerDict.addObserver('eslGeo', eslGeoObserver)
         observerDict.addObserver('topo'  , topoObserver)
         observerDict.addObserver('esl'   , eslObserver)
 
-        #out_times = np.union1d(remTimes, out_times)[::-1]
 
-        # Use progressbar to track calculation
+        # Use progressbar to track calculation if desired.
         if verbose:
            try:
                widgets = ['Convolution: ', Bar(), ' ', ETA()]
@@ -410,7 +410,7 @@ class GiaSimGlobal(object):
         for o in observerDict:
             o.loadStageUpdate(ice.times[0], topo=topo)
 
-        esl = 0
+        esl = 0                 # Equivalent sea level assumed to start at 0.
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -501,7 +501,7 @@ class GiaSimGlobal(object):
             
             # Check for mass conservation.
             massConCheck = np.abs(loadChangeSpec[0]/loadChangeSpec.max())
-            if  massConCheck>= 0.01:
+            if  verbose and massConCheck>= 0.01:
                 print("Load at {0} doesn't conserve mass: {1}.".format(ta,
                                                                 massConCheck))
             # N.B. the n=0 load should be zero in cases of glacial isostasy, as 

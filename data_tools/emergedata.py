@@ -132,8 +132,8 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         every iteration of an inversion.
         """
         
-        self.long_data = np.array([None, None])
-        self.long_time = np.array([None, None])
+        self.long_data = np.array([None])
+        self.long_time = np.array([None])
         self.locs = np.array([None, None])
         for loc in self:
             self.locs = np.vstack((self.locs, loc.loc))

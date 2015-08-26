@@ -47,7 +47,7 @@ from scipy.integrate import ode, odeint
 from numba import jit, void, int64, float64
 
 #from giapy.numTools.solvde import solvde
-from giapy.numTools.solvdeJit import solvde
+from ..numTools.solvdeJit import solvde
 
         
 
@@ -70,6 +70,7 @@ def integrateRelaxationScipy(f, out, atol=1e-6, rtol=1e-5):
     out.out(0, 0, 0, f)
 
     r = ode(f).set_integrator('vode', method='adams')
+    #r = ode(f).set_integrator('dop853')
     r.set_initial_value(y=np.zeros(2*nz), t=0)
     timeswrite = out.times
     dts = timeswrite[1:]-timeswrite[:-1]
@@ -188,7 +189,11 @@ class SphericalEarthOutput(object):
 
     def out(self, t, uv, vv, f):
         ind = np.argwhere(self.times == t)
-        self.maxind = ind[0][0]
+        try:
+            self.maxind = ind[0][0]
+        except IndexError:
+            raise IndexError("SphericalEarthOutput received a time t={0:.3f}".format(t)+
+                            " that was not in its output times.")
         Ue, Ve, phi1, g1 = f.solout()
         self.outArray[ind, 0] = Ue
         self.outArray[ind, 1] = uv
