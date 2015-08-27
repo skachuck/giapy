@@ -381,7 +381,9 @@ class GiaSimGlobal(object):
         # Initialize the return object
         uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
         horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
+        gravObserver = GravObserver(out_times, ntrunc, ns)
         loadObserver = LoadObserver(remTimes, ice.shape)
+        wloadObserver = WaterLoadObserver(remTimes, ice.shape)
         eslUplObserver = TotalUpliftObserver(remTimes, ntrunc, ns)
         eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
         topoObserver = TopoObserver(remTimes, ice.shape)
@@ -390,7 +392,9 @@ class GiaSimGlobal(object):
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
         observerDict.addObserver('hor'   , horObserver)
+        observerDict.addObserver('grav'  , gravObserver)
         observerDict.addObserver('load'  , loadObserver)
+        observerDict.addObserver('wload' , wloadObserver)
 
         observerDict.addObserver('eslUpl', eslUplObserver)
         observerDict.addObserver('eslGeo', eslGeoObserver)
@@ -446,46 +450,60 @@ class GiaSimGlobal(object):
                     geob = observerDict['eslGeo'].array[nta+1]
                     dU = self.harmTrans.spectogrd(uplb-upla)
                     dG = self.harmTrans.spectogrd(geob-geoa)
-                    dhwBarU = sealevelChangeByUplift(dU, Tb, grid)
-                    dhwU = oceanUpliftLoad(dhwBarU, Tb, dU)
+                    dhwBarU = sealevelChangeByUplift(dU-dG, Tb, grid)
+                    dhwU = oceanUpliftLoad(dhwBarU, Tb, dU-dG)
 
                     # Correct topography and load with uplift.
-                    Tb = Tb + dU - dhwBarU
+                    Tb = Tb + dU - dG - dhwBarU
                     esl += dhwBarU
                     dLoad = dLoad + dhwU
+                    dhwI += dhwU
 
-                    # Get elastic response to the meltwater and uplift load.
-                    elResp = earth.getResp(0.0)[ns,0]/100
+                    # Get elastic and geoid response to the water load.
+                    elResp, geoResp = earth.getResp(0.0)[np.meshgrid(ns,[0,4])]
+                    elResp *= 1e-2
+                    #TODO make this a not hard-coded number (do in earth model?)
+                    geoResp /= -982.22*100
+
 
                     # Find the elastic uplift in response to stage's load
                     # redistribution.
                     dUel = self.harmTrans.spectogrd(DYNEperM*elResp*\
                                 self.harmTrans.grdtospec(dLoad))
-                    dhwBarUel = sealevelChangeByUplift(dUel, Tb, grid)
-                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUel)
+                    dGel = self.harmTrans.spectogrd(DYNEperM*geoResp*\
+                                self.harmTrans.grdtospec(dLoad))
+
+                    dhwBarUel = sealevelChangeByUplift(dUel-dGel, Tb, grid)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUel-dGel)
 
                     Tb = Tb + dUel - dhwBarUel
                     esl += dhwBarUel
                     dLoad = dLoad + dhwUel
+                    dhwI += dhwUel
 
                 # Iterate elastic responses until they are sufficiently small.
                 for i in range(eliter):
-                    # Need to save elastic uplift at each iteration to compare
-                    # to previous steps for convergence.
+                    # Need to save elasticuplift  and geoid  at each iteration to
+                    # compare to previous steps for convergence.
                     dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
                                 self.harmTrans.grdtospec(dhwUel))
-                    dhwBarUel = sealevelChangeByUplift(dUelp, Tb, grid)
-                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp)
+                    dGelp = self.harmTrans.spectogrd(DYNEperM*geoResp*\
+                                self.harmTrans.grdtospec(dhwUel))
+
+                    dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, Tb, grid)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp-dGelp)
 
                     # Correct topography
-                    Tb = Tb + dUelp - dhwBarUel
+                    Tb = Tb + dUelp - dGelp - dhwBarUel
                     esl += dhwBarUel
                     dLoad = dLoad + dhwUel
+                    dhwI += dhwUel
 
-                    if np.mean(np.abs(dUelp))/np.mean(np.abs(dUel)) <= 1e-2:
+                    if np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel)) <= 1e-2:
                         break
                     else:
                         dUel = dUel + dUelp
+                        dGel = dGel + dGelp
                         continue
 
             else:
@@ -608,17 +626,28 @@ class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
 
 class TotalUpliftObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
-        # 1/100 makes the response in m uplift / m ice
+        # 1/100 makes the response in m uplift / dyne ice
         return (respArray[self.ns,0] + respArray[self.ns,1])/100
 
 class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
-        # 1/100 makes the response in m displacement / m ice
+        # 1/100 makes the response in m displacement / dyne ice
         return (respArray[self.ns,2] + respArray[self.ns,3])/100
 
 class GeoidObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
-        return respArray[self.ns,4]
+        # Divide the negative potential by PREM surface gravity,
+        # 982.22 cm/s^2, to get the geoid shift. (negative because when the
+        # potential at the surface decreases, the equipotential surface
+        # representing the ocean must have risen.)
+        #TODO make this a not hard-coded number (do in earth model?)
+        # 1e-2 makes the response in m displacement / dyne ice
+        return -respArray[self.ns,4]/982.22*1e-2
+
+class GravObserver(AbstractEarthGiaSimObserver):
+    def isolateRespArray(self, respArray):
+        # 1e3 makes the response in miligals / dyne ice
+        return respArray[self.ns,5]*1e3
 
 class MOIObserver(AbstractEarthGiaSimObserver):
     pass
