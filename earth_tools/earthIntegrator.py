@@ -24,6 +24,9 @@ earthIntegrator.py
     object (described above) and an output object, SphericalEarthOutput, that
     organizes the recording of solution points.
 
+    NOTE ON UNITS:
+    This module uses cgs units.
+
     Module Contents
     ---------------
     SphericalEarthOutput

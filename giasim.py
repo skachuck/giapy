@@ -512,7 +512,8 @@ class GiaSimGlobal(object):
 
             for o in observerDict:
                 # Topography and load for time tb are updated and saved.
-                o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl)
+                o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl,
+                                    dwLoad=dhwI)
 
             # Transform load change into spherical harmonics.
             loadChangeSpec = self.harmTrans.grdtospec(dLoad)/NREM
@@ -667,6 +668,25 @@ class LoadObserver(AbstractGiaSimObserver):
     def loadStageUpdate(self, tout, **kwargs):
         if 'dLoad' in kwargs.keys():
             self.update(tout, kwargs['dLoad'])
+
+    def update(self, tout, load):
+        if tout not in self.outTimes:
+            return
+        n = self.locateByTime(tout)
+        self.array[n] = load
+
+class WaterLoadObserver(AbstractGiaSimObserver):
+    def __init__(self, outTimes, iceShape):
+        self.initialize(outTimes, iceShape)
+
+    def initialize(self, outTimes, iceShape):
+        self.array = np.zeros((len(outTimes), 
+                                iceShape[0], iceShape[1]))
+        self.outTimes = outTimes
+
+    def loadStageUpdate(self, tout, **kwargs):
+        if 'dwLoad' in kwargs.keys():
+            self.update(tout, kwargs['dwLoad'])
 
     def update(self, tout, load):
         if tout not in self.outTimes:

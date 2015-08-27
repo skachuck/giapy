@@ -13,7 +13,9 @@ A note on UNITS (unless otherwise specified):
     meaning positive times are in the past.
 
     Length - Length is usually specified in the individual modules, but
-    kilometers is fairly standard.
+    there are a few regulars:
+        distances along globe            : km
+        uplift, geoid, ice heights, etc. : m
 
     Viscosity - in 10^21 Pa s
 

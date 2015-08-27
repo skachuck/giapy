@@ -1,5 +1,6 @@
 """
-
+    NOTE ON UNITS:
+    This module uses cgs units.
 """
 import numpy as np
 from scipy.interpolate import interp1d
