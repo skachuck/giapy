@@ -187,8 +187,8 @@ class SphericalEarthOutput(object):
                       10., 12., 13., 14., 15., 16., 18., 21., 25., 30., 
                       40., 50., 70., 90., 110., 130., 150.])
 
-        #   Ue  Uv  Ve  Vv  phi1    g1  
-        self.outArray = np.zeros((len(self.times), 6))
+        #   Ue  Uv  Ve  Vv  phi1    g1  vels
+        self.outArray = np.zeros((len(self.times), 7))
 
     def out(self, t, uv, vv, f):
         ind = np.argwhere(self.times == t)
@@ -197,20 +197,21 @@ class SphericalEarthOutput(object):
         except IndexError:
             raise IndexError("SphericalEarthOutput received a time t={0:.3f}".format(t)+
                             " that was not in its output times.")
-        Ue, Ve, phi1, g1 = f.solout()
+        Ue, Ve, phi1, g1, vel = f.solout()
         self.outArray[ind, 0] = Ue
         self.outArray[ind, 1] = uv
         self.outArray[ind, 2] = Ve
         self.outArray[ind, 3] = vv
         self.outArray[ind, 4] = phi1
         self.outArray[ind, 5] = g1
+        self.outArray[ind, 6] = vel
 
     def converged(self, vislim=None):
         n = len(self.times)-self.maxind-1
         vislim = vislim or self.outArray[self.maxind, 1]
         self.outArray[self.maxind+1:] = np.tile(
             [0, vislim, 0, 
-                self.outArray[self.maxind, 3], 0, 0], (n,1))
+                self.outArray[self.maxind, 3], 0, 0, 0], (n,1))
 
 
 ############################## RELAXATION METHOD ##############################
@@ -407,11 +408,16 @@ class SphericalEarthRelaxer(object):
         disfac = rstar/mustar
         gfac   = 1./rstar
 
+        etastar = self.earthparams.norms['eta']
+        velfac  = rstar/etastar         # Simulation units to [cm / s].
+
+        vel = velfac*self.yV[0,-1]*self.alpha
+
         Ue, Ve = disfac*self.yE[[0,1], -1]
         phi1 = self.yE[4, -1]
         g1 = gfac*self.yE[5, -1]
 
-        return Ue, Ve, phi1, g1
+        return Ue, Ve, phi1, g1, vel
 
 
 def get_t0_guess(earthmodel, zarray, n=2):
@@ -980,8 +986,9 @@ class SphericalEarthShooter(object):
         phi1 = self.eProf[4, -1]
         g1 = gfac*self.eProf[5, -1]
 
-        return Ue, Ve, phi1, g1
+        vel = self.vProf[0,-1]*self.alpha
 
+        return Ue, Ve, phi1, g1, vel
 
 ##############################   Z-DERIVATIVES   ##############################
 

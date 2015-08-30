@@ -127,7 +127,7 @@ class EarthParams(object):
 
     def addViscosity(self, visArray, etaStar=None):
         """visArray is an 2xN array of depths zi and viscosities at those
-           depths."""
+           depths, in poise."""
         if etaStar is not None:
             self.norms['eta']
         visArray = np.asarray(visArray)

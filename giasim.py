@@ -388,6 +388,7 @@ class GiaSimGlobal(object):
         eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
         topoObserver = TopoObserver(remTimes, ice.shape)
         eslObserver = EslObserver(remTimes)
+        velObserver = VelObserver(out_times, ntrunc, ns)
 
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
@@ -395,6 +396,7 @@ class GiaSimGlobal(object):
         observerDict.addObserver('grav'  , gravObserver)
         observerDict.addObserver('load'  , loadObserver)
         observerDict.addObserver('wload' , wloadObserver)
+        observerDict.addObserver('vel'   , velObserver)
 
         observerDict.addObserver('eslUpl', eslUplObserver)
         observerDict.addObserver('eslGeo', eslGeoObserver)
@@ -649,6 +651,11 @@ class GravObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
         # 1e3 makes the response in miligals / dyne ice
         return respArray[self.ns,5]*1e3
+
+class VelObserver(AbstractEarthGiaSimObserver):
+    def isolateRespArray(self, respArray):
+        # 3.1536e8 makes the response in mm/yr / dyne ice
+        return respArray[self.ns,6]*3.1536e8
 
 class MOIObserver(AbstractEarthGiaSimObserver):
     pass
