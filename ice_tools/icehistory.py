@@ -11,317 +11,10 @@ import numpy as np
 import cPickle as pickle
 import os
 
+from . import GlacierBounds
 from giapy.map_tools import loadXYZGridData
 
 from progressbar import ProgressBar, ETA, Percentage, Bar
-
-def load(filename):
-    return pickle.load(open(filename, 'rb'))
-
-class Ice2d(object):
-    """Store, use, and manipulate an ice model small enough to be stored in a
-    single array. (In practice, this means less than ...)
-    
-    Attributes
-    ----------
-    heights : array
-        3D array of ice heights with dimensions [stages, xdim, ydim]
-    shape : tuple
-        (xdim, ydim)
-    times : array
-        Times corresponding to the defined ice stages (in order)
-    N : int
-        The optimal order number for Fourier decomposition of the ice model.
-
-    >>> ice = Ice2D()
-    >>> ice.readice('./IceModels/Fullice_Aleksey.dat', 471, 491)
-    """
-    def __init__(self):
-        self.times = np.array([20, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8])
-        self._alterDict = {}
-        self._desc = ''
-        self.stageOrder = None                       # Used for loading cycle
-
-    def __str__(self):
-        return self._desc+'\n'+self.printAreas()
-        
-    def save(self, filename):
-        pickle.dump(self, open(filename, 'wb'))
-    
-    def load_data(self, filename):
-        self.heights = pickle.load( open( filename, 'rb' ) )
-        self.shape = np.shape(self.heights[0,:,:])
-        self.N = 512
-        
-    def readice(self, filename, Nx, Ny):
-        """Read in a full comma-delimitted ice file in x-y-z format.
-    
-        Parameters
-        ----------
-            filename : the file to be read
-            Nx, Ny   : number of lon, lat sites
-
-        Example
-        -------
-        >>> ice = Ice2d()
-        >>> ice.readice(u'./path/to/Fullice_Aleksey.dat', 471, 491)
-        """
-        rawdata = np.loadtxt(filename, delimiter=',')
-        self.lon = (np.reshape(rawdata[:,0], (-1, Nx, Ny))[0, :, :])[0,:]
-        self.lat = (np.reshape(rawdata[:,1], (-1, Nx, Ny))[0, :, :])[:,0]
-        self.heights = np.reshape(rawdata[:,2], (-1, Nx, Ny))
-        self.N = 512
-        self.shape = np.shape(self.heights[0,:,:])
-        
-    def fft(self, N, grid):
-        """Return the truncated FFT of ice heights to order N."""
-
-        heights = self.alterAreas(grid)
-        fullfft = np.fft.fft2(heights, s=[self.N,self.N])
-        truncfft = np.zeros((11, N, N), dtype=complex)
-        truncfft[:,:N/2,:N/2]=fullfft[:,          :N/2,           :N/2]
-        truncfft[:,:N/2,N/2:]=fullfft[:,          :N/2, self.N-N/2:   ]
-        truncfft[:,N/2:,:N/2]=fullfft[:,self.N-N/2:   ,           :N/2]
-        truncfft[:,N/2:,N/2:]=fullfft[:,self.N-N/2:   , self.N-N/2:   ]
-
-        if self.stageOrder is None:
-            return truncfft
-        else:
-            return truncfft[self.stageOrder]
-
-    def addArea(self, name, verts, prop, latlon=True):
-        """Add an area to the model to be altered proportionally by amount prop.
-
-        Parameters
-        ----------
-        name : string
-            The name of the area (user convenience)
-        verts : list of tuples
-            The lon/lat (or map coord pairs) defining the area edges
-        prop : float
-            The proportion by which to alter the area
-        latlon : bool (default True)
-            Indicates whether vertices are in lon/lat or map coords
-
-        Result
-        ------
-        New entry in self.alterDict under key 'name' with values 'verts' 
-        and 'prop'.
-        """
-        prop = np.asarray(prop)
-        if prop.shape != self.times.shape and prop.shape != ():
-            raise ValueError('prop must either be one number, or one for eac\
-                time in self.times')
-        self._alterDict[name] = {'verts':verts, 'prop':prop, 'latlon':latlon}
-
-    def editArea(self, name, prop=None, verts=None):
-        """Edit an area previously defined and named by addArea."""
-        if verts is not None: self._alterDict[name]['verts'] = verts
-        if prop is not None:
-            prop = np.asarray(prop)
-            if prop.shape != self.times.shape and prop.shape != ():
-                raise ValueError('prop must either be one number, or one for\
-                    each time in self.times')
-            self._alterDict[name]['prop'] = prop
-
-    def updateAreas(self, updatelist, namelist=None):
-        if namelist is None: namelist = self._alterDict.keys()
-        # Method uses list operations to parse updatelist into areas
-        updatelist = list(updatelist)
-        for name in namelist:
-            # need length of prop, but need to catch length 1
-            try: n = len(self._alterDict[name]['prop'])
-            except TypeError: n = 1
-            try:
-                # Take the appropriate numer of alterations out ...
-                props = updatelist[0] if n==1 else updatelist[:n]
-                # ... delete them from the list ...
-                del updatelist[:n]
-                # ... and use them to update that areas props.
-                self.editArea(name, prop=props)
-            except IndexError:
-                raise IndexError('updatelist had insufficient length for areas\
-                in namelist')
-
-    def alterAreas(self, grid):
-        """Multiply the areas in self.heights by their props.
-
-        Parameters
-        ----------
-        grid : GridObject
-            the map grid associated with the ice model            
-        """
-        grid.update_shape(self.shape)
-        alteredIce = self.heights.copy()
-        for areaDict in self._alterDict.values():
-            areaind = grid.selectArea(areaDict['verts'], areaDict['latlon'])
-            if areaDict['prop'].shape == ():
-                alteredIce[:, areaind] *= areaDict['prop']
-            else:
-                for icestage, prop in zip(alteredIce, areaDict['prop']):
-                    icestage[areaind] *= prop
-
-        return alteredIce
-
-    def printAreas(self):
-        """Print the list of alterations made to the ice model"""
-        arealist = ''
-        for name, areaDict in self._alterDict.iteritems():
-            arealist += '\t {0}: {1}\n'.format(name, areaDict['prop'])
-        return arealist
-
-    def isGrounded(self, time, topo, interp=False):
-        """Generate a Boolean array indicating the location of grounded ice.
-
-        Grounded ice is ice which 
-        
-        Parameters
-        ----------
-        time : float
-            The stage at which to check. Must be in self.times if interp is
-            False.
-        topo : ndarray
-            The paleotopography at the stage of interest, must be shape
-            ice.shape.
-        interp : Boolean
-            Indicates whether interpolation between explicitly defined stages
-            is allowed.
-        """ 
-        if topo.shape != self.shape:
-            raise ValueError('Shapes are incompatible')
-
-        # Pull the ice at the desired time
-        if time in self.times:
-            icetime = self.heights[time==self.times]
-        elif interp:
-            #TODO implement this
-            raise NotImplementedError()
-        else:
-            raise ValueError('If interp==False, time must be in self.times')
-
-        return (icetime>topo*0.9)*np.sign(icetime)
-
-    def groundedReplace(self, time, topo, areaind):
-        """Replace the ice in a certain area with just-grounded ice.
-
-        Parameters
-        ----------
-        time : float
-            A time in self.times
-        topo : ndarray
-            The paleotopography at time
-        areaind : list
-            The indices defining the area. See GridObject.selectArea.
-        """
-        # Pull the ice at the desired time
-        if time in self.times:
-            icetime = self.heights[time==self.times]
-        else:
-            raise ValueError('time must be in self.times')
-        
-        # 1.666 = rho_asth * rho_w / rho_ice (rho_asth - rho_w)
-        #       ~ 3 * 1 / 0.9 (3-1) 
-        # which accounts for 10% above water level, and a zero-order isostatic
-        # correction (assumes equilibrium).
-        return 1.666*topo[areaind]*(icetime[areaind]!=0)
-
-    def printMW(self, grid, oceanarea=3.61e8):
-        """Print equivalent meters meltwater for the glaciers in _alterDict.
-
-        Parameters
-        ----------
-        grid : GridObject
-        oceanarea : float
-            the area of the ocean to convert volumes to heights, 
-            default = 3.14e8 km^2, current area.
-        """
-        for time, icestage in zip(self.times, self.heights):
-            print '\n{0} ka BP'.format(time)
-            print '------------------------------'
-            # Get the glacier volumes by integrating on the grid.
-            vols = grid.integrateAreas(icestage, self._alterDict)
-            for name, vol in vols.iteritems():
-                print '\t{0} : {1} mMW'.format(name, vol/oceanarea)
-
-    def calcMW(self, grid, arealist=None, oceanarea=3.61e8):
-        """
-        """
-        # Set up the dictionary for return - keys are area names, values are
-        # lists of MW in time.
-        if arealist is None:
-            returndict = {}
-            for name in self._alterDict.iterkeys():
-                returndict[name] = np.zeros(len(self.times))
-            returndict['whole'] = np.zeros(len(self.times))
-        pbar = ProgressBar(widgets=['Integrating: ',' ', Bar(), ' ', ETA()])
-        pbar.start()
-        for i, icestage in enumerate(self.heights):
-            vols = grid.integrateAreas(icestage, self._alterDict)
-            for name, mwlist in returndict.iteritems():
-                mwlist[i] = vols[name]/oceanarea
-            pbar.update(i + 1)
-        pbar.finish()
-
-        return returndict
-    
-    def appendLoadCycle(self, esl):
-        """Identify glaciating stages with deglaciating stage of same ESL.
-
-        Parameters
-        ----------
-        esl : scipy.interp1d
-            Eustatic Sea Level interpolating object.
-
-        Results
-        -------
-        Appends the glaciation times to self.times and the matching stage
-        files to self.icefiles.
-        """
-        # To split the esl curve into glaciation/deglaciation sections
-        iLGM = np.argmin(esl.y)
-        glaTimes = esl.x[iLGM:]
-        glaESLs = esl.y[iLGM:]
-
-        tReturn = []
-        nReturn = []
-
-        for nStage, tStage in enumerate(self.times):
-            # Collect all indices before ESL passes through esl(tStage)
-            switches = np.sign(glaESLs - esl(tStage))
-            switchInd = np.argwhere((switches[1:]-switches[:-1]) != 0)
-            # Two sign changes occur is ESL at deglaciation stage is same as ESL
-            # during load cycle to append. Find any actual zeros and take only
-            # one index.
-            zeroInd = np.argwhere(switches == 0) - 1
-            for k in zeroInd:
-                keep = np.logical_and(switchInd!=k, switchInd!=k+1)
-                switchInd = np.r_[switchInd[keep].flatten(), k]
-
-            # Interpolate to times at which ESL = esl(tStage)
-            tUp = np.array([glaTimes[i+1] for i in switchInd])
-            yUp = np.array([glaESLs[i+1] for i in switchInd])
-            dt = tUp - glaTimes[switchInd]
-            dy = yUp - glaESLs[switchInd]
-            glaStageTimes = glaTimes[switchInd] + \
-                                dt/dy*(esl(tStage) - glaESLs[switchInd])
-
-            # Check for ESL load redundencies - keep only first
-            if np.any([i in tReturn for i in glaStageTimes]):
-                continue
-
-            # Fill in lists.
-            tReturn.extend(glaStageTimes.flatten())
-            nReturn.extend(np.repeat(nStage, len(glaStageTimes)))
-
-        # Append the load cycle to unloading times
-        self.times = np.r_[tReturn, self.times]
-        self.stageOrder = np.r_[nReturn, range(len(self.times))]
-
-        # Sort it all into decreasing order
-        sortInd = np.argsort(self.times)[::-1]
-        self.times = self.times[sortInd]
-        self.stageOrder = self.stageOrder[sortInd]
-        print('{0} stages added for the load cycle.'.format(len(nReturn)))
 
 
 class IceHistory(object):
@@ -391,6 +84,7 @@ class IceHistory(object):
             raise e
 
         self.stageOrder = range(len(self.times))
+        self.alterationList = None
 
     def __getitem__(self, key):
         return self.load(self.fnames[self.stageOrder[key]])
@@ -412,6 +106,8 @@ class IceHistory(object):
         """
         stage0 = self.stageOrder[0]
         ice1, t1 = self.load(self.fnames[stage0]), self.times[0]
+        if self.alterationList is not None:
+            self.alterStage(ice1, 0)
         if transform is not None:
             ice1 = transform(ice1)
         
@@ -420,6 +116,8 @@ class IceHistory(object):
             time = self.times[i]
             fname = self.fnames[stage]
             ice0, t0, ice1, t1 = ice1, t1, self.load(fname), time
+            if self.alterationList is not None:
+                self.alterStage(ice1, i)
             if transform is not None:
                 ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
@@ -509,3 +207,72 @@ class IceHistory(object):
         self.Lon = self.Lon[::2**n,::2**n]
         self.Lat = self.Lat[::2**n,::2**n]
         self.shape = self.Lon.shape
+
+    def addAlterationAreas(self, grid, props, areaNames=None):
+        """Create alteration areas for proportional ice height changes.
+
+        Parameters
+        ----------
+        grid : giapy.map_tools.GridObject
+            Required for now to locate the lonlat indices of the areas.
+        props : list
+            A list of numbers by which to multiply ice heights in the area. It
+            must have as many elements as there are areas, and the elements
+            must either be singlets or else as long as there are stages
+            (assumes the order follows self.stageOrder)
+        areaNames : list
+            A list of the area names to include. (Default None). If None,
+            assumes all the areas in GlacierBounds.areaNames. See
+            help(GlacierBounds) for more information about area names.
+        """
+        #TODO DO IT WITHOUT THE GRID OBJECT!
+        if areaNames is not None:
+            assert len(props) == len(areaNames)
+        else:
+            assert len(props) == len(GlacierBounds.areaNames)
+
+        self.alterationList = GlacierBounds.outputAsList(areaNames)
+        for area, prop in zip(self.alterationList, props):
+            area['prop'] = prop
+
+        self._alterationMask = np.zeros(self.shape)
+        for i, area in enumerate(self.alterationList, start=1):
+            self._alterationMask += i*grid.selectArea(area['vert'])
+
+    def updateAlterationAreas(self, props):
+        """Change the multiplicative factor for each area set by
+        self.addAlterationAreas.
+
+        Parameters
+        ----------
+        props : list
+            A list of numbers by which to multiply ice heights in the area. It
+            must have as many elements as there are areas, and the elements
+            must either be singlets or else as long as there are stages
+            (assumes the order follows self.stageOrder)
+
+        """
+        assert len(props) == len(self.alterationList)
+
+        for area, prop in zip(self.alterationList, props):
+            area['prop'] = prop
+
+    def alterStage(self, stage, stageNum):
+        """Multiplies each area in stage by the appropriate factor.
+
+        Parameters
+        ----------
+        stage : 2D array
+            Array of ice heights, as would be returned by self.load.
+        stageNum : int
+            The associated stage number, e.g., from self.stageOrder, so that if
+            an area is being changed at each stage, the correct number can be
+            retrieved.
+        """
+        #TODO Fix this type checking
+        for i, area in enumerate(self.alterationList, start=1):
+            if (isinstance(area['prop'], list) or \
+                    isinstance(area['prop'], np.ndarray)):
+                stage[self._alterationMask==i] *= area['prop'][stageNum]
+            else:
+                stage[self._alterationMask==i] *= area['prop']

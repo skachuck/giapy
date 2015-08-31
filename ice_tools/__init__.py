@@ -1,9 +1,36 @@
 # GLACIER AREAS
 class GlacierBounds(object):
+    """An object containing lon/lat pairs of vertices for polygons bounding
+    separate glacier systems. The following areas are defined:
+
+    EUROPE
+    fen     : Mainlaind Fennoscandia
+    eng     : England
+    fullbar : Barents Sea including islands
+    sval    : Svalbard (and adjacent Barents Sea)
+    fjl     : Franz Josefland
+    nz      : Novaya Zemlya
+    bar     : Barents Sea excluding islands (marine areas)
+
+    NORTH AMERICA
+    laut    : Laurentian
+    cor     : Cordilleran
+    naf     : Southern fringe of Laurentian
+    inu     : Inutian
+    grn     : Greenland
+
+    OTHER
+    ice     : Iceland
+    want    : West Antarctica
+    eant    : East Antarctica
+    """
+
+    areaNames = ['eng', 'fen', 'fullbar', 'laur', 'cor', 'naf', 'inu', 'grn',
+                    'ice', 'want', 'eant']
 
     # England
-    eng = [(-10.23, 68.57), (-3.7, 68.57), (5.67, 49.82), (5.67, 49.82),
-           (-10.23, 49.82)]
+    eng = [(-5, 68.57), (-3.7, 68.57), (5.67, 49.82), (5.67, 49.82),
+           (-10.23, 49.82), (-10.23, 60), (-5, 60)]
 
     # Mainland Fennoscandia
     fen = [(-20, 50), (-15, 60), (-5, 70), (-5, 85), (180, 85), (180, 40),
@@ -50,12 +77,13 @@ class GlacierBounds(object):
            (-102.5, 47), (-112.5, 47)]
 
     # Inutian
-    inu = [(-140, 85), (-45, 85), (-45, 74.5), (-140, 74.5)]
+    inu = [(-140, 85), (-45, 85), (-55, 83), (-60, 82), (-65, 81), (-70, 79.5),
+            (-75, 77), (-70, 74.5), (-140, 74.5)]
 
     # Greenland
     grn = [(-75, 77), (-70, 79.5), (-65, 81), (-60, 82), (-55, 83), (-45, 85),
-           (-5, 85), (-5, 55), (-50, 55), (-55, 60), (-57.5, 65), (-60, 70),
-           (-70, 74.5), (-75, 77)]
+           (-5, 85), (-5, 75), (-15, 70), (-30, 65), (-35, 60), (-55, 60), 
+           (-57.5, 65), (-60, 70), (-70, 74.5), (-75, 77)]
 
     # Iceland
     ice = [(-35, 60), (-30, 65), (-15, 70), (-5, 75), (-5, 60), (-35, 60)]
@@ -68,5 +96,12 @@ class GlacierBounds(object):
             (-7.5, -55), (172, -55), (172, -82.5), (180, -84.5), (180, -90),
             (-180, -90)]
 
-    def __repr__(self):
-        return "An object containing lon/lat pairs on the boundaries of areas"
+    @classmethod
+    def outputAsList(cls, names=None):
+        names = names or cls.areaNames
+        outputList = []
+        for name in names:
+            outputList.append({ 'name':name,
+                                'vert':getattr(cls, name)})
+        return outputList
+
