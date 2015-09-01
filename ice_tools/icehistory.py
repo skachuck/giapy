@@ -89,6 +89,10 @@ class IceHistory(object):
     def __getitem__(self, key):
         return self.load(self.fnames[self.stageOrder[key]])
 
+    def __iter__(self):
+        for stage in self.stageOrder:
+            yield self.load(self.fnames[stage])
+
     def load(self, fname, lonlat=False, dataFormat=None):
         dataFormat = dataFormat or self.dataFormat
         data =  loadXYZGridData(self.path+fname, shape=self.shape,\
@@ -276,3 +280,24 @@ class IceHistory(object):
                 stage[self._alterationMask==i] *= area['prop'][stageNum]
             else:
                 stage[self._alterationMask==i] *= area['prop']
+
+def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
+    """Print equivalent meters meltwater for the glaciers.
+
+    Parameters
+    ----------
+    grid : GridObject
+    oceanarea : float
+        the area of the ocean to convert volumes to heights, 
+        default = 3.14e8 km^2, current area.
+    """
+    
+    areas = GlacierBounds.outputAsList(areaNames)
+
+    for i, stage in enumerate(ice):
+        print '\n{0} ka BP'.format(ice.times[i])
+        print '------------------------------'
+        # Get the glacier volumes by integrating on the grid.
+        vols = grid.integrateAreas(stage, areas)
+        for area in vols:
+            print '\t{0:>7} : {1:0.3f>6}'.format(area['name'], area['vol']/oceanarea)

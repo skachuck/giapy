@@ -90,19 +90,22 @@ class GridObject(object):
 
     def integrateArea(self, array, area, latlon=False):
         """Integrate an array over a specific area."""
-        inds = self.selectArea(area, latlon=latlon)
+        inds = self.selectArea(area, latlon=latlon, reduced=1)
         dV = self.volume(array)
         return dV[inds].sum()
 
-    def integrateAreas(self, array, areaDict):
+    def integrateAreas(self, array, areaList):
         """Integrate an array over areas stored in an AreaDict."""
         dV = self.volume(array)
-        volDict = {'whole': dV.sum()}
-        for name, area in areaDict.iteritems():
-            inds = self.selectArea(area['verts'], latlon=area['latlon'])
-            volDict[name] = dV[inds].sum()
+        volList = []
+        for area in areaList:
+            inds = self.selectArea(area['vert'], reduced=1)
+            volList.append({'name' : area['name'],
+                            'vol'  : dV[inds].sum()})
+        volList.append({'name' : 'whole',
+                        'vol'  : dV.sum()})
             
-        return volDict
+        return volList
 
     def create_interper(self, array):
         """Return a 2D interpolation object on the map, in map coordinates.
@@ -153,7 +156,7 @@ class GridObject(object):
         interper = self.create_interper(array)
         return interper.ev(xs, ys)
 
-    def selectArea(self, ptlist, latlon=False):
+    def selectArea(self, ptlist, latlon=False, reduced=None):
         """Select an area of the grid"""
         ptlist = np.asarray(ptlist)
         if latlon: 
@@ -161,9 +164,16 @@ class GridObject(object):
         # create the polygon
         path = Path(ptlist)
 
-        X, Y = np.meshgrid(self.x, self.y)
+        if reduced is not None:
+            X, Y = np.meshgrid(self.x[:-reduced], self.y[:-reduced])
+            areaind = path.contains_points(zip(X.flatten(), Y.flatten()))
+            areaind = areaind.reshape((self.shape[0]-reduced,
+                                       self.shape[1]-reduced))
+        else:
+            X, Y = np.meshgrid(self.x, self.y)
+            areaind = path.contains_points(zip(X.flatten(), Y.flatten()))
+            areaind = areaind.reshape(self.shape)
         # return array indices
-        areaind = path.contains_points(zip(X.flatten(), Y.flatten())).reshape(self.shape)
         return areaind
 
     def pcolormesh(self, Z, **kwargs):
