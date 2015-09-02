@@ -89,9 +89,12 @@ class IceHistory(object):
     def __getitem__(self, key):
         return self.load(self.fnames[self.stageOrder[key]])
 
-    def __iter__(self):
-        for stage in self.stageOrder:
-            yield self.load(self.fnames[stage])
+    def __iter__(self, alter=True):
+        for stageNum in self.stageOrder:
+            stage = self.load(self.fnames[stageNum])
+            if self.alterationList is not None:
+                self.alterStage(stage, stageNum)
+            yield stage
 
     def load(self, fname, lonlat=False, dataFormat=None):
         dataFormat = dataFormat or self.dataFormat
@@ -121,7 +124,7 @@ class IceHistory(object):
             fname = self.fnames[stage]
             ice0, t0, ice1, t1 = ice1, t1, self.load(fname), time
             if self.alterationList is not None:
-                self.alterStage(ice1, i)
+                self.alterStage(ice1, stage)
             if transform is not None:
                 ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
@@ -292,12 +295,21 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
         default = 3.14e8 km^2, current area.
     """
     
+    areaNames = areaNames or GlacierBounds.areaNames
     areas = GlacierBounds.outputAsList(areaNames)
+        
+    s = ''
+    for column in ['ka BP']+areaNames:
+        s += '{column:{align}{width}} '.format(column=column, align='^',
+                                                width=7)
+    print(s)
 
     for i, stage in enumerate(ice):
-        print '\n{0} ka BP'.format(ice.times[i])
-        print '------------------------------'
+        s = '{num:{align}{width}{base}}  '.format(num=ice.times[i], align='<',
+                                                    width=7, base='.2f')
         # Get the glacier volumes by integrating on the grid.
         vols = grid.integrateAreas(stage, areas)
         for area in vols:
-            print '\t{0:>7} : {1:0.3f>6}'.format(area['name'], area['vol']/oceanarea)
+            s += '{num:{align}{width}{base}} '.format(num=area['vol']/oceanarea, 
+                                                        align='>', width=7, base='.3f')
+        print(s)
