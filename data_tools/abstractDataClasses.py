@@ -117,7 +117,8 @@ class AbsGeoTimeSeriesContainer(object):
             if loc.recnbr in nbrs:
                 yield loc
 
-    def filter(self, func, args, filename=None):
+    @classmethod
+    def filter(cls, func, args, filename=None):
         """Filter data and return a new EmergeData object with the new data.
         
         Parameters
@@ -129,9 +130,12 @@ class AbsGeoTimeSeriesContainer(object):
         filename - to save new data immediately, provide a filename. Filtered
                     data can be saved later by name.save(filename)
         """
-        filtered = EmergeData([loc for loc in 
-                                        self.__getattribute__(func)(**args)])
-        filtered.form_long_vectors()
+        filteredData = {}
+
+        for loc in func(**args):
+            filteredData[loc.recnbr] = loc
+
+        filtered = cls(filteredData)
                 
         if filename is not None:
             filtered.save(filename)

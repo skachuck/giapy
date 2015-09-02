@@ -17,13 +17,14 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
 
     datamax = np.max(np.abs(ses))
     datamag = np.floor(np.log10(datamax))
-    vmax = (10**datamag)*np.max(
+    vmax = (10**datamag)*np.maximum(
             np.floor(datamax/(10**datamag)/2), 1.)
     vmin=-vmax
 
 
     basemap.drawcoastlines(color=(1,1,1,1), ax=ax, zorder=0)
-    p = basemap.scatter(lons, lats, c=ses, s=s, 
+    xs, ys = basemap(lons, lats)
+    p = basemap.scatter(xs, ys, c=ses, s=s, 
                         vmin=vmin, vmax=vmax, cmap='RdYlBu_r', 
                         ax=ax, edgecolor='None', alpha=0.5)
     ax.set_axis_bgcolor((0,0,0,0.2))
