@@ -11,16 +11,16 @@ from .abstractDataClasses import AbsGeoTimeSeries, AbsGeoTimeSeriesContainer
 from .. import timestamp
 
 
-def calcEmergence(sim, emergedata):
+def calcEmergence(sim, emergedata, smooth=True):
     #TODO This function shouldn't have to know what's inside any object, let
     # alone a complicated one, like sim. Consider calculating rsl first and
     # passing it and calculated times in (ts, rsl, emergedata).
     # To reference to present day
     #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
-    u0 = sim['topo'][-1]
+    u0 = sim['rsl'][-1]
 
     uAtLocs = []
-    for ut in sim['topo']:
+    for ut in sim['rsl']:
         ut = u0 - ut
         interpfunc = sim.inputs.grid.create_interper(ut.T)
         uAtLocs.append(interpfunc.ev(emergedata.lons, emergedata.lats))
@@ -29,8 +29,12 @@ def calcEmergence(sim, emergedata):
 
     data = {}
     for uAtLoc, loc in zip(uAtLocs, emergedata):
-        timeseries = np.array([np.sort(loc.ts), 
-                    np.interp(np.sort(loc.ts), 
+        if smooth:
+            ts = np.union1d(np.sort(loc.ts), np.linspace(0, loc.ts.max()))
+        else:
+            ts = np.sort(loc.ts)
+        timeseries = np.array([ts, 
+                    np.interp(ts, 
                                 sim.inputs.out_times[::-1], uAtLoc[::-1])]).T
         data[loc.recnbr] = EmergeDatum(timeseries, 
                                         lat=loc.lat, 

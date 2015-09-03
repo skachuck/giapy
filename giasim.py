@@ -384,11 +384,14 @@ class GiaSimGlobal(object):
         gravObserver = GravObserver(out_times, ntrunc, ns)
         loadObserver = LoadObserver(remTimes, ice.shape)
         wloadObserver = WaterLoadObserver(remTimes, ice.shape)
+        geoObserver = GeoidObserver(out_times, ntrunc, ns)
+
         eslUplObserver = TotalUpliftObserver(remTimes, ntrunc, ns)
         eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
         topoObserver = TopoObserver(remTimes, ice.shape)
         eslObserver = EslObserver(remTimes)
         velObserver = VelObserver(out_times, ntrunc, ns)
+        rslObserver = HeightObserver(remTimes, ice.shape, 'rsl')
 
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
@@ -397,11 +400,13 @@ class GiaSimGlobal(object):
         observerDict.addObserver('load'  , loadObserver)
         observerDict.addObserver('wload' , wloadObserver)
         observerDict.addObserver('vel'   , velObserver)
+        observerDict.addObserver('geo'   , geoObserver)
 
         observerDict.addObserver('eslUpl', eslUplObserver)
         observerDict.addObserver('eslGeo', eslGeoObserver)
         observerDict.addObserver('topo'  , topoObserver)
         observerDict.addObserver('esl'   , eslObserver)
+        observerDict.addObserver('rsl'   , rslObserver)
 
 
         # Use progressbar to track calculation if desired.
@@ -508,14 +513,21 @@ class GiaSimGlobal(object):
                         dGel = dGel + dGelp
                         continue
 
+                for o in observerDict:
+                    # Topography and load for time tb are updated and saved.
+                    o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl,
+                                        dwLoad=dhwI, rsl=Tb-iceb)
+
             else:
                 dLoad = (iceb-icea)*DENICE/DENSEA
                 Tb = None
 
-            for o in observerDict:
-                # Topography and load for time tb are updated and saved.
-                o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl,
-                                    dwLoad=dhwI)
+                for o in observerDict:
+                    # Topography and load for time tb are updated and saved.
+                    o.loadStageUpdate(tb, dLoad=dLoad)
+
+
+            
 
             # Transform load change into spherical harmonics.
             loadChangeSpec = self.harmTrans.grdtospec(dLoad)/NREM
@@ -662,6 +674,27 @@ class MOIObserver(AbstractEarthGiaSimObserver):
 
 class AngularMomentumObserver(AbstractEarthGiaSimObserver):
     pass
+
+class HeightObserver(AbstractGiaSimObserver):
+    def __init__(self, outTimes, iceShape, name):
+        self.initialize(outTimes, iceShape)
+        self.name = name
+
+    def initialize(self, outTimes, iceShape):
+        self.array = np.zeros((len(outTimes), 
+                                iceShape[0], iceShape[1]))
+        self.outTimes = outTimes
+
+    def loadStageUpdate(self, tout, **kwargs):
+        if self.name in kwargs.keys():
+            self.update(tout, kwargs[self.name])
+
+    def update(self, tout, load):
+        if tout not in self.outTimes:
+            return
+        n = self.locateByTime(tout)
+        self.array[n] = load
+
 
 class LoadObserver(AbstractGiaSimObserver):
     def __init__(self, outTimes, iceShape):
