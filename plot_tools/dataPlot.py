@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.basemap import Basemap
 
-def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
+def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
+                        ptids=None):
     basemap = basemap or Basemap()
     if ax is None:
         fig, ax = plt.subplots(1,1, figsize=(15,10))
@@ -15,7 +16,7 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
         normPts = numPts/float(max(numPts))
         s = 500*normPts
 
-    datamax = np.max(np.abs(ses))
+    datamax = np.mean(np.abs(ses)) + np.std(np.abs(ses))
     datamag = np.floor(np.log10(datamax))
     vmax = (10**datamag)*np.maximum(
             np.floor(datamax/(10**datamag)/2), 1.)
@@ -32,6 +33,11 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
     cax = divider.append_axes('right', size='2%', pad=0.05)
     plt.colorbar(p, cax=cax, label='Standard Error (m)')
 
+    if ptids is not None:
+        for x, y, ptid in zip(xs, ys, ptids):
+            ax.text(x, y, ptid, va='center', ha='center', fontsize=10,
+            transform=ax.transData)
+
     # If scaling point size by number of points, add a label.
     if numPts is not None:
         samplept = int(5*10**(np.floor(np.log10(max(numPts)))-1))
@@ -42,7 +48,7 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None):
         ax.text(0.065, 0.1, '- {0:d} observations at site'.format(samplept),
             transform=ax.transAxes, va='center', fontsize=12)
 
-    return plt.gca()
+    return ax
 
 def plotLocTimeseries(data, calc, ax=None):
     if ax is None:
@@ -51,4 +57,5 @@ def plotLocTimeseries(data, calc, ax=None):
             ms=15, ls='None')
     ax.plot(calc.ts, calc.ys)
     ax.set_title(str(data))
+    ax.invert_xaxis()
     return plt.gca()
