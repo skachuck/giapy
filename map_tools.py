@@ -98,12 +98,14 @@ class GridObject(object):
         """Integrate an array over areas stored in an AreaDict."""
         dV = self.volume(array)
         volList = []
+        wholeVol = 0
         for area in areaList:
             inds = self.selectArea(area['vert'], reduced=1)
             volList.append({'name' : area['name'],
                             'vol'  : dV[inds].sum()})
+            wholeVol += dV[inds].sum()
         volList.append({'name' : 'whole',
-                        'vol'  : dV.sum()})
+                        'vol'  : wholeVol})
             
         return volList
 

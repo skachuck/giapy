@@ -215,8 +215,16 @@ class IceHistory(object):
         self.Lat = self.Lat[::2**n,::2**n]
         self.shape = self.Lon.shape
 
-    def addAlterationAreas(self, grid, props, areaNames=None):
+    def createAlterationAreas(self, grid, props, areaNames=None):
         """Create alteration areas for proportional ice height changes.
+
+        The area definitions and proportions are stored in two dictionaries, 
+        whose keys are the names of the areas. The reason for saving both is
+        that the area definitions occassionally are changed, and for
+        consistency and reproducibility it will be useful to have an altered
+        ice model carry with it all the information needed for the alteration.
+        (The only thing not stored by the ice model internally are the raw ice
+        model files.)
 
         Parameters
         ----------
@@ -233,22 +241,27 @@ class IceHistory(object):
             help(GlacierBounds) for more information about area names.
         """
         #TODO DO IT WITHOUT THE GRID OBJECT!
-        if areaNames is not None:
-            assert len(props) == len(areaNames)
-        else:
-            assert len(props) == len(GlacierBounds.areaNames)
+        areaNames = areaNames or GlacierBounds.areaNames
+        
+        assert len(props) == len(areaNames)
 
-        self.alterationList = GlacierBounds.outputAsList(areaNames)
-        for area, prop in zip(self.alterationList, props):
-            area['prop'] = prop
+        # GlacierBounds.outputAsDict outputs  a dictionary of names, one for
+        # each area in areaNames, with the values the vertices of the area.
+        self.areaVerts = GlacierBounds.outputAsDict(areaNames)
+        # The alteration mask is an lat/lon array mapping membership to a
+        # glacier area to an integer, for fast area locating later on
+        # (grid.selectArea is quite slow). The integer of each glacier is
+        # stored in the area 
+        self._alterationMask = np.zeros(self.shape, dtype=int)
+        self.areaProps = {}
+        for area, prop in zip(areaNames, props):
+            self.areaProps[area] = prop
+            inds = grid.selectArea(self.areaVerts[area])
+            self._alterationMask += hash(area)*inds
 
-        self._alterationMask = np.zeros(self.shape)
-        for i, area in enumerate(self.alterationList, start=1):
-            self._alterationMask += i*grid.selectArea(area['vert'])
-
-    def updateAlterationAreas(self, props):
+    def updateAlterationAreas(self, updateDict):
         """Change the multiplicative factor for each area set by
-        self.addAlterationAreas.
+        self.createAlterationAreas.
 
         Parameters
         ----------
@@ -259,10 +272,11 @@ class IceHistory(object):
             (assumes the order follows self.stageOrder)
 
         """
-        assert len(props) == len(self.alterationList)
+        for area, prop in updateDict.iteritems():
+            self.areaProps[area] = prop
 
-        for area, prop in zip(self.alterationList, props):
-            area['prop'] = prop
+
+            
 
     def alterStage(self, stage, stageNum):
         """Multiplies each area in stage by the appropriate factor.
@@ -277,12 +291,12 @@ class IceHistory(object):
             retrieved.
         """
         #TODO Fix this type checking
-        for i, area in enumerate(self.alterationList, start=1):
-            if (isinstance(area['prop'], list) or \
-                    isinstance(area['prop'], np.ndarray)):
-                stage[self._alterationMask==i] *= area['prop'][stageNum]
+        for name, prop in self.areaProps.iteritems():
+            if (isinstance(prop, list) or \
+                    isinstance(prop, np.ndarray)):
+                stage[self._alterationMask==hash(name)] *= prop[stageNum]
             else:
-                stage[self._alterationMask==i] *= area['prop']
+                stage[self._alterationMask==hash(name)] *= prop
 
 def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
     """Print equivalent meters meltwater for the glaciers.
@@ -299,7 +313,7 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
     areas = GlacierBounds.outputAsList(areaNames)
         
     s = ''
-    for column in ['ka BP']+areaNames:
+    for column in ['ka BP']+areaNames+[' Total']:
         s += '{column:{align}{width}} '.format(column=column, align='^',
                                                 width=7)
     print(s)

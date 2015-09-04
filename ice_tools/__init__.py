@@ -109,3 +109,12 @@ class GlacierBounds(object):
                                 'vert':getattr(cls, name)})
         return outputList
 
+    @classmethod
+    def outputAsDict(cls, names=None):
+        names = names or cls.areaNames
+        outputDict = {}
+        for name in names:
+            outputDict[name] = getattr(cls, name)
+        return outputDict
+
+
