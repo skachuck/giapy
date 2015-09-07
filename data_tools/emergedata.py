@@ -216,7 +216,10 @@ def importEmergeDataFromFile(filename):
                 pass
             else:
                 timeseries[i] = [line[0], line[ecol]]
-        
+
+        # Sort the data by time (will be needed for interpolation
+        sortind = np.argsort(timeseries[:,0])
+        timeseries = timeseries[sortind, :]
 
         # Post processing of data based on metadata
         if unit == 2: timeseries[:,1] = timeseries[:,1]*0.3048      # ft -> m

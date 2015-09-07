@@ -84,7 +84,9 @@ class IceHistory(object):
             raise e
 
         self.stageOrder = range(len(self.times))
-        self.alterationList = None
+        # Used for alterations.
+        self.areaProps = None
+        self.areaNames = None
 
     def __getitem__(self, key):
         return self.load(self.fnames[self.stageOrder[key]])
@@ -92,7 +94,7 @@ class IceHistory(object):
     def __iter__(self, alter=True):
         for stageNum in self.stageOrder:
             stage = self.load(self.fnames[stageNum])
-            if self.alterationList is not None:
+            if self.areaProps is not None:
                 self.alterStage(stage, stageNum)
             yield stage
 
@@ -113,7 +115,7 @@ class IceHistory(object):
         """
         stage0 = self.stageOrder[0]
         ice1, t1 = self.load(self.fnames[stage0]), self.times[0]
-        if self.alterationList is not None:
+        if self.areaProps is not None:
             self.alterStage(ice1, 0)
         if transform is not None:
             ice1 = transform(ice1)
@@ -123,7 +125,7 @@ class IceHistory(object):
             time = self.times[i]
             fname = self.fnames[stage]
             ice0, t0, ice1, t1 = ice1, t1, self.load(fname), time
-            if self.alterationList is not None:
+            if self.areaProps is not None:
                 self.alterStage(ice1, stage)
             if transform is not None:
                 ice1 = transform(ice1)
