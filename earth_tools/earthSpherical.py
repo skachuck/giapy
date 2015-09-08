@@ -43,24 +43,22 @@ class SphericalEarth(object):
 
     def __repr__(self):
         return self._desc
+
+    def __getstate__(self):
+        odict = self.__dict__.copy()
+        del odict['respInterp']
+        return odict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.respInterp = interp1d(self.times, self.respArray, axis=1)
+
     
     def getResp(self, t_dur):
         """Return an NDarray (nmax+1, 4) of the responses to a one dyne load applied
         for time t_dur.
         """
         return self.respInterp(t_dur)
-    
-    def save(self, fname):
-        #TODO use dill or klepto packages to serialize interp1d objects
-        # interp1d objects can't be pickled, so get rid of them for saving, and
-        # reinitialize them afterward.
-        self.respInterp = None
-        self.params._interpParams = None
-        pickle.dump(self, open(fname, 'w'))
-
-        self.params._interpParams = interp1d(self.params.zz,
-                                             self.params.paramArray)
-        self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
     def setDesc(self, string):
         self._desc = string 
@@ -117,13 +115,4 @@ class SphericalEarth(object):
                 self.relaxer = SphericalEarthRelaxer(self.params, 
                                     zarray, yE0, yV0, n)
                 integrateRelaxationScipy(self.relaxer, out)
-        return out   
-
-
-def loadEarth(fname):
-    earth = pickle.load(open(fname, 'r'))
-    earth.params._interpParams = interp1d(earth.params.zz, 
-                                          earth.params.paramArray)
-    earth.respInterp = interp1d(earth.times, earth.respArray, axis=1)
-
-
+        return out

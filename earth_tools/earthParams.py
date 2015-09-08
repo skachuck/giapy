@@ -114,6 +114,15 @@ class EarthParams(object):
     def __call__(self, z, depth=False):
         return self.getParams(z, depth)
 
+    def __getstate__(self):
+        odict = self.__dict__.copy()
+        del odict['_interpParams']
+        return odict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._interpParams = interp1d(self.z, self._paramArray)
+
     def getParams(self, z, depth=False):
         """
         Return a dictionary of parameters interpolated to radius (depth) z.
