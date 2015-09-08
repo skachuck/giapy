@@ -27,15 +27,28 @@ def calcEmergence(sim, emergedata, smooth=True):
 
     uAtLocs = np.array(uAtLocs).T
 
+    calcTimes = sim['rsl'].outTimes
+    if np.all(np.diff(calcTimes)<0):
+        reverse = True
+    else:
+        reverse=False
+        
+
     data = {}
     for uAtLoc, loc in zip(uAtLocs, emergedata):
         if smooth:
             ts = np.union1d(np.sort(loc.ts), np.linspace(0, loc.ts.max()))
         else:
             ts = np.sort(loc.ts)
-        timeseries = np.array([ts, 
+
+        if reverse:
+            timeseries = np.array([ts, 
                     np.interp(ts, 
-                                sim.inputs.out_times[::-1], uAtLoc[::-1])]).T
+                                sim['rsl'].outTimes[::-1], uAtLoc[::-1])]).T
+        else:
+            timeseries = np.array([ts, 
+                    np.interp(ts, 
+                                sim['rsl'].outTimes, uAtLoc)]).T
         data[loc.recnbr] = EmergeDatum(timeseries, 
                                         lat=loc.lat, 
                                         lon=loc.lon,

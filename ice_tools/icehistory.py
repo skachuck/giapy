@@ -131,7 +131,7 @@ class IceHistory(object):
                 ice1 = transform(ice1)
             yield ice0, t0, ice1, t1
 
-    def appendLoadCycle(self, esl):
+    def appendLoadCycle(self, esl, verbose=False):
         """Identify glaciating stages with deglaciating stage of same ESL.
 
         Parameters
@@ -188,7 +188,8 @@ class IceHistory(object):
         sortInd = np.argsort(self.times)[::-1]
         self.times = self.times[sortInd]
         self.stageOrder = self.stageOrder[sortInd]
-        print('{0} stages added for the load cycle.'.format(len(nReturn)))
+        if verbose:
+            print('{0} stages added for the load cycle.'.format(len(nReturn)))
 
     def sortByTime(self, dec=True):
         """Sort the fnames by times, decreasing by default."""
