@@ -79,6 +79,7 @@ class IceHistory(object):
             self.Lon = trial[0]
             self.Lat = trial[1]
             self.shape = self.Lon.shape
+            self.nlat = len(np.union1d(ice.Lat.flatten(), ice.Lat.flatten()))
             if shape is None: print('Shape assumed {0}'.format(self.shape))
         except ValueError as e:
             raise e
@@ -116,7 +117,7 @@ class IceHistory(object):
         stage0 = self.stageOrder[0]
         ice1, t1 = self.load(self.fnames[stage0]), self.times[0]
         if self.areaProps is not None:
-            self.alterStage(ice1, 0)
+            self.alterStage(ice1, stage0)
         if transform is not None:
             ice1 = transform(ice1)
         
@@ -276,10 +277,7 @@ class IceHistory(object):
 
         """
         for area, prop in updateDict.iteritems():
-            self.areaProps[area] = prop
-
-
-            
+            self.areaProps[area] = prop 
 
     def alterStage(self, stage, stageNum):
         """Multiplies each area in stage by the appropriate factor.
@@ -300,6 +298,32 @@ class IceHistory(object):
                 stage[self._alterationMask==hash(name)] *= prop[stageNum]
             else:
                 stage[self._alterationMask==hash(name)] *= prop
+
+class PersistentIceHistory(IceHistory):
+    def __init__(self, icehistory):
+        self.stageArray = np.array([icehistory.load(stage) 
+                            for stage in icehistory.fnames])
+
+        # Copy important info from icehistory
+        self.Lon = icehistory.Lon
+        self.Lat = icehistory.Lat
+        self.nlat              = icehistory.nlat 
+        self.shape             = icehistory.shape
+        self._alterationMask   = icehistory._alterationMask.copy()
+        self.areaProps         = icehistory.areaProps.copy()
+        self.areaVerts         = icehistory.areaVerts.copy()
+        self.times             = icehistory.times.copy()
+        self.stageOrder        = icehistory.stageOrder[:]
+        self.fnames            = icehistory.fnames[:]
+        self.fnameDict         = dict(zip(icehistory.fnames,
+                                    range(len(icehistory.fnames))))
+    def load(self, fname, **kwargs):
+        return self.stageArray[self.fnameDict[fname]] 
+
+    def applyAlteration(self, name):
+        pass
+
+
 
 def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
     """Print equivalent meters meltwater for the glaciers.
