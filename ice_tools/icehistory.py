@@ -88,6 +88,7 @@ class IceHistory(object):
         # Used for alterations.
         self.areaProps = None
         self.areaNames = None
+        self._alterationMask = np.zeros(self.shape)
 
     def __getitem__(self, key):
         return self.load(self.fnames[self.stageOrder[key]])
@@ -98,6 +99,24 @@ class IceHistory(object):
             if self.areaProps is not None:
                 self.alterStage(stage, stageNum)
             yield stage
+
+    def _getMetaData(self):
+        metadata = {'Lon'               : self.Lon,
+                    'Lat'               : self.Lat,
+                    'nlat'              : self.nlat,
+                    'shape'             : self.shape,
+                    '_alterationMask'   : self._alterationMask.copy(),
+                    'areaProps'         : self.areaProps.copy(),
+                    'areaVerts'         : self.areaVerts.copy(),
+                    'times'             : self.times[:],
+                    'stageOrder'        : self.stageOrder[:],
+                    'path'              : self.path,
+                    'fnames'            : self.fnames[:]}
+        return metadata
+
+    def copy():
+        """Create a copy of the ice model, including alteration dicts."""
+        pass
 
     def load(self, fname, lonlat=False, dataFormat=None):
         dataFormat = dataFormat or self.dataFormat
@@ -299,29 +318,103 @@ class IceHistory(object):
             else:
                 stage[self._alterationMask==hash(name)] *= prop
 
-class PersistentIceHistory(IceHistory):
-    def __init__(self, icehistory):
-        self.stageArray = np.array([icehistory.load(stage) 
-                            for stage in icehistory.fnames])
 
+def loadIceStages(icehistory):
+    """Create a PersistentIceHistory from an IceHistory.
+
+    Whereas IceHistory objects store links to the files containing the ice
+    heights at each stage, a PersistentIceHistory stores the entire ice model
+    in memory. Each stage is loaded and stacked into an array. All original
+    meta-data is passed along.
+
+    Parameters
+    ----------
+    icehistory : giapy.icehistory.IceHistory
+        The ice history whose stages are to be loaded.
+    """
+    # Load the ice heights from each stage
+    stageArray = np.array([icehistory.load(stage) 
+                            for stage in icehistory.fnames])
+    metadata = icehistory._getMetaData()
+
+    return PersistentIceHistory(stageArray, metadata)
+
+class PersistentIceHistory(IceHistory):
+    """Store an ice model in memory (np.ndarray) for faster access.
+
+    Whereas IceHistory objects store links to the files containing the ice
+    heights at each stage, a PersistentIceHistory stores the entire ice model
+    in memory. Each stage is loaded and stacked into an array. All original
+    meta-data is passed along.
+
+    Parameters
+    ----------
+    iceArray : numpy.ndarray
+        The array of ice heights at each stage. Must have shape 
+        (nstages, nlon, nlat).
+    metadata : dict
+        The metadata, e.g., as collected from _getMetaData().
+    """
+    def __init__(self, iceArray, metadata):
+
+        self.stageArray = iceArray
         # Copy important info from icehistory
-        self.Lon = icehistory.Lon
-        self.Lat = icehistory.Lat
-        self.nlat              = icehistory.nlat 
-        self.shape             = icehistory.shape
-        self._alterationMask   = icehistory._alterationMask.copy()
-        self.areaProps         = icehistory.areaProps.copy()
-        self.areaVerts         = icehistory.areaVerts.copy()
-        self.times             = icehistory.times.copy()
-        self.stageOrder        = icehistory.stageOrder[:]
-        self.fnames            = icehistory.fnames[:]
-        self.fnameDict         = dict(zip(icehistory.fnames,
-                                    range(len(icehistory.fnames))))
+        for attr, value in metadata.iteritems():
+            setattr(self, attr, value)
+
+        self.fnameDict = dict(zip(self.fnames,
+                                    range(len(self.fnames))))
+
+    def copy(self):
+        metadata = self._getMetaData()
+        return PersistentIceHistory(self.stageArray.copy(), metadata)
+
     def load(self, fname, **kwargs):
         return self.stageArray[self.fnameDict[fname]] 
 
-    def applyAlteration(self, name):
-        pass
+    def applyAlteration(self, names=None):
+        """Applies all the proprtional alterations in self.areaProps and
+        returns a new object. The original object is unchanged.
+
+        Parameters
+        ----------
+        names : list or str
+            The name(s) of the areas to alter. Must be a name in 
+            self.areaProp. Default is to do them all.
+        """
+        # Generate the copy.
+        altIce = self.copy()
+        # Interpret the input.
+        if names is not None:
+            if isinstance(names, str):
+                names = [names]
+        else:
+            names = altIce.areaProps.keys()
+
+        # Apply the alterations location by location.
+        for name in names:
+            if (isinstance(prop, list) or \
+                    isinstance(prop, np.ndarray)):
+                # If the area has a different prop for each stage, it is
+                # applied here by creating a stacked mask.
+                mask = np.outer(altIce.areaProps[name], 
+                                (altIce._alterationMask ==
+                                hash(name))).reshape(altIce.stageArray.shape)
+            else:
+                # Otherwise, there's only one mask for the whole stack
+                # of stages.
+                mask = altIce.areaProps[name]*(altIce._alterationMask == hash(name))
+
+            # Everything outside the area stay the same.
+            mask[mask == 0] = 1.
+            # The whole thing is multiplied
+            altIce.stageArray *= mask
+            # and the area is removed from the alteration list.
+            del altIce.areaProps[name]
+            del altIce.areaVerts[name]
+        # The alteration mask is zeroed.
+        altIce._alterationMask *= 0.
+        return altIce
 
 
 
