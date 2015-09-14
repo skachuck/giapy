@@ -393,17 +393,18 @@ class PersistentIceHistory(IceHistory):
 
         # Apply the alterations location by location.
         for name in names:
+            prop = altIce.areaProps[name]
             if (isinstance(prop, list) or \
                     isinstance(prop, np.ndarray)):
                 # If the area has a different prop for each stage, it is
                 # applied here by creating a stacked mask.
-                mask = np.outer(altIce.areaProps[name], 
+                mask = np.outer(prop, 
                                 (altIce._alterationMask ==
                                 hash(name))).reshape(altIce.stageArray.shape)
             else:
                 # Otherwise, there's only one mask for the whole stack
                 # of stages.
-                mask = altIce.areaProps[name]*(altIce._alterationMask == hash(name))
+                mask = prop*(altIce._alterationMask == hash(name))
 
             # Everything outside the area stay the same.
             mask[mask == 0] = 1.
