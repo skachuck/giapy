@@ -6,7 +6,7 @@ giamc.py
     Author: Samuel B. Kachuck
 """
 
-
+import numpy as np
 import time
 import sys
 
@@ -40,26 +40,32 @@ def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
         f = open(fname, 'w')
         f.close()
 
-    if verbose: tstart = time.time()
+    if verbose: 
+        tstart = time.time()
+        outmsg = 'Taking step {0:3d}/{1:3d}\033[K\r'
 
     for i, step in enumerate(sampler.sample(pos, iterations=nsteps,
-                                                storechain=False)):
+                                                storechain=False), start=1):
         if verbose:
-            sys.stdout.write('Taking step {0:3d}/{1:3d}\r'.format(i, nsteps))
+            sys.stdout.write(outmsg.format(i, nsteps))
             sys.stdout.flush()
         # For each step we create an output dump.
         output = ''
         # Iterate over the walkers.
         for k in range(step[0].shape[0]):
+
+            #f.write('{0:4d}\t{1:.5e}\t{2:s}\t{3:s}\n'
+            #.format(k, step[1][k], '\t'.join(step[0][k]),
+            #                       '\t'.join(step[3][k]))
             # Write the logProbability.
-            output += '{0:.3f}'.format(step[1][k])
+            output += '{0:d}\t{1:e}\t'.format(k, step[1][k])
             # Write out all parameters.
             for param in step[0][k]:
-                output += '{0:0.3f}\t'.format(param)
+                output += '{0:f}\t'.format(param)
             # Write out the blobs, if asked to.
             if blobs:
                 for blob in step[3][k]:
-                    output += '{0:0.3f}\t'.format(blob)
+                    output += '{0:f}\t'.format(blob)
             # End the line.
             output += '\n'
         # Dump the output.
@@ -78,4 +84,4 @@ def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
             unit = 's'
         avgaccept = np.mean(sampler.naccepted)/nsteps
         donemessage = '{0:3d} steps in {1:.3f} {2}, with {3:.3f} accepted.\033[K\n'
-        sys.stdout.write(donemessage.format(niter, ttotal, unit, avgaccept))
+        sys.stdout.write(donemessage.format(nsteps, ttotal, unit, avgaccept))
