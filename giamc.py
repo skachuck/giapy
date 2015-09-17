@@ -10,7 +10,7 @@ import numpy as np
 import time
 import sys
 
-def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
+def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, verbose=False):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
     If the output file exists, the results are appended. If not, it is created.
@@ -42,10 +42,11 @@ def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
 
     if verbose: 
         tstart = time.time()
-        outmsg = 'Taking step {0:3d}/{1:3d}\033[K\r'
+        outmsg = 'Taking step {0:d}/{1:d}\033[K\r'
+        donemessage = ''
 
-    for i, step in enumerate(sampler.sample(pos, iterations=nsteps,
-                                                storechain=False), start=1):
+    for i, step in enumerate(sampler.sample(pos, lnprob0=lnprob0, blobs0=blobs0, 
+                                iterations=nsteps, storechain=False), start=2):
         if verbose:
             sys.stdout.write(outmsg.format(i, nsteps))
             sys.stdout.flush()
@@ -65,7 +66,7 @@ def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
             # Write out the blobs, if asked to.
             if blobs:
                 for blob in step[3][k]:
-                    output += '{0:f}\t'.format(blob)
+                    output += '{0}\t'.format(blob)
             # End the line.
             output += '\n'
         # Dump the output.
@@ -83,5 +84,5 @@ def sampleOut(sampler, pos, fname, nsteps, blobs=False, verbose=False):
         else:
             unit = 's'
         avgaccept = np.mean(sampler.naccepted)/nsteps
-        donemessage = '{0:3d} steps in {1:.3f} {2}, with {3:.3f} accepted.\033[K\n'
+        donemessage += '{0:3d} steps in {1:.3f} {2}, with {3:.3f} accepted.\033[K\n'
         sys.stdout.write(donemessage.format(nsteps, ttotal, unit, avgaccept))
