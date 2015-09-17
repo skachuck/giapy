@@ -8,6 +8,12 @@ the Glacial Isostatic Adjustment of the earth and comparing it to geophysical
 data. The method being developed is principally that of Cathles (1975), though
 I hope to expand this in future.
 
+DEPENDENCIES
+basemap : this package does the majority of the geographic plotting and provides 
+            some useful tools for dealing with geographic data.
+numba   : Provides a just in time compiler for faster computation.
+emcee   : The MCMC Hammer. Affine invariant MCMC algorithm.
+
 A note on UNITS (unless otherwise specified):
     Time - time is measured in thousand years before present (cal ka bp),
     meaning positive times are in the past.
