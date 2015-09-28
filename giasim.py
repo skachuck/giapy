@@ -13,301 +13,10 @@ except:
     pass
 
 from .map_tools import GridObject, redistributeOcean, sealevelChangeByMelt,\
-                    volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad
+                    volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
+                    floatingIceRedistribute
 
 from . import GITVERSION, timestamp
-
-class GiaSim(object):
-    """
-    
-    Calculate and store Glacial Isostacy Simulation results, and compare
-    with data. Must be called with an earth model (earth), an ice model (ice)
-    and a grid (grid). To add a data source to be used in residual finding and
-    interpolation, use GiaSim.attach_data.
-
-    Parameters
-    ----------
-    earth    : giapy.earth_tools.EarthModel
-        The earth model to be used in the simulation
-    ice      : giapy.ice_tools.IceModel
-        The ice model to be used in the simulation
-    grid     : giapy.map_tools.GridObject
-        The map associated with the earth and ice models
-    datalist : list (optional)
-        A list of giapy.data_tools objects to compare to results of simulation.
-        Can be added later using GiaSim.attach_data
-
-    Attributes
-    ----------
-    earth
-    ice
-    grid
-    datalist
-    esl
-    priors
-    old_params
-    old_chi2
-
-    Example
-    -------
-    Instantiate the GiaSim object
-    >>> ice = giapy.ice_tools.icehistory.load(u'./IceModels/eur_ice.p')
-    >>> earth = giapy.earth_tools.earth_two_d.EarthTwoLayer(1, 10)
-    >>> earth.calc_taus(128)
-    >>> grid = giapy.map_tools.GridObject(mapparm=giapy.plot_tools.eur_map_param)
-    >>> data = giapy.data_tools.emerge_data.load(u'./Data/emergence_data/\
-                                                    eur_emerge_data.p')
-
-    >>> sim = giapy.GiaSim(earth, ice, grid, [data])
-    >>> sim.attach_esl(giapy.data_tools.meltwater.gen_eustatic())
-    >>> sim.set_out_times(np.arange(16, -1, -1))
-
-    Use the GiaSim object to calculate uplift. Results are stored in
-    sim.uplift with size (len(sim.out_times), sim.grid.shape)
-    >>> sim.perform_convolution()
-    """
-    
-    def __init__(self, earth, ice, grid, datalist=None):
-        self.earth = earth
-        self.ice = ice
-        self.grid = grid
-
-        if datalist is not None:
-            for data in datalist:
-                self.datalist = datalist
-        else:
-            self.datalist = []
-
-        self.old_params = None
-        self.old_chi2 = None
-        self.priors = None
-
-    def attach_data(self, data):
-        self.datalist.append(data)
-
-    def reset_data(self):
-        self.datalist = []
-
-    def remove_data(self, data):
-        self.datalist.remove(data)
-
-    def attach_esl(self, esl):
-        self.esl = esl
-
-    def set_out_times(self, out_times):
-        self.out_times = out_times
-        
-    def leastsq(self, x0, func=None, args=None, priors=None, 
-                    save_params=False, save_chi2=False, **kwargs):
-        """Calculate the least squares minimum from starting point x0.
-
-        Parameters
-        ----------
-        x0 - the initial guess vector
-        arglist - 
-        priors - list of parameter prior standard deviations 
-        save_params - if True, save the param steps during optimization
-        save_chi2 - if True, save the steps in chi2 during optimization
-        **kwargs - see kwargs for scipy.optimize.leastsq
-        """
-
-        func = func or self.residualsEarth
-        self.priors = priors
-        self.old_params = [] if save_params else None
-        self.old_chi2 = [] if save_chi2 else None
-
-        m = leastsq(func, x0, args=(args,), Dfun=self.jacobian, 
-                    col_deriv=1, **kwargs)
-        
-        if save_params: self.old_params = np.asarray(self.old_params)
-        if save_chi2: self.old_chi2 = np.asarray(self.old_chi2)
-
-        return m
-
-    def residualsEarth(self, xs, arglist=None, verbose=False):
-        """Calculate the residuals associated with stored data sources and
-        earth parameters xs.
-        """
-        raise NotImplemented()
-        #TODO Get residual calculations out of data containers
-        if not self.datalist:
-            raise StandardError('self.datalist is empty. Use self.attach_data.')
-
-        if arglist is None:
-            self.earth.reset_params(*xs)
-        else:
-             self.earth.reset_params_list(xs, arglist)
-
-        self.perform_convolution()
-        
-        res = []
-
-        for data in self.datalist:
-            res.append(data.residual(self, verbose=verbose))
-        
-        if self.priors is not None:
-            res.append((xs-self.priors[:,0])/self.priors[:,1])
-
-        res = np.concatenate(res)
-
-        # If saving steps, save current step
-        if inspect.stack()[1][3] != 'jacobian':
-            if self.old_params is not None:
-                self.old_params.append(self.earth.get_params())
-            if self.old_chi2 is not None:
-                self.old_chi2.append(res.dot(res))
-
-        return res
-
-    def residualsIce(self, xs, namelist=None, verbose=False):
-        if not self.datalist:
-            raise StandardError('self.datalist is empty. Use self.attach_data.')
-
-        # Ascertain size of alteration
-        
-        self.ice.updateAreas(xs)
-        self.perform_convolution()
-        res = []
-            
-        for data in self.datalist:
-            res.append(data.residual(self, verbose=verbose))
-        
-        if self.priors is not None:
-            res.append((xs-self.priors[:,0])/self.priors[:,1])
-
-        res = np.concatenate(res)
-
-        # If saving steps, save current step
-        if inspect.stack()[1][3] != 'jacobian':
-            if self.old_params is not None:
-                self.old_params.append(self.earth.get_params())
-            if self.old_chi2 is not None:
-                self.old_chi2.append(res.dot(res))
-
-        return res
-
-    def jacobian(self, xs, arglist=None, func=None, func_args=None,
-                    eps_f=5.e-5):
-        """Calculate the jacobian associated with stored data sources and
-        parameters xs, with function evaluation error eps_f (default 5e-11).
-        """
-        func = func or self.residualsIce
-
-        jac = []
-        xs = np.asarray(xs)
-        for i, x in enumerate(xs):
-            # Determine the separation to use
-            # Optimal one-pt separation is (eps_f*f/f'')^(1/2) ~ sqrt(eps_f)*x
-            # Optimal two-pt separation is (eps_f*f/f''')^(1/3) ~ cbrt(eps_f)*x
-            h = np.zeros(len(xs))
-            h[i] = (eps_f**(1./3.))*max(x, 0.5)
-
-            # Evaluate the function
-            # One-pt
-            #f1 = rebound_2d_earth_res(xs...)
-            # Two-pt
-            f1 = func(xs-h, arglist)
-            f2 = func(xs+h, arglist)
-
-            # Difference
-            # One-pt
-            #(f2-f1)/h
-            # Two-pt
-            jac.append((f2-f1)*0.5/h[i])
-
-        # put them together
-        jac = np.asarray(jac)
-        # reset the function to initial value
-        trash = func(xs, arglist)
-        return jac
-
-    def mcmc(self, N):
-        raise NotImplemented()
-        # priors
-
-        # observations
-        @pm.deterministic
-        def emerge(viscs):
-            return self.data_vec(viscs)
-        obs = pm.Normal('obs', emerge, observed=True)
-
-    def perform_convolution(self, out_times=None, emergeCorr=True, 
-                            t_rel=0, verbose=False):  
-        """Convolve an ice load and an earth response model in fft space.
-        Calculate the uplift associated with stored earth and ice model.
-        
-        Parameters
-        ----------
-        out_times - an array of times at which to caluclate the convolution.
-                    (default is to use previously stored values).
-        t_rel - the time relative to which uplift is considered (defaul present)
-                (None for no relative)
-        emergeCorr : Bool
-            Apply any attached corrections to uplift to get emergence
-        """
-        time_start = time.clock()
-
-        earth = self.earth
-        ice = self.ice
-
-        N = earth.N                             # use the resolution in earth
-        Nrem = 1                                # number of intermediate steps
-    
-        out_times = out_times or self.out_times
-        self.out_times = out_times
-
-        # Make sure t_rel is in out_times
-        if t_rel is not None and t_rel not in out_times:
-            raise ValueError('t_rel must be in out_times')
-        
-        # Fourier transform the ice_hist
-        #TODO Use pyfftw instead.
-        ice_stages = ice.fft(N, self.grid)
-        
-        # Initialize the uplift array
-        uplift_f = np.zeros((len(out_times), N, N), dtype=complex)
-        
-        # Convolve each ice stage to the each output time
-        for ice0, t0, ice1, t1 in \
-                          zip(ice_stages, ice.times, ice_stages[1:], ice.times[1:]):
-            delta_ice = (ice0 - ice1)/Nrem
-            for inter_time in np.linspace(t0, t1, Nrem, endpoint=False):
-                # Perform the time convolution for each output time
-                for t_out in out_times[out_times <= inter_time]:
-                    t_dur = (inter_time-t_out)
-                    # 0.3 accounts for density difference between ice and rock
-                    uplift_f[t_out == out_times, :, :] += 0.3 *\
-                                        delta_ice * earth.get_resp(t_dur)
-        
-        # The resolution correction
-        res = float(N)/ice.N
-        shape = (np.ceil(res*ice.shape[0]), np.ceil(res*ice.shape[1]))
-        # Retransform the uplift
-        # The normalization needs to be corrected for each dimension (N/ice.N)**2
-        uplift = np.real(np.fft.ifft2(uplift_f, s=[N, N]))*(res**2)
-    
-        # Calculate uplift relative to t_rel (default, present)
-        if t_rel is not None: 
-            uplift = uplift[np.where(out_times==t_rel)] - uplift 
-
-        self.grid.update_shape(shape)
-    
-        # Correctly grid the uplift array by removing the fourier padding
-        self.uplift = uplift[:, :shape[0], :shape[1]]
-
-        if emergeCorr:
-            # Perform meltwater correction
-            if hasattr(self, 'esl'): self.mw_corr()
-
-        if verbose: print 'Convolution time: {0}s'.format(time.clock()-\
-                                                                time_start)
-
-    def mw_corr(self, esl=None):
-        """Apply the meltwater correction to transform uplift to emergence."""
-        self.esl = esl or self.esl
-            
-        eslcorr = self.esl(self.out_times)
-        self.uplift = self.uplift + eslcorr[:, np.newaxis, np.newaxis]
 
 class GiaSimGlobal(object):
     def __init__(self, earth, ice, grid=None):
@@ -382,16 +91,16 @@ class GiaSimGlobal(object):
         uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
         horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
         gravObserver = GravObserver(out_times, ntrunc, ns)
-        loadObserver = LoadObserver(remTimes, ice.shape)
-        wloadObserver = WaterLoadObserver(remTimes, ice.shape)
+        loadObserver = HeightObserver(remTimes, ice.shape, 'dLoad')
+        wloadObserver = HeightObserver(remTimes, ice.shape, 'dwLoad')
         geoObserver = GeoidObserver(out_times, ntrunc, ns)
 
         eslUplObserver = TotalUpliftObserver(remTimes, ntrunc, ns)
         eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
-        topoObserver = TopoObserver(remTimes, ice.shape)
+        topoObserver = HeightObserver(remTimes, ice.shape, 'topo')
         eslObserver = EslObserver(remTimes)
         velObserver = VelObserver(out_times, ntrunc, ns)
-        rslObserver = HeightObserver(remTimes, ice.shape, 'rsl')
+        rslObserver = HeightObserver(remTimes, ice.shape, 'sstopo')
 
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
@@ -406,7 +115,7 @@ class GiaSimGlobal(object):
         observerDict.addObserver('eslGeo', eslGeoObserver)
         observerDict.addObserver('topo'  , topoObserver)
         observerDict.addObserver('esl'   , eslObserver)
-        observerDict.addObserver('rsl'   , rslObserver)
+        observerDict.addObserver('sstopo', rslObserver)
 
 
         # Use progressbar to track calculation if desired.
@@ -419,7 +128,7 @@ class GiaSimGlobal(object):
                raise ImportError('progressbar not loaded')
 
         for o in observerDict:
-            o.loadStageUpdate(ice.times[0], topo=topo)
+            o.loadStageUpdate(ice.times[0], sstopo=topo)
 
         esl = 0                 # Equivalent sea level assumed to start at 0.
 
@@ -433,39 +142,40 @@ class GiaSimGlobal(object):
             if topo is not None:
                 # Get index for starting time.
                 nta = observerDict['eslUpl'].locateByTime(ta)
-                # Collect the topography at the beginning of the step.
-                Ta = observerDict['topo'].array[nta] + iceb - icea
+                # Collect the solid-surface topography at beginning of step.
+                Ta = observerDict['sstopo'].array[nta]
 
-                # Make the ocean volume change based on the ice change.
-                dM = (iceb - icea) * DENICE/DENSEA
-                dhwBarI = sealevelChangeByMelt(-grid.integrate(dM, km=False), 
-                            Ta, grid)
-                dhwI = volumeChangeLoad(dhwBarI, Ta)
+                # Redistribute the ocean by change in ocean floor / surface.
+                upla = observerDict['eslUpl'].array[nta]
+                uplb = observerDict['eslUpl'].array[nta+1]
+                geoa = observerDict['eslGeo'].array[nta]
+                geob = observerDict['eslGeo'].array[nta+1]
+                dU = self.harmTrans.spectogrd(uplb-upla)
+                dG = self.harmTrans.spectogrd(geob-geoa)
+                dhwBarU = sealevelChangeByUplift(dU-dG, Ta, grid)
+                dhwU = oceanUpliftLoad(dhwBarU, Ta, dU-dG)
 
-                # First correction to topography is applied.
-                Tb = Ta - dhwBarI
+                # Update the solid-surface topography with uplift / geoid.
+                Tb = Ta + dU - dG - dhwBarU
+                esl += dhwBarU
+                dLoad = dhwU
+                dwLoad = dhwU                       # Save the water load
+
+                # Redistribute ice, consistent with current floating ice. 
+                dILoad, dhwBarI = floatingIceRedistribute(icea, iceb, Tb, grid,
+                                                            DENICE/DENSEA)
+
+                # Combine loads from ocean changes and ice volume changes.
+                dLoad += dILoad
                 esl += dhwBarI
+                dwLoad += volumeChangeLoad(dhwBarI, Tb+DENICE/DENSEA*iceb)
+                Tb -= dhwBarI
+                
 
-                # First load is ice change and melt change.
-                dLoad = dM + dhwI
-
+                # Calculate instantaneous (elastic and gravity) responses to
+                # the load shift and redistribute ocean accordingly.
+                # Note: WE DO NOT CURRENTLY RECHECK FOR FLOATING ICE LOADS.
                 if eliter:
-                    # Redistribute ocean by change in ocean floor.
-                    upla = observerDict['eslUpl'].array[nta]
-                    uplb = observerDict['eslUpl'].array[nta+1]
-                    geoa = observerDict['eslGeo'].array[nta]
-                    geob = observerDict['eslGeo'].array[nta+1]
-                    dU = self.harmTrans.spectogrd(uplb-upla)
-                    dG = self.harmTrans.spectogrd(geob-geoa)
-                    dhwBarU = sealevelChangeByUplift(dU-dG, Tb, grid)
-                    dhwU = oceanUpliftLoad(dhwBarU, Tb, dU-dG)
-
-                    # Correct topography and load with uplift.
-                    Tb = Tb + dU - dG - dhwBarU
-                    esl += dhwBarU
-                    dLoad = dLoad + dhwU
-                    dhwI += dhwU
-
                     # Get elastic and geoid response to the water load.
                     elResp, geoResp = earth.getResp(0.0)[np.meshgrid(ns,[0,4])]
                     elResp *= 1e-2
@@ -486,37 +196,38 @@ class GiaSimGlobal(object):
                     Tb = Tb + dUel - dhwBarUel
                     esl += dhwBarUel
                     dLoad = dLoad + dhwUel
-                    dhwI += dhwUel
+                    dwLoad += dhwUel
 
-                # Iterate elastic responses until they are sufficiently small.
-                for i in range(eliter):
-                    # Need to save elasticuplift  and geoid  at each iteration to
-                    # compare to previous steps for convergence.
-                    dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
-                                self.harmTrans.grdtospec(dhwUel))
-                    dGelp = self.harmTrans.spectogrd(DYNEperM*geoResp*\
-                                self.harmTrans.grdtospec(dhwUel))
+                    # Iterate elastic responses until they are sufficiently small.
+                    for i in range(eliter):
+                        # Need to save elasticuplift  and geoid  at each iteration to
+                        # compare to previous steps for convergence.
+                        dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
+                                    self.harmTrans.grdtospec(dhwUel))
+                        dGelp = self.harmTrans.spectogrd(DYNEperM*geoResp*\
+                                    self.harmTrans.grdtospec(dhwUel))
 
-                    dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, Tb, grid)
-                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp-dGelp)
+                        dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, Tb, grid)
+                        dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp-dGelp)
 
-                    # Correct topography
-                    Tb = Tb + dUelp - dGelp - dhwBarUel
-                    esl += dhwBarUel
-                    dLoad = dLoad + dhwUel
-                    dhwI += dhwUel
+                        # Correct topography
+                        Tb = Tb + dUelp - dGelp - dhwBarUel
+                        esl += dhwBarUel
+                        dLoad = dLoad + dhwUel
+                        dwLoad += dhwUel
 
-                    if np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel)) <= 1e-2:
-                        break
-                    else:
-                        dUel = dUel + dUelp
-                        dGel = dGel + dGelp
-                        continue
+                        if np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel)) <= 1e-2:
+                            break
+                        else:
+                            dUel = dUel + dUelp
+                            dGel = dGel + dGelp
+                            continue
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
-                    o.loadStageUpdate(tb, dLoad=dLoad, topo=Tb, esl=esl,
-                                        dwLoad=dhwI, rsl=Tb-iceb)
+                    o.loadStageUpdate(tb, dLoad=dLoad, 
+                                      topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
+                                      esl=esl, dwLoad=dwLoad, sstopo=Tb)
 
             else:
                 dLoad = (iceb-icea)*DENICE/DENSEA
@@ -694,64 +405,6 @@ class HeightObserver(AbstractGiaSimObserver):
             return
         n = self.locateByTime(tout)
         self.array[n] = load
-
-
-class LoadObserver(AbstractGiaSimObserver):
-    def __init__(self, outTimes, iceShape):
-        self.initialize(outTimes, iceShape)
-
-    def initialize(self, outTimes, iceShape):
-        self.array = np.zeros((len(outTimes), 
-                                iceShape[0], iceShape[1]))
-        self.outTimes = outTimes
-
-    def loadStageUpdate(self, tout, **kwargs):
-        if 'dLoad' in kwargs.keys():
-            self.update(tout, kwargs['dLoad'])
-
-    def update(self, tout, load):
-        if tout not in self.outTimes:
-            return
-        n = self.locateByTime(tout)
-        self.array[n] = load
-
-class WaterLoadObserver(AbstractGiaSimObserver):
-    def __init__(self, outTimes, iceShape):
-        self.initialize(outTimes, iceShape)
-
-    def initialize(self, outTimes, iceShape):
-        self.array = np.zeros((len(outTimes), 
-                                iceShape[0], iceShape[1]))
-        self.outTimes = outTimes
-
-    def loadStageUpdate(self, tout, **kwargs):
-        if 'dwLoad' in kwargs.keys():
-            self.update(tout, kwargs['dwLoad'])
-
-    def update(self, tout, load):
-        if tout not in self.outTimes:
-            return
-        n = self.locateByTime(tout)
-        self.array[n] = load
-
-class TopoObserver(AbstractGiaSimObserver):
-    def __init__(self, outTimes, shape):
-        self.initialize(outTimes, shape)
-
-    def initialize(self, outTimes, shape):
-        self.array = np.zeros((len(outTimes), 
-                                shape[0], shape[1]))
-        self.outTimes = outTimes
-
-    def loadStageUpdate(self, tout, **kwargs):
-        if 'topo' in kwargs.keys():
-            self.update(tout, kwargs['topo'])
-
-    def update(self, tout, topo):
-        if tout not in self.outTimes:
-            return
-        n = self.locateByTime(tout)
-        self.array[n] = topo
 
 class EslObserver(AbstractGiaSimObserver):
     def __init__(self, outTimes):

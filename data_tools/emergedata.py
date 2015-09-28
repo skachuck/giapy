@@ -11,23 +11,23 @@ from .abstractDataClasses import AbsGeoTimeSeries, AbsGeoTimeSeriesContainer
 from .. import timestamp
 
 
-def calcEmergence(sim, emergedata, smooth=True):
+def calcEmergence(sim, emergedata, smooth=True, noise=0):
     #TODO This function shouldn't have to know what's inside any object, let
     # alone a complicated one, like sim. Consider calculating rsl first and
     # passing it and calculated times in (ts, rsl, emergedata).
     # To reference to present day
     #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
-    u0 = sim['rsl'][-1]
+    u0 = sim['sstopo'][-1]
 
     uAtLocs = []
-    for ut in sim['rsl']:
+    for ut in sim['sstopo']:
         ut = u0 - ut
         interpfunc = sim.inputs.grid.create_interper(ut.T)
         uAtLocs.append(interpfunc.ev(emergedata.lons, emergedata.lats))
 
     uAtLocs = np.array(uAtLocs).T
 
-    calcTimes = sim['rsl'].outTimes
+    calcTimes = sim['sstopo'].outTimes
     if np.all(np.diff(calcTimes)<0):
         reverse = True
     else:
@@ -44,11 +44,15 @@ def calcEmergence(sim, emergedata, smooth=True):
         if reverse:
             timeseries = np.array([ts, 
                     np.interp(ts, 
-                                sim['rsl'].outTimes[::-1], uAtLoc[::-1])]).T
+                                sim['sstopo'].outTimes[::-1], uAtLoc[::-1])]).T
         else:
             timeseries = np.array([ts, 
                     np.interp(ts, 
-                                sim['rsl'].outTimes, uAtLoc)]).T
+                                sim['sstopo'].outTimes, uAtLoc)]).T
+
+        #Apply the noise (default 0)
+        scatter = noise*np.random.randn(len(timeseries[:,1]))
+        timeseries[:,1] = timeseries[:,1] + scatter
         data[loc.recnbr] = EmergeDatum(timeseries, 
                                         lat=loc.lat, 
                                         lon=loc.lon,

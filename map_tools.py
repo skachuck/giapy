@@ -278,6 +278,9 @@ def oceanUpliftLoad(h, Ta, upl):
 
 def sealevelChangeByUplift(upl, topo, grid):
 
+    if np.all(upl==0):
+        return 0
+
     # Average ocean floor uplift, for initial guess.
     h0 = grid.integrate(upl*(topo<0), km=False)/grid.integrate(topo<0, km=False)
 
@@ -304,6 +307,47 @@ def redistributeOcean(Ta, dM, dU, grid):
     dLoad = dM + dhwI + dhwU
 
     return dLoad, Tb
+
+
+def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
+    """Calculate load and topographic shift due to ice height changes.
+
+    Calculate the water-equivalent load changes due to changing from ice
+    heights I0 to I1 on a solid-surface topography (height of solid earth, NOT
+    ice, relative to sea level at t0) S0. The load accounts for the fact that
+    when ice is not grounded, it represents a neutral water load, and 
+    appropriately updates the 'groundedness' where necessary. 
+
+    The updated solid surface,            S1 = S0 - dhwBar.
+    Floating ice can be identified where  (S1 + denp*I1) < 0.
+    Topography (to top of ice) is         T1 = S1 + I1*(S1 + denp*I1 >= 0).
+
+    Parameters
+    ----------
+    I0, I1 : np.ndarrays
+        Ice heights (from solid surface to top of ice) at times t0 and t1
+    S0 : np.ndarray
+        Solid surface topography (height of solid earth relative to sea level)
+        at t0.
+    grid : <GridObject>
+        The grid object assists with integration.
+    denp : float
+        The ratio of densities of ice and water (default = 0.9077). Used it
+        transforming ice heights to equivalent water heights.
+    """
+    
+    # Find the water-equivalent load change relative to sea level at t0.
+    dIwh = (np.maximum(0, S0+denp*I1) - np.maximum(0, S0+denp*I0))*\
+        ((S0+denp*I0>=0) + (S0+denp*I1>=0)) # Only where ice for either
+                                          # stage are not floating at t0.
+                    
+    # The change in water volume of the ocean.
+    dVo = -grid.integrate(dIwh, km=False)
+                                                   
+    dhwBar = sealevelChangeByMelt(dVo, S0+denp*I1, grid)
+    dLoad = dIwh + volumeChangeLoad(dhwBar, S0+denp*I1)
+                                                                                  
+    return dLoad, dhwBar
 
 
 

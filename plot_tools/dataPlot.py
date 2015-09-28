@@ -19,7 +19,7 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
     datamax = np.mean(np.abs(ses)) + np.std(np.abs(ses))
     datamag = np.floor(np.log10(datamax))
     vmax = (10**datamag)*np.maximum(
-            np.floor(datamax/(10**datamag)/2), 1.)
+            np.floor(datamax/(10**datamag))*2, 1.)
     vmin=-vmax
 
 
@@ -41,11 +41,12 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
     # If scaling point size by number of points, add a label.
     if numPts is not None:
         samplept = int(5*10**(np.floor(np.log10(max(numPts)))-1))
+        smaplept = np.floor((max(numPts) + min(numPts))/2)
         basemap.scatter([0.05], [0.1], c='k', alpha=0.75, 
                         s=500*samplept/float(max(numPts)),
                         vmin=vmin, vmax=vmax, ax=ax,
                         edgecolor='None', transform=ax.transAxes)
-        ax.text(0.065, 0.1, '- {0:d} observations at site'.format(samplept),
+        ax.text(0.065, 0.05, '- {0:d} observations at site'.format(samplept),
             transform=ax.transAxes, va='center', fontsize=12)
 
     return ax
