@@ -12,7 +12,7 @@ try:
 except:
     pass
 
-from .map_tools import GridObject, redistributeOcean, sealevelChangeByMelt,\
+from .map_tools import GridObject, sealevelChangeByMelt,\
                     volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
                     floatingIceRedistribute
 

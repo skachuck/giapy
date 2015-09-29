@@ -241,8 +241,22 @@ def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
 
 
 def volumeChangeLoad(h, topo):
-    """Computes ocean depth changes for a topographic lowering of h, consistent 
-    with sloping topographies."""
+    """Compute ocean depth changes for a topographic shift h, consistent with
+    sloping topographies.
+    
+    Parameters
+    ----------
+    h : float
+        The topographic shift.
+    topo : np.ndarray
+        The topography to shift. (Altered topography is T - h)
+
+    Returns
+    -------
+    hw : np.ndarray
+        An array with shape topo.shape whose maximum magnitude is h, with
+        decreasing magnitudes along slopes newly submerged or uncovered.
+    """
 
     if h > 0:
         hw = (h - np.maximum(0, topo)) * (h > topo)
@@ -260,53 +274,99 @@ def sealevelChangeByMelt(V, topo, grid):
     generally change the volume of the ocean by more (less) than with a
     'bathtub' ocean model. This function uses a Newton method with an initial
     guess based on the 'bathtub' model.
+
+    Parameters
+    ----------
+    V : float
+        The volume by which to alter the ocean.
+    topo : np.ndarray
+        The topography to alter.
+    grid : <GridObject>
+        The grid object assists with integration.
+    
+    Returns
+    -------
+    h : float
+        The topographic shift consistent with changing / sloping coastlines.
+        Note that the new topography after this shift is T - h.
     """
     if V == 0:
         return 0
     # Get first guess of eustatic h.
     h0 = V / grid.integrate(topo < 0, km=False)
 
+    # Use scipy.optimize.root to minimize volume difference.
     Vexcess = lambda h: V - grid.integrate(volumeChangeLoad(h, topo), km=False)
     h = root(Vexcess, h0)
 
     return h['x'][0]
 
 def oceanUpliftLoad(h, Ta, upl):
+    """Compute ocean depth changes for a topographic shift h, consistent with
+    sloping topographies.
+
+    Note that the resultant topography is Tb = Ta + upl - h.
+
+    
+    Parameters
+    ----------
+    h : float
+        The topographic shift.
+    Ta : np.ndarray
+        The topography to shift.     
+    upl : np.ndarray
+        The uplift additionally shifting the topography. Note that uplift and
+        geoid affect sea level oppositely (opposite sign).
+
+    Returns
+    -------
+    hw : np.ndarray
+        An array with shape topo.shape whose maximum magnitude is h, with
+        decreasing magnitudes along slopes newly submerged or uncovered.
+
+    """
+    # The new topography
     Tb = Ta + upl - h
+    #               Newly submerged.            Newly emerged.
     hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Ta*(Tb>0)*(Ta<0)
     return hw
 
 def sealevelChangeByUplift(upl, topo, grid):
+    """Find the topographic lowering that alters the ocean's volume by V.
 
+    Because of changing coastlines, a eustatic increase (decrease) of h will
+    generally change the volume of the ocean by more (less) than with a
+    'bathtub' ocean model. This function uses a Newton method with an initial
+    guess based on the 'bathtub' model.
+
+    Parameters
+    ----------
+    upl : np.ndarray
+        The uplift additionally shifting the topography.Note that uplift and
+        geoid affect sea level oppositely (opposite sign).
+    topo : np.ndarray
+        The topography to alter.
+    grid : <GridObject>
+        The grid object assists with integration.
+    
+    Returns
+    -------
+    h : float
+        The topographic shift consistent with changing / sloping coastlines.
+        Note that the new topography after this shift is T + upl - h.
+        Techincally, upl = uplift - geoid.
+    """
     if np.all(upl==0):
         return 0
 
     # Average ocean floor uplift, for initial guess.
     h0 = grid.integrate(upl*(topo<0), km=False)/grid.integrate(topo<0, km=False)
 
-    # 
+    # Use scipy.optimize.root to minimize volume difference..
     Vexcess = lambda h: grid.integrate(oceanUpliftLoad(h, topo, upl), km=False)
     h = root(Vexcess, h0)
 
     return h['x'][0]
-
-def redistributeOcean(Ta, dM, dU, grid):
-    # Change volume of ocean by dM (meltwater in- or outflux)
-    heI = sealevelChangeByMelt(-grid.integrate(dM, km=False), Ta, grid)
-    if heI == 0:
-        dhwI = 0
-    else:
-        dhwI = volumeChangeLoad(heI, Ta)
-    Tb = Ta-heI                             # Intermediate topography.
-
-    # Redistribute the ocean based on new uplift.
-    heU = sealevelChangeByUplift(dU, Tb, grid)
-    Tb = Tb + dU - heU
-    dhwU = oceanUpliftLoad(heU, Tb, dU)
-
-    dLoad = dM + dhwI + dhwU
-
-    return dLoad, Tb
 
 
 def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
@@ -334,6 +394,14 @@ def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
     denp : float
         The ratio of densities of ice and water (default = 0.9077). Used it
         transforming ice heights to equivalent water heights.
+
+    Returns
+    -------
+    dLoad : np.ndarray
+        The total water load induced by ice height chagnes from I0 to I1,
+        taking into account floating ice and mass redistribution.
+    dhwBar : float
+        The topographic shift associated with the mass transfer.
     """
     
     # Find the water-equivalent load change relative to sea level at t0.
@@ -348,53 +416,3 @@ def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
     dLoad = dIwh + volumeChangeLoad(dhwBar, S0+denp*I1)
                                                                                   
     return dLoad, dhwBar
-
-
-
-
-#def rectifyMassBalance(wLoad0, wLoad1, topo, grid):
-#    """Calculate the ocean load change associated with a continental ice
-#    change.
-#    """
-#    # Calculate the current eustatic level
-#    Vequiv0 = grid.integrate(wLoad0, km=False)
-#    # 74 accounts for ESL equivalent of remaining present day ice.
-#    #TODO Generalize this.
-#    he = eustaticChangeByVolume(-Vequiv0, topo, grid) + 74
-#    if he == 0:
-#        hw = 0
-#    else:
-#        hw = eustaticChange(he, topo)
-#
-#    dLoad = wLoad1-wLoad0
-#    # Calculate the water equivalent volume of the ice change.
-#    dVequiv = grid.integrate(dLoad, km=False)
-#    # Calculate the eustatic change, consistent with changing shorelines.
-#    dhe = eustaticChangeByVolume(-dVequiv, topo-hw, grid)
-#    if dhe == 0:
-#        return dLoad
-#    # Get the ocean load of that eustatic change.
-#    dhw = eustaticChange(dhe, topo-hw)
-#    # Add it to the load and return.
-#    return dLoad + dhw
-
-def rectifyMassBalance(wLoad0, wLoad1, upl0, upl1, topo, grid):
-    # Calculate topography and esl at t0.
-    topop = topo + upl0 + wLoad0            # Topographic changes.
-    Vequiv0 = grid.integrate(wLoad0, km=False)
-    he = eustaticChangeByVolume(-Vequiv0, topop, grid) + 74
-    if he == 0:
-        hw = 0
-    else:
-        hw = eustaticChange(he, topop)
-    topop -= hw                             # Topography refelcts eustasy.
-
-    dLoad = wLoad1 - wLoad0
-    dUpl = upl1 - upl0
-    dVequiv = grid.integrate(dLoad, km=False)
-    dhe = eustaticChangeByVolume(-dVequiv, topop, grid, dUpl)
-    if dhe == 0:
-        return dLoad
-    dhw = eustaticChange(dhe, topop, dUpl)
-    return dLoad + dhw
-
