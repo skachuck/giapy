@@ -439,6 +439,8 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
                                                 width=7)
     print(s)
 
+    #TODO allow limiting by time.
+
     for i, stage in enumerate(ice):
         s = '{num:{align}{width}{base}}  '.format(num=ice.times[i], align='<',
                                                     width=7, base='.2f')

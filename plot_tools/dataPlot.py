@@ -42,7 +42,7 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
     if numPts is not None:
         samplept = int(5*10**(np.floor(np.log10(max(numPts)))-1))
         smaplept = np.floor((max(numPts) + min(numPts))/2)
-        basemap.scatter([0.05], [0.1], c='k', alpha=0.75, 
+        basemap.scatter([0.05], [0.05], c='k', alpha=0.75, 
                         s=500*samplept/float(max(numPts)),
                         vmin=vmin, vmax=vmax, ax=ax,
                         edgecolor='None', transform=ax.transAxes)
