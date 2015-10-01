@@ -405,9 +405,7 @@ def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
     """
     
     # Find the water-equivalent load change relative to sea level at t0.
-    dIwh = (np.maximum(0, S0+denp*I1) - np.maximum(0, S0+denp*I0))*\
-        ((S0+denp*I0>=0) + (S0+denp*I1>=0)) # Only where ice for either
-                                          # stage are not floating at t0.
+    dIwh = np.maximum(0, S0+denp*I1) - np.maximum(0, S0+denp*I0)
                     
     # The change in water volume of the ocean.
     dVo = -grid.integrate(dIwh, km=False)
