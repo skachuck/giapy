@@ -55,11 +55,21 @@ class EarthParams(object):
     """Store and interpolate Earth's material parameters.
 
     Uses PREM (Dziewonski & Anderson 1981) for density and elastic parameters.
-    If visArray is None, assumes a uniform 1e21 Pa s mantle.
 
-    visArray should be a 2xN array or depths and viscosities.
+    Parameters
+    ----------
+    visArray : np.ndarray
+        The array of depths and viscosities (in poise, 1e-1 Pa s). If visArray
+        is None, assumes a uniform 1e21 Pa s mantle. visArray should be a 2xN 
+        array or depths and viscosities. Can be changed later using 
+        EarthParams.addViscosity.
+
+    D : float
+        The flexural rigidity of the lithosphere (in N). Can be changed later
+        using EarthParams.addLithosphere (with either D, the flexural rigidity,
+        or H, the elastic thickness of the lithospehre).
     """
-    def __init__(self, visArray=None):        
+    def __init__(self, visArray=None, D=0):        
         self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
         
         self.norms = {'r'  :     6.371e+8 ,     # cm
@@ -109,7 +119,7 @@ class EarthParams(object):
         self.addViscosity(visArray)
 
         # Flexural rigidity is assumed 0 (no lithosphere)
-        self.D = 0
+        self.D = D
 
     def __call__(self, z, depth=False):
         return self.getParams(z, depth)
