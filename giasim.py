@@ -37,7 +37,7 @@ class GiaSimGlobal(object):
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
     def performConvolution(self, out_times=None, ntrunc=None, topo=None,
-                            verbose=False, eliter=5):  
+                            verbose=False, eliter=5, nrem=1):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -57,7 +57,7 @@ class GiaSimGlobal(object):
         DENSEA      = 1.029          # g/cc
         GSURF       = 982.2          # cm/s^2
         DYNEperM    = DENSEA*GSURF*1e2
-        NREM        = 1              # number of intermediate steps
+        NREM        = nrem           # number of intermediate steps
 
 
         earth = self.earth
@@ -73,7 +73,10 @@ class GiaSimGlobal(object):
                                                 # (ntrunc+1)*(ntrunc+2)/2.
         
         # Store out_times
-        out_times = out_times or self.out_times
+        if out_times is None:
+            out_times = self.out_times
+        else:
+            out_times = out_times
         self.out_times = out_times
         if out_times is None:
            raise ValueError('out_times is not set')
@@ -134,11 +137,9 @@ class GiaSimGlobal(object):
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
-        i=0     # i counts loop number for ProgressBar.
         for icea, ta, iceb, tb in ice.pairIter():
-            # Find ice change between stages.
-
-            # Take/put water equiv ice change from/into ocean as water un/load.
+            # Determine the water load redistribution for ice, uplift, and
+            # geoid changes between ta and tb,
             if topo is not None:
                 # Get index for starting time.
                 nta = observerDict['eslUpl'].locateByTime(ta)
@@ -331,6 +332,7 @@ class AbstractGiaSimObserver(object):
 class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
     def __init__(self, outTimes, ntrunc, ns):
         self.initialize(outTimes, ntrunc, ns)
+
     def initialize(self, outTimes, ntrunc, ns):
         self.array = np.zeros((len(outTimes), 
                                 (ntrunc+1)*(ntrunc+2)/2), dtype=complex)
