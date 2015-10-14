@@ -216,7 +216,10 @@ class GiaSimGlobal(object):
                         dLoad = dLoad + dhwUel
                         dwLoad += dhwUel
 
-                        if np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel)) <= 1e-2:
+                        percChange = np.mean(np.abs(dUelp-dGelp))/\
+                                     np.mean(np.abs(dUel-dGel))
+
+                        if  percChange <= 1e-2:
                             break
                         else:
                             dUel = dUel + dUelp
