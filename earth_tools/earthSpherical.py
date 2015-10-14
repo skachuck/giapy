@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.interpolate import interp1d
-from progressbar import ProgressBar, Bar, Percentage
 import cPickle as pickle
 
 from .earthIntegrator import SphericalEarthOutput, SphericalEarthShooter,\
@@ -63,7 +62,7 @@ class SphericalEarth(object):
     def setDesc(self, string):
         self._desc = string 
             
-    def calcResponse(self, zarray, nmax=100, nstart=None, prog_track=False):
+    def calcResponse(self, zarray, nmax=100, nstart=None):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
         
@@ -73,11 +72,7 @@ class SphericalEarth(object):
             nstart = self.nmax
 
         respArray = []
-        if prog_track:
-            pbar = ProgressBar(widgets=['Earth progress: ',  Bar(), Percentage()])
-        else:
-            pbar = lambda x: x
-        for n in pbar(range(nstart, nmax+1)):
+        for n in range(nstart, nmax+1):
             out = self.timeEvolve(n, zarray, nstart)
             respArray.append(out.outArray)
 
@@ -87,6 +82,8 @@ class SphericalEarth(object):
             # Append n=0 zero response
             self.respArray = np.r_[np.zeros((1,out.outArray.shape[0],
                                     out.outArray.shape[1])), respArray]
+        else:
+            self.respArray = np.r_[self.respArray, respArray]
 
 
         self.times = out.times / 3.1536e10  # convert to thousand years

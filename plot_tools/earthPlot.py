@@ -7,6 +7,8 @@ def plotViscDecay(earth, ax=None, nmin=1, nmax=-1, nskip=1,
     ax.set_xscale('log')
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
+    ax.set_xlabel('Time (ka)')
+    ax.set_ylabel('Remaining viscous displacement (m)')
     paramSurf = earth.params.getParams(1.)
     rhog = paramSurf['den']*paramSurf['grav']
     if nmax == -1: nmax = earth.respArray.shape[0]
