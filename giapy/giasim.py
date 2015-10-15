@@ -159,8 +159,8 @@ class GiaSimGlobal(object):
                 # Update the solid-surface topography with uplift / geoid.
                 Tb = Ta + dU - dG - dhwBarU
                 esl += dhwBarU
-                dLoad = dhwU
-                dwLoad = dhwU                       # Save the water load
+                dLoad = dhwU.copy()
+                dwLoad = dhwU.copy()                # Save the water load
 
                 # Redistribute ice, consistent with current floating ice. 
                 dILoad, dhwBarI = floatingIceRedistribute(icea, iceb, Tb, grid,
