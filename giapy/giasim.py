@@ -153,8 +153,9 @@ class GiaSimGlobal(object):
                 geob = observerDict['eslGeo'].array[nta+1]
                 dU = self.harmTrans.spectogrd(uplb-upla)
                 dG = self.harmTrans.spectogrd(geob-geoa)
-                dhwBarU = sealevelChangeByUplift(dU-dG, Ta, grid)
-                dhwU = oceanUpliftLoad(dhwBarU, Ta, dU-dG)
+                dhwBarU = sealevelChangeByUplift(dU-dG, Ta+DENICE/DENSEA*icea, 
+                                                        grid)
+                dhwU = oceanUpliftLoad(dhwBarU, Ta+DENICE/DENSEA*icea, dU-dG)
 
                 # Update the solid-surface topography with uplift / geoid.
                 Tb = Ta + dU - dG - dhwBarU
@@ -191,8 +192,10 @@ class GiaSimGlobal(object):
                     dGel = self.harmTrans.spectogrd(DYNEperM*geoResp*\
                                 self.harmTrans.grdtospec(dLoad))
 
-                    dhwBarUel = sealevelChangeByUplift(dUel-dGel, Tb, grid)
-                    dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUel-dGel)
+                    dhwBarUel = sealevelChangeByUplift(dUel-dGel, 
+                                                        Tb+DENICE/DENSEA*iceb, grid)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, 
+                                                Tb+DENICE/DENSEA*iceb, dUel-dGel)
 
                     Tb = Tb + dUel - dhwBarUel
                     esl += dhwBarUel
@@ -201,15 +204,17 @@ class GiaSimGlobal(object):
 
                     # Iterate elastic responses until they are sufficiently small.
                     for i in range(eliter):
-                        # Need to save elasticuplift  and geoid  at each iteration to
-                        # compare to previous steps for convergence.
+                        # Need to save elasticuplift and geoid at each iteration
+                        # to compare to previous steps for convergence.
                         dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
                                     self.harmTrans.grdtospec(dhwUel))
                         dGelp = self.harmTrans.spectogrd(DYNEperM*geoResp*\
                                     self.harmTrans.grdtospec(dhwUel))
 
-                        dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, Tb, grid)
-                        dhwUel = oceanUpliftLoad(dhwBarUel, Tb, dUelp-dGelp)
+                        dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, 
+                                                            Tb+DENICE/DENSEA*iceb, grid)
+                        dhwUel = oceanUpliftLoad(dhwBarUel, 
+                                                    Tb+DENICE/DENSEA*iceb, dUelp-dGelp)
 
                         # Correct topography
                         Tb = Tb + dUelp - dGelp - dhwBarUel
