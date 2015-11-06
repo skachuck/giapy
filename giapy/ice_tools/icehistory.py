@@ -238,7 +238,7 @@ class IceHistory(object):
         self.Lat = self.Lat[::2**n,::2**n]
         self.shape = self.Lon.shape
 
-    def createAlterationAreas(self, grid, props, areaNames=None):
+    def createAlterationAreas(self, grid, props, areaNames=None, areaVerts=None):
         """Create alteration areas for proportional ice height changes.
 
         The area definitions and proportions are stored in two dictionaries, 
@@ -262,15 +262,22 @@ class IceHistory(object):
             A list of the area names to include. (Default None). If None,
             assumes all the areas in GlacierBounds.areaNames. See
             help(GlacierBounds) for more information about area names.
+        areaVerts : dict
+            A dictionary of area names (as keys) and lists of lon/lat vertices 
+            (as values). If defined, it is preferentially used over areaNames.
         """
         #TODO DO IT WITHOUT THE GRID OBJECT!
-        areaNames = areaNames or GlacierBounds.areaNames
+        if areaVerts is None:
+            areaNames = areaNames or areaNamesGlacierBounds.areaNames
+            # GlacierBounds.outputAsDict outputs  a dictionary of names, one for
+            # each area in areaNames, with the values the vertices of the area.
+            self.areaVerts = GlacierBounds.outputAsDict(areaNames)
+        else:
+            self.areaVerts = areaVerts
+            areaNames = areaVerts.keys()
         
         assert len(props) == len(areaNames)
 
-        # GlacierBounds.outputAsDict outputs  a dictionary of names, one for
-        # each area in areaNames, with the values the vertices of the area.
-        self.areaVerts = GlacierBounds.outputAsDict(areaNames)
         # The alteration mask is an lat/lon array mapping membership to a
         # glacier area to an integer, for fast area locating later on
         # (grid.selectArea is quite slow). The integer of each glacier is
