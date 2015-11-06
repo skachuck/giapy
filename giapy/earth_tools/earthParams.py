@@ -148,13 +148,26 @@ class EarthParams(object):
         """visArray is an 2xN array of depths zi and viscosities at those
            depths, in poise."""
         if etaStar is not None:
-            self.norms['eta']
+            self.norms['eta'] = etaStar
         visArray = np.asarray(visArray)
         visArray[1] /= self.norms['eta']        # Normalize viscosities
         self.alterColumn(6, visArray)
 
 
-    def addNonadiabatic(self, z, nonad):
+    def addNonadiabatic(self, nonad, normed=True):
+        """Introduce a nonadiabatic density gradient in the mantle.
+
+        Parameters
+        ----------
+        nonad : np.ndarray
+            A 2xN array of depths and nonadiabatic density gradients.
+            NOTE: must be in g/cc / cm (if normed=False) or
+                             g/cc / earth radii (if normed=True).
+        normed : boolean
+            Are the gradients already normalized to earth radii?
+        """
+        if not normed:
+            nonad[0] = nonad[0]*self.norms['r']
         self.alterColumn(5, nonad)
 
     def addLithosphere(self, D=None, H=None):
