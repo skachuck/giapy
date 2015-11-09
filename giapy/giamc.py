@@ -10,6 +10,105 @@ import numpy as np
 import time
 import sys
 
+from . import GITVERSION, timestamp
+
+def gen_metadatastr(metadatadict):
+    """Generate a string of line-separated metadata from a dictionary.
+
+    This string can be written onto the beginning of a results file to carry
+    around important information for the run (as defined by fields in
+    metadatadict). The first line of the string contains the number of lines of
+    the metadata (to ease automated reading in later). The function adds the
+    git hash of the current version of the code (GITVERSION) and the time of
+    metadata creation (timestamp).
+
+    Parameters
+    ----------
+    metadatadict : dict
+        Dictionary with metadata categories (keys) and values (values).
+
+    Results
+    -------
+    metadatastr : str
+        A string representation of the metadata dictionary, with keys and
+        values tab separated and successive entries line separated. The first
+        line contrains the number of lines following. 
+
+    Notes
+    -----
+    Some things of interest might be:
+        - ndim, nwalkers, nblobs (these are necessary for get_metadatadict to work)
+        - arguments (i.e., data, earth model, ice model areas)
+    """
+
+    metadatadict['GITVERSION'] = GITVERSION
+    metadatadict['timestamp'] = timestamp()
+
+    metadatastr = ''
+    linecount = 1
+
+    for key, value in metadatadict.iteritems():
+        metadatastr += '{0}\t{1}\n'.format(key, value)
+        linecount += 1
+
+    # Append the linecount to the beginning.
+    metadatastr = '{0}\n'.format(linecount) + metadatastr
+    
+    return metadatastr
+
+def get_metadatadict(fname):
+    """Retrieve the metadata from an MCMC result as a dictionary.
+
+    Parameters
+    ----------
+    fname : str
+        The file path of the MCMC result. The first line of the file must be
+        the number of lines of metadata.
+
+    Results
+    -------
+    metadatadict : dict
+        A dictionary of the metadata.
+
+    """
+    with open(fname, 'r') as f:
+        metadatadict = {}
+        linecount = f.readline()
+        for i in range(linecount):
+            key, val = f.readline().split('\t')
+            metadatadict[key] = val
+
+    try:
+        metadatadict['ndim'] = int(metadatadict['ndim'])
+        metadatadict['nwalkers'] = int(metadatadict['nwalkers'])
+        metadatadict['nblobs'] = int(metadatadict['nblobs'])
+    except KeyError:
+        pass
+
+    return metadatadict
+
+
+def readMCMCresult(fname, metadata=False):
+    """Read in a saved MCMC result.
+
+    Returns an array of samples, blobs, and (if metadata is True) the metadata.
+    """
+    metadatadict = get_metadata(fname)
+
+    fulloutput = np.loadtxt(fname, skiprows=linecount)
+    fulloutput = fulloutput.reshape((-1, nwalkers, ndim+2+nblobs))
+    fulloutput = fulloutput.transpose([1,0,2])
+
+    probs = fulloutput[:,:,0]
+    samples = fulloutput[:,:,1:1+ndim]
+    blobs = fulloutput[:,:,1+ndim:1+ndim+nblobs]
+
+    if metadata:
+        return probs, samples, blobs, metadata
+    else:
+        return probs, samples, blobs
+    
+
 def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, verbose=False):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
