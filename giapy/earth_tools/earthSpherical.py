@@ -45,6 +45,8 @@ class SphericalEarth(object):
 
     def __getstate__(self):
         odict = self.__dict__.copy()
+        if getattr(self, 'relaxer', None):
+            del odict['relaxer']
         del odict['respInterp']
         return odict
 

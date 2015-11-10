@@ -10,6 +10,7 @@ import numpy as np
 import time
 import sys
 
+<<<<<<< HEAD
 from . import GITVERSION, timestamp
 
 def gen_metadatastr(metadatadict):
@@ -108,6 +109,26 @@ def readMCMCresult(fname, metadata=False):
     else:
         return probs, samples, blobs
     
+=======
+def uniform_lnprior(params, lower, upper):
+    """For boxcar (uniform) prior in range, return 0 in range, -np.inf outside.
+
+    Parameters
+    ----------
+    params : float or np.ndarray
+        The parameter (or list of parameters) drawn from a uniform probability.
+    lower  : float or np.ndarray
+    upper  : float or np.ndarray
+        The lower and upper bounds of the parameter(s). Must have same shape as
+        params.
+    """
+    assert np.asarray(params).shape == np.asarray(upper).shape ==\
+        np.asarray(lower).shape, 'Input shapes incompatible.' 
+
+    if np.all(np.logical_and( lower < params, params < upper)): 
+        return 0.0
+    return -np.inf
+>>>>>>> 74aabf502515a46b020bc9dab4be71953651e003
 
 def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, verbose=False):
     """Iteratively sample and store from an emcee Sampler starting at pos.
