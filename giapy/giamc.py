@@ -10,7 +10,6 @@ import numpy as np
 import time
 import sys
 
-<<<<<<< HEAD
 from . import GITVERSION, timestamp
 
 def gen_metadatastr(metadatadict):
@@ -95,6 +94,7 @@ def readMCMCresult(fname, metadata=False):
     Returns an array of samples, blobs, and (if metadata is True) the metadata.
     """
     metadatadict = get_metadata(fname)
+    linecount = metadatadict['linecount']
 
     fulloutput = np.loadtxt(fname, skiprows=linecount)
     fulloutput = fulloutput.reshape((-1, nwalkers, ndim+2+nblobs))
@@ -109,7 +109,6 @@ def readMCMCresult(fname, metadata=False):
     else:
         return probs, samples, blobs
     
-=======
 def uniform_lnprior(params, lower, upper):
     """For boxcar (uniform) prior in range, return 0 in range, -np.inf outside.
 
@@ -128,9 +127,9 @@ def uniform_lnprior(params, lower, upper):
     if np.all(np.logical_and( lower < params, params < upper)): 
         return 0.0
     return -np.inf
->>>>>>> 74aabf502515a46b020bc9dab4be71953651e003
 
-def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, verbose=False):
+def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, 
+                verbose=False):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
     If the output file exists, the results are appended. If not, it is created.
