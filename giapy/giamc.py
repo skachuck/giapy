@@ -73,10 +73,11 @@ def get_metadatadict(fname):
     """
     with open(fname, 'r') as f:
         metadatadict = {}
-        linecount = f.readline()
-        for i in range(linecount):
-            key, val = f.readline().split('\t')
-            metadatadict[key] = val
+        linecount = int(f.readline())
+        for i in range(linecount-1):
+            line = f.readline().replace('\n','').split('\t')
+            metadatadict[line[0]] = line[1]
+        metadatadict['linecount'] = int(linecount)
 
     try:
         metadatadict['ndim'] = int(metadatadict['ndim'])
@@ -93,16 +94,20 @@ def readMCMCresult(fname, metadata=False):
 
     Returns an array of samples, blobs, and (if metadata is True) the metadata.
     """
-    metadatadict = get_metadata(fname)
+    metadatadict = get_metadatadict(fname)
     linecount = metadatadict['linecount']
+
+    nwalkers = metadatadict['nwalkers'] 
+    ndim     = metadatadict['ndim']
+    nblobs   = metadatadict['nblobs']
 
     fulloutput = np.loadtxt(fname, skiprows=linecount)
     fulloutput = fulloutput.reshape((-1, nwalkers, ndim+2+nblobs))
     fulloutput = fulloutput.transpose([1,0,2])
 
-    probs = fulloutput[:,:,0]
-    samples = fulloutput[:,:,1:1+ndim]
-    blobs = fulloutput[:,:,1+ndim:1+ndim+nblobs]
+    probs = fulloutput[:,:,1]
+    samples = fulloutput[:,:,2:2+ndim]
+    blobs = fulloutput[:,:,2+ndim:2+ndim+nblobs]
 
     if metadata:
         return probs, samples, blobs, metadata
