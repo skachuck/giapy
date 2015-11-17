@@ -426,7 +426,7 @@ class PersistentIceHistory(IceHistory):
 
 
 
-def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
+def printMW(ice, grid, areaVerts=None, areaNames=None, oceanarea=3.61e8):
     """Print equivalent meters meltwater for the glaciers.
 
     Parameters
@@ -437,11 +437,13 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
         default = 3.14e8 km^2, current area.
     """
     
-    areaNames = areaNames or GlacierBounds.areaNames
-    areas = GlacierBounds.outputAsList(areaNames)
+    if areaVerts is None:
+        assert areaNames, 'need to specify areaVerts or areaNames'
+        areaNames = areaNames or GlacierBounds.areaNames
+        areaVerts = GlacierBounds.outputAsDict(areaNames)
         
     s = ''
-    for column in ['ka BP']+areaNames+[' Total']:
+    for column in ['ka BP']+areaVerts.keys()+[' Total']:
         s += '{column:{align}{width}} '.format(column=column, align='^',
                                                 width=7)
     print(s)
@@ -452,8 +454,8 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
         s = '{num:{align}{width}{base}}  '.format(num=ice.times[i], align='<',
                                                     width=7, base='.2f')
         # Get the glacier volumes by integrating on the grid.
-        vols = grid.integrateAreas(stage, areas)
-        for area in vols:
-            s += '{num:{align}{width}{base}} '.format(num=area['vol']/oceanarea, 
+        vols = grid.integrateAreas(stage, areaVerts)
+        for area in areaVerts.keys()+['whole']:
+            s += '{num:{align}{width}{base}} '.format(num=vols[area]/oceanarea, 
                                                         align='>', width=7, base='.3f')
         print(s)
