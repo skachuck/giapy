@@ -27,11 +27,35 @@ class OnlineSamplingCovariance(object):
         necessary to change this for a univariate distribution, only a
         convenience in calling it up later.
     """
-    def __init__(self, n=0, mean=0, m2n=0, univariate=False):
+    def __init__(self, m, n=0, mean=None, m2n=None):
         self.n = n
         self.mean = mean
         self.m2n = m2n
         self.univariate = univariate
+
+        if m > 1:
+            self.univariate = False
+        elif m == 1:
+            self.univariate = True
+        else:
+            raise ValueError('')
+
+        self.m = m
+
+        self.n = n
+        if mean is None and m2n is None:
+            if self.univariate:
+                self.mean = 0
+                self.m2n = 0
+            else:
+                self.mean = np.zeros(m)
+                self.m2n = np.zeros((m, m))
+        elif mean is not None and m2n is not None:
+            self.mean = mean
+            self.m2n = m2n
+        else:
+            raise ValueError('Specify mean and m2n or neither.')
+
         
     def update(self, x):
         """Update the covariance matrix with a newly sampled pt/vector.
@@ -72,7 +96,7 @@ class OnlineSamplingCovariance(object):
         n = self.n + other.n
         mean = (self.n*self.mean + other.n*other.mean)
         
-        if self.univariate:\
+        if self.univariate:
             m2n = self.m2n + other.m2n + (delta**2)*self.n*other.n
         else:
             m2n = self.m2n + other.m2n + np.outer(delta, delta)*self.n*other.n
@@ -85,4 +109,4 @@ class OnlineSamplingCovariance(object):
         if self.n < 2:
             return np.nan
         else:
-            return self.m2n/(self.n - 1)}
+            return self.m2n/(self.n - 1)

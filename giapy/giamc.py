@@ -133,8 +133,8 @@ def uniform_lnprior(params, lower, upper):
         return 0.0
     return -np.inf
 
-def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False, 
-                verbose=False):
+def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, 
+                verbose=False, resCov=None):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
     If the output file exists, the results are appended. If not, it is created.
@@ -188,9 +188,16 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, blobs=False,
             for param in step[0][k]:
                 output += '{0:f}\t'.format(param)
             # Write out the blobs, if asked to.
-            if blobs:
-                for blob in step[3][k]:
-                    output += '{0}\t'.format(blob)
+            if resCov is not None:
+                res = step[3][k][-resCov.m:]
+                blobs = step[3][k][:-resCov.m]
+                if not np.any(np.isnan(step[3][k])):
+                    resCov.update(res)
+            else:
+                blobs = step[3][k]
+
+            for blob in blobs:
+                output += '{0}\t'.format(blob)
             # End the line.
             output += '\n'
         # Dump the output.
