@@ -31,7 +31,6 @@ class OnlineSamplingCovariance(object):
         self.n = n
         self.mean = mean
         self.m2n = m2n
-        self.univariate = univariate
 
         if m > 1:
             self.univariate = False

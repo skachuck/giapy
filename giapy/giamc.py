@@ -9,6 +9,7 @@ giamc.py
 import numpy as np
 import time
 import sys
+import cPickle as pickle
 
 from . import GITVERSION, timestamp
 
@@ -174,6 +175,10 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         if verbose:
             sys.stdout.write(outmsg.format(i, nsteps))
             sys.stdout.flush()
+
+        if i < 100:
+            continue
+
         # For each step we create an output dump.
         output = ''
         # Iterate over the walkers.
@@ -191,8 +196,9 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
             if resCov is not None:
                 res = step[3][k][-resCov.m:]
                 blobs = step[3][k][:-resCov.m]
-                if not np.any(np.isnan(step[3][k])):
+                if np.isfinite(step[1][k]):
                     resCov.update(res)
+                    print('prob is {0}'.format(step[1][k]))
             else:
                 blobs = step[3][k]
 
@@ -203,6 +209,9 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         # Dump the output.
         with open(fname, 'a') as f:
             f.write(output)
+
+        if i%100 == 0:
+            pickle.dump(resCov, open(str(hash(fname))+'.p', 'w'), -1)
 
     if verbose:
         ttotal = time.time() - tstart
