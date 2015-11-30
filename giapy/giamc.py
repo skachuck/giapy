@@ -115,27 +115,52 @@ def readMCMCresult(fname, metadata=False):
     else:
         return probs, samples, blobs
     
-def uniform_lnprior(params, lower, upper):
-    """For boxcar (uniform) prior in range, return 0 in range, -np.inf outside.
+def make_uniform_lnprior(lower=None, upper=None):
+    """Generate a boxcar (uniform) prior between lower and upper bounds.
+    The function returns a normalized distribution if both bounds are finite,
+    an unnormalized distribution if either bound is missing.
 
     Parameters
     ----------
-    params : float or np.ndarray
-        The parameter (or list of parameters) drawn from a uniform probability.
     lower  : float or np.ndarray
     upper  : float or np.ndarray
         The lower and upper bounds of the parameter(s). Must have same shape as
         params.
     """
-    assert np.asarray(params).shape == np.asarray(upper).shape ==\
-        np.asarray(lower).shape, 'Input shapes incompatible.' 
+    assert lower is not None or upper is not None, \
+    'Must specifiy either lower or upper bound of uniform prior'
 
-    if np.all(np.logical_and( lower < params, params < upper)): 
-        return 0.0
-    return -np.inf
+    # Interpret input: making Nones into -np.inf or np.inf where necessary.
+    try:
+        if lower is None:
+            lower = np.repeat(-np.inf, len(upper))
+        if upper is None:
+            upper = np.repeat(np.inf, len(lower))
+    except:
+        lower = lower or -np.inf
+        upper = upper or np.inf
+
+    # If both lower and upper are specified (and therefore finite), we can
+    # create a normalized uniform distribution.
+    if np.all(np.isfinite(np.r_[lower, upper])):
+        lnvol = np.sum(np.log(1./(upper - lower)))
+    # Otherwise, assume the uniform dist is of order unity.
+    else:
+        lnvol = 0.0
+
+    def uniform_lnprior(params, *args, **kwargs):
+        assert np.asarray(params).shape == np.asarray(upper).shape ==\
+            np.asarray(lower).shape, 'Input shapes incompatible.' 
+
+        if np.all(np.logical_and( lower <= params, params <= upper)): 
+            return lnvol
+        else:
+            return -np.inf
+
+    return uniform_lnprior
 
 def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, 
-                verbose=False, resCov=None):
+                verbose=False, resCov=None, burnin=0, resCovDump=0):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
     If the output file exists, the results are appended. If not, it is created.
@@ -155,6 +180,18 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         If the sampler also returns predictive blobs to store (default False).
     verbose : bool
         If terminal feedback on calculation is desired (default False).
+    resCov : <giapy.numTools.stats.OnlineSamplingCovariance>
+        An updatable covariance object. Default None. If not None, it is
+        assumed the post-probability function of sampler outputs all residual
+        values as blobs after the actual blobs. The residuals are removed from
+        blobs before the sampled blobs are stored.
+    burnin : int
+        Number of steps of nsteps to take as burn-in (not stored). Note that
+        the number of written-out steps will be nsteps - burnin.
+    resCovDump : int
+        Number of steps at which to write save the covariance matrix out to a
+        file str(hash(filename))+'.p'. Default 0 means never to dump (can dump
+        after sampling from calling function).
     """
     # Check if the file exists and, if not,
     try:
@@ -176,7 +213,8 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
             sys.stdout.write(outmsg.format(i, nsteps))
             sys.stdout.flush()
 
-        if i < 100:
+        # If burning in, skip write-out.
+        if i < burnin:
             continue
 
         # For each step we create an output dump.
@@ -184,9 +222,6 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         # Iterate over the walkers.
         for k in range(step[0].shape[0]):
 
-            #f.write('{0:4d}\t{1:.5e}\t{2:s}\t{3:s}\n'
-            #.format(k, step[1][k], '\t'.join(step[0][k]),
-            #                       '\t'.join(step[3][k]))
             # Write the logProbability.
             output += '{0:d}\t{1:e}\t'.format(k, step[1][k])
             # Write out all parameters.
@@ -210,9 +245,10 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         with open(fname, 'a') as f:
             f.write(output)
 
-        if i%100 == 0:
+        if resCov is not None and resCovDump and i%resCovDump == 0:
             pickle.dump(resCov, open(str(hash(fname))+'.p', 'w'), -1)
 
+    # Post sampling message.
     if verbose:
         ttotal = time.time() - tstart
         if ttotal > 3600:
