@@ -49,7 +49,7 @@ def gen_metadatastr(metadatadict):
     linecount = 1
 
     for key, value in metadatadict.iteritems():
-        metadatastr += '{0}\t{1}\n'.format(key, value)
+        metadatastr += '{0}\t{1}\n'.format(key, str(value).replace('\n', '')
         linecount += 1
 
     # Append the linecount to the beginning.
@@ -233,7 +233,6 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
                 blobs = step[3][k][:-resCov.m]
                 if np.isfinite(step[1][k]):
                     resCov.update(res)
-                    print('prob is {0}'.format(step[1][k]))
             else:
                 blobs = step[3][k]
 
