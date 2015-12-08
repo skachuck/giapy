@@ -49,7 +49,7 @@ def gen_metadatastr(metadatadict):
     linecount = 1
 
     for key, value in metadatadict.iteritems():
-        metadatastr += '{0}\t{1}\n'.format(key, str(value).replace('\n', '')
+        metadatastr += '{0}\t{1}\n'.format(key, str(value).replace('\n', ''))
         linecount += 1
 
     # Append the linecount to the beginning.
@@ -160,7 +160,8 @@ def make_uniform_lnprior(lower=None, upper=None):
     return uniform_lnprior
 
 def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps, 
-                verbose=False, resCov=None, burnin=0, resCovDump=0):
+                verbose=False, resCov=None, burnin=0, resCovDump=0,
+                corrSkip=1):
     """Iteratively sample and store from an emcee Sampler starting at pos.
 
     If the output file exists, the results are appended. If not, it is created.
@@ -192,6 +193,9 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         Number of steps at which to write save the covariance matrix out to a
         file str(hash(filename))+'.p'. Default 0 means never to dump (can dump
         after sampling from calling function).
+    corrSkip : int
+        Number of samples to skip before writing out (to avoid correlated
+        samples during MCMC stepping).
     """
     # Check if the file exists and, if not,
     try:
@@ -214,7 +218,7 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
             sys.stdout.flush()
 
         # If burning in, skip write-out.
-        if i < burnin:
+        if i < burnin and i%corrSkip == 0:
             continue
 
         # For each step we create an output dump.
