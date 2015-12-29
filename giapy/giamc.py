@@ -218,7 +218,7 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
             sys.stdout.flush()
 
         # If burning in, skip write-out.
-        if i < burnin and i%corrSkip == 0:
+        if i < burnin and i%corrSkip != 0:
             continue
 
         # For each step we create an output dump.

@@ -421,7 +421,7 @@ class PersistentIceHistory(IceHistory):
             del altIce.areaProps[name]
             del altIce.areaVerts[name]
         # The alteration mask is zeroed.
-        altIce._alterationMask *= 0.
+        altIce._alterationMask *= 0
         return altIce
 
 
