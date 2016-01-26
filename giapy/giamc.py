@@ -111,7 +111,7 @@ def readMCMCresult(fname, metadata=False):
     blobs = fulloutput[:,:,2+ndim:2+ndim+nblobs]
 
     if metadata:
-        return probs, samples, blobs, metadata
+        return probs, samples, blobs, metadatadict
     else:
         return probs, samples, blobs
     

@@ -44,8 +44,8 @@ class OnlineSamplingCovariance(object):
         self.n = n
         if mean is None and m2n is None:
             if self.univariate:
-                self.mean = 0
-                self.m2n = 0
+                self.mean = 0.
+                self.m2n = 0.
             else:
                 self.mean = np.zeros(m)
                 self.m2n = np.zeros((m, m))
@@ -66,11 +66,11 @@ class OnlineSamplingCovariance(object):
         """
         delta = x - self.mean
         if self.univariate:
-            self.m2n += self.n/(self.n + 1.) * delta**2
+            self.m2n = self.m2n + self.n/(self.n + 1.) * delta**2
         else:
-            self.m2n += self.n/(self.n + 1.) * np.outer(delta, delta)
-        self.mean += delta/(self.n + 1)
-        self.n += 1
+            self.m2n = self.m2n + self.n/(self.n + 1.) * np.outer(delta, delta)
+        self.mean = self.mean + delta/(self.n + 1.)
+        self.n = self.n + 1
         
     def combine(self, other):
         """Combine two covariance matrices together into one.
