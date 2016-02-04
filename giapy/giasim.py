@@ -24,7 +24,7 @@ class GiaSimGlobal(object):
         self.earth = earth
         self.ice = ice
 
-        self.nlon, self.nlat = ice.shape
+        self.nlat, self.nlon = ice.shape
         
         # The grid used is a cylindrical projection (equispaced lat/lon grid
         # unless otherwise specified)

@@ -79,7 +79,7 @@ class IceHistory(object):
             self.Lon = trial[0]
             self.Lat = trial[1]
             self.shape = self.Lon.shape
-            self.nlat = len(np.union1d(ice.Lat.flatten(), ice.Lat.flatten()))
+            self.nlat = len(np.union1d(self.Lat.ravel(), self.Lat.ravel()))
             if shape is None: print('Shape assumed {0}'.format(self.shape))
         except ValueError as e:
             raise e
