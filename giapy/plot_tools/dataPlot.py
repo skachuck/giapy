@@ -51,12 +51,15 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
 
     return ax
 
-def plotLocTimeseries(data, calc, ax=None):
+def plotLocTimeseries(data, calc, ax=None, title=False, nbr=False):
     if ax is None:
         fig, ax = plt.subplots(1,1)
     ax.plot(data.ts, data.ys, marker='+', color='k', alpha=0.75,
             ms=15, ls='None')
     ax.plot(calc.ts, calc.ys)
-    ax.set_title(str(data))
+    if title:
+        ax.set_title(str(data))
+    elif nbr:
+        ax.set_title(data.recnbr)
     ax.invert_xaxis()
     return plt.gca()
