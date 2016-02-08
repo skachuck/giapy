@@ -84,7 +84,7 @@ class EarthParams(object):
                                                 # shear modulus.
         # Convert the bulk modulus to the first lame parameter.
         #TODO Do we want first lame parameter or bulk modulus?
-        prem[1:, 2] = prem[1:, 2]-2./3.*prem[1:, 3]
+        prem[1:, 2] = prem[1:, 2] - (2./3.*prem[1:, 3])
 
         # Create density gradient, g/cc.earthRadii
         dend = np.gradient(prem[1:,1])/np.gradient(z)

@@ -78,6 +78,7 @@ def integrateRelaxationScipy(f, out, atol=1e-6, rtol=1e-5):
     timeswrite = out.times
     dts = timeswrite[1:]-timeswrite[:-1]
 
+
     for dt in dts:
         r.integrate(r.t+dt)
         out.out(r.t, r.y[nz-1], r.y[2*nz-1], f)
@@ -180,13 +181,16 @@ class SphericalEarthOutput(object):
         is met.
         
     """
-    def __init__(self):
+    def __init__(self, times=None):
         secs_per_year = 3.1536e+7  # seconds in a year
-        self.times = secs_per_year*1e+3*\
-            np.array([0., 0.2, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 
+        if times is not None:
+            self.times = times[:]
+        else:
+            self.times = np.array([0., 0.2, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 
                       10., 12., 13., 14., 15., 16., 18., 21., 25., 30., 
-                      40., 50., 70., 90., 110., 130., 150.])
+                      40., 50., 70., 90., 110., 130., 150.])            
 
+        self.times = self.times*secs_per_year*1e+3
         #   Ue  Uv  Ve  Vv  phi1    g1  vels
         self.outArray = np.zeros((len(self.times), 7))
 

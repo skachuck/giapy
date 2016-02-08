@@ -64,7 +64,7 @@ class SphericalEarth(object):
     def setDesc(self, string):
         self._desc = string 
             
-    def calcResponse(self, zarray, nmax=100, nstart=None):
+    def calcResponse(self, zarray, nmax=100, nstart=None, times=None):
         """Calculate the response of the Earth to order numbers up to nmax.
         """
         
@@ -75,7 +75,7 @@ class SphericalEarth(object):
 
         respArray = []
         for n in range(nstart, nmax+1):
-            out = self.timeEvolve(n, zarray, nstart)
+            out = self.timeEvolve(n, zarray, nstart, times)
             respArray.append(out.outArray)
 
         respArray = np.array(respArray)
@@ -88,12 +88,12 @@ class SphericalEarth(object):
             self.respArray = np.r_[self.respArray, respArray]
 
 
-        self.times = out.times / 3.1536e10  # convert to thousand years
+        self.times = out.times / 3.1536e10  # convert back to thousand years
         self.nmax = nmax
         self.respInterp = interp1d(self.times, self.respArray, axis=1)
 
-    def timeEvolve(self, n, zarray, nstart=None):
-        out = SphericalEarthOutput()
+    def timeEvolve(self, n, zarray, nstart=None, times=None):
+        out = SphericalEarthOutput(times)
         
         if n == nstart or nstart is None:
             # For the first one, set up the relaxer and initial guess.
