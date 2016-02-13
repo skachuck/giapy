@@ -9,6 +9,7 @@ giamc.py
 import numpy as np
 import time
 import sys
+import os
 import cPickle as pickle
 
 from . import GITVERSION, timestamp
@@ -206,6 +207,8 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         f = open(fname, 'w')
         f.close()
 
+    fnoext = os.path.splitext(fname)[0]
+
     if verbose: 
         tstart = time.time()
         outmsg = 'Taking step {0:d}/{1:d}\033[K\r'
@@ -249,7 +252,7 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
             f.write(output)
 
         if resCov is not None and resCovDump and i%resCovDump == 0:
-            pickle.dump(resCov, open(str(hash(fname))+'.p', 'w'), -1)
+            pickle.dump(resCov, open(fnoext+'_resCov.p', 'w'), -1)
 
     # Post sampling message.
     if verbose:
