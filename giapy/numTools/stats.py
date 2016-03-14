@@ -100,7 +100,7 @@ class OnlineSamplingCovariance(object):
         else:
             m2n = self.m2n + other.m2n + np.outer(delta, delta)*self.n*other.n
             
-        return OnlineSamplingCovariance(n=n, mean=mean, m2n=m2n, univariate=self.univariate)
+        return OnlineSamplingCovariance(self.m, n=n, mean=mean, m2n=m2n)
     
     @property
     def cov(self):
