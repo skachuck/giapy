@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import cPickle as pickle
+import emcee
 
 from . import GITVERSION, timestamp
 
@@ -268,3 +269,69 @@ def sampleOut(sampler, pos, lnprob0, blobs0, fname, nsteps,
         avgaccept = np.mean(sampler.naccepted)/nsteps
         donemessage += '{0:3d} steps in {1:.3f} {2}, with {3:.3f} accepted.\033[K\n'
         sys.stdout.write(donemessage.format(nsteps, ttotal, unit, avgaccept))
+
+def autocorr(samples, nburn=0):
+    """Compute the average autocorrelation time (in steps) between walkers for
+    each variable in an MCMC sampling.
+
+    Parameters
+    ----------
+    samples : np.ndarray (nwalkers, nsamples, ndim)
+    nburn   : int, initial number of samples to skip.
+    
+    Returns
+    -------
+    avgauto : np,ndarray (ndim)
+        The average autocorrelation over walkers for each variable.
+    """
+
+    avgauto = np.array([np.mean([emcee.autocorr.integrated_time(walker) 
+                                        for walker in var.T]) 
+                                        for var in samples[:,nburn:,:].T])
+
+    return avgauto
+
+def flatten_walkers(samplelist, nburnlist=None, ncorrlist=None):
+    """Combine samples from independent samplers (i.e., computers).
+
+    (Can be used on blobs as well.)
+
+    Parameters
+    ----------
+    samplelist : list of np.ndarray (nwalkers, nsamples, ndim)
+    nburnlist  : list of ints corresponding to burn in correspinding sample.
+    ncorrlist  : list of ints corresponding to the number to skip in
+        corresponding sample
+
+    Returns
+    -------
+    long_samples : np.ndarray (nsamples, ndim)
+        nsamples = Sum [(nsamples_i - nburn_i) / ncorr_i]
+    """
+    
+    ndims = np.array([samples.shape[2] for samples in samplelist])
+    assert np.all(ndims == ndims[0]), 'All samples must have same ndim.'
+    ndim = ndims[0]
+
+    if nburnlist is not None:
+        assert len(nburnlist) == len(samplelist), \
+            'Must specify nburn for each samples.'
+    if ncorrlist is not None:
+        assert len(ncorrlist) == len(samplelist), \
+            'Must specify ncorr for each samples.'
+
+    nburnlist = nburnlist or np.zeros(len(samplelist))
+    ncorrlist = ncorrlist or np.ones(len(samplelist))
+
+        
+    long_samples = np.vstack([s[:,nburn::ncorr,:].reshape((-1, ndim)) 
+                                for s, nburn, ncorr 
+                                in zip(samplelist, nburnlist, ncorrlist)])
+
+
+
+    return long_samples
+
+    
+        
+
