@@ -76,18 +76,20 @@ class EarthParams(object):
                       'eta':     1e+22    ,     # poise = g/cm.s    
                       'mu' :     293.8e+10}     # dyne/cm^2
 
-        self.rCore = prem[0,0]/prem[-1,0]       # earth radii
-        self.denCore = prem[0,1]                # g/cc
+        locprem = prem.copy()
 
-        z = prem[1:,0]/prem[-1, 0]              # Normalized depths in mantle.
-        prem[1:, [2,3]] /= prem[1, 3]           # Normalized elastic props by
+        self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
+        self.denCore = locprem[0,1]                # g/cc
+
+        z = locprem[1:,0]/locprem[-1, 0]              # Normalized depths in mantle.
+        locprem[1:, [2,3]] /= locprem[1, 3]           # Normalized elastic props by
                                                 # shear modulus.
         # Convert the bulk modulus to the first lame parameter.
         #TODO Do we want first lame parameter or bulk modulus?
-        prem[1:, 2] = prem[1:, 2] - (2./3.*prem[1:, 3])
+        locprem[1:, 2] = locprem[1:, 2] - (2./3.*locprem[1:, 3])
 
         # Create density gradient, g/cc.earthRadii
-        dend = np.gradient(prem[1:,1])/np.gradient(z)
+        dend = np.gradient(locprem[1:,1])/np.gradient(z)
 
         # Fillers for nonadiabatic density gradients and visocisity.
         filler = np.zeros((len(z), 1))
@@ -102,7 +104,7 @@ class EarthParams(object):
         # 6     Viscosity
         self._paramNames = ['den', 'bulk', 'shear', 'grav', 'dend',
                             'nonad', 'visc']
-        self._paramArray = np.concatenate((prem[1:,1:], dend[:,np.newaxis], 
+        self._paramArray = np.concatenate((locprem[1:,1:], dend[:,np.newaxis], 
                                             filler, filler), axis=1).T
 
         self._interpParams = interp1d(z, self._paramArray)
