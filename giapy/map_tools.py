@@ -189,8 +189,6 @@ class GridObject(object):
         p = self.basemap.pcolormesh(self.Lon, self.Lat, Z, **kwargs)
         return p 
 
-
-
 def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
     """Calculate the distance bewteen two sets of lat/lon pairs.
 
@@ -209,6 +207,14 @@ def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
                         np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2))
 
     return ds
+
+def lonlatmax_area(Lon, Lat, Z, slicer):
+    maxind = np.argmax(Z[slicer])
+    Lonmax = Lon[slicer].ravel()[maxind]
+    Latmax = Lat[slicer].ravel()[maxind]
+    Zmax = Z[slicer].ravel()[maxind]
+
+    return Lonmax, Latmax, Zmax
 
 def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
     """Load data on an evenly spaced grid from an XYZ format.
