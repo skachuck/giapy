@@ -49,6 +49,40 @@ def grav_response_less_hydroisostacy(result, t0, trem=1):
 
     return dg
 
+def grav_response_from_hydroisostacy(result, t0, trem=1):
+    """Get grav response at t0 from ice mass changes ONLY from trem on.
+    """
+
+    ms, ns = spharm.getspecindx(result.inputs.nlat-1)
+
+    # Identify the load stage associated with first ice mass change desired.
+    remind = np.argmin(np.abs(result['wload'].outTimes - trem))
+
+    # Identify the maximum load change stage (can only consider ice mass
+    # changes before t0.
+    maxind = np.argwhere(result['wload'].outTimes - t0 < 0)
+    if maxind.shape[0]:
+        maxind = min(maxind)
+    else:
+        maxind = None
+
+    # Index slice for load.
+    rslice = slice(remind, maxind)
+    # Iterator for times, total load changes, and water load changes.
+    loadzip = zip(result['wload'].outTimes[rslice],
+                  result['wload'][rslice])
+
+    dg = np.zeros(result.inputs.grid.shape)
+    for t, dW in loadzip:
+        # Subtract water load change from total chagne to isolate ice changes.
+        dLspec = result.inputs.harmTrans.grdtospec(dW)
+        respArray = result.inputs.earth.getResp(t - t0)
+        # Multiply the resp array and dLspec with things to get right units.
+        tmpresp = respArray[ns, 5]*1e3 * dLspec*101068.38
+        dg += result.inputs.harmTrans.spectogrd(tmpresp)
+
+    return dg
+
 def get_gravrate_less_modern_iceloss(result, trem=1):
     """Return present day gravrate from GIA result less the gravity signal from
     more contemporary iceloss (from the trem thousand years). We explicitly
