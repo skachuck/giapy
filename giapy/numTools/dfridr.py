@@ -33,6 +33,8 @@ def dfridr(f, x, h, fargs=(), fkwargs={}, full_output=False):
 
     hh = h
     a[0,0] = (f(x+hh, *fargs, **fkwargs) - f(x-hh, *fargs, **fkwargs))/(2.0*hh)
+    # Initialize zeroth order return.
+    ans = a[0,0]
     err = BIG
 
     for i in range(1, NTAB):
