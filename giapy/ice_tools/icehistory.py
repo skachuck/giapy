@@ -467,7 +467,7 @@ class PersistentIceHistory(IceHistory):
         t : the time to interpolate the ice history to.
         """
 
-        assert ice.times.min()<=t<=ice.times.max(): 't must be interior.'
+        assert ice.times.min()<=t<=ice.times.max(), 't must be interior.'
 
         itup = np.argwhere(self.times > t)[-1][0]
         itdo = itup + 1
@@ -490,7 +490,7 @@ class PersistentIceHistory(IceHistory):
         t : the time at which to interpolate and insert.
         """
 
-        assert t not in ice.times: 't must not be in ice.times.'
+        assert t not in ice.times, 't must not be in ice.times.'
 
         newice = self.interp_to_t(t)
         itup = np.argwhere(ice.times > t)[-1][0]
