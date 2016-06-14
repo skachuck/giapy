@@ -376,8 +376,43 @@ class PersistentIceHistory(IceHistory):
         metadata = self._getMetaData()
         return PersistentIceHistory(self.stageArray.copy(), metadata)
 
-    def load(self, fname, **kwargs):
-        return self.stageArray[self.fnameDict[fname]] 
+    def __getitem__(self, key):
+        return self.stageArray[self.stageOrder[key]]
+
+    def __iter__(self, alter=True):
+        for stageNum in self.stageOrder:
+            stage = self.stageArray[stageNum]
+            if self.areaProps is not None:
+                self.alterStage(stage, stageNum)
+            yield stage
+
+    def pairIter(self, transform=None):
+        """Iterate over consecutive pairs of ice stages, loading only one at
+        each iteration
+
+        Parameters
+        ----------
+        transform : transformation function
+            If the data are to be transformed before yielding.
+        """
+        stage0 = self.stageOrder[0]
+        ice1, t1 = self[0], self.times[0]
+        if self.areaProps is not None:
+            self.alterStage(ice1, stage0)
+        if transform is not None:
+            ice1 = transform(ice1)
+        
+        #for time, fname in zip(self.times[1:], self.fnames[1:]):
+        for i, stage in enumerate(self.stageOrder[1:], start=1):
+            time = self.times[i]
+            fname = self[stage]
+            ice0, t0, ice1, t1 = ice1, t1, self.stageArray[stage], time
+            if self.areaProps is not None:
+                self.alterStage(ice1, stage)
+            if transform is not None:
+                ice1 = transform(ice1)
+            yield ice0, t0, ice1, t1
+
 
     def applyAlteration(self, names=None):
         """Applies all the proprtional alterations in self.areaProps and
@@ -423,6 +458,57 @@ class PersistentIceHistory(IceHistory):
         # The alteration mask is zeroed.
         altIce._alterationMask *= 0
         return altIce
+
+    def interp_to_t(self, t):
+        """Interpolate the ice history to an interior time t (not checked).
+
+        Parameters
+        ----------
+        t : the time to interpolate the ice history to.
+        """
+
+        assert ice.times.min()<=t<=ice.times.max(): 't must be interior.'
+
+        itup = np.argwhere(self.times > t)[-1][0]
+        itdo = itup + 1
+        tup = self.times[itup]
+        
+        dicedt = (self[itdo] - self[itup])/(self.times[itdo] - tup)
+
+        return self[itup] + (dicedt * (t - tup))
+
+    def insert_interp_stage(self, t):
+        """Insert an ice stage at t DURING DEGLACTIATION by interpolating the
+        ice stage and putting it into the appropriate place in the stageArray. 
+        The stageOrder list and time list are both corrected.
+
+        NOTE: It only works for deglaciation stages, and the procedure DOES NOT
+        CHECK.
+
+        Parameters
+        ----------
+        t : the time at which to interpolate and insert.
+        """
+
+        assert t not in ice.times: 't must not be in ice.times.'
+
+        newice = self.interp_to_t(t)
+        itup = np.argwhere(ice.times > t)[-1][0]
+        insertLoc = self.stageOrder[itup]
+
+        # Get indices for stage Orders that need to be incremented to make room
+        # for new stage.
+        stageOrderFixes = self.stageOrder > insertLoc
+
+        self.stageArray = np.vstack([self.stageArray[:insertLoc+1],
+                                     newice[None, :, :],
+                                     self.stageArray[insertLoc+1:]])
+
+        self.stageOrder[stageOrderFixes] = self.stageOrder[stageOrderFixes] + 1
+        self.stageOrder = np.r_[self.stageOrder[:itup+1], 
+                                insertLoc,
+                                self.stageOrder[itup+1:]]
+        self.times = np.r_[self.times[:itup+1], t, self.times[itup+1]]
 
 
 
