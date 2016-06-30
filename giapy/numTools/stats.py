@@ -93,12 +93,13 @@ class OnlineSamplingCovariance(object):
             
         delta = other.mean - self.mean
         n = self.n + other.n
-        mean = (self.n*self.mean + other.n*other.mean)
+        mean = (self.n*self.mean + other.n*other.mean) / n
         
         if self.univariate:
-            m2n = self.m2n + other.m2n + (delta**2)*self.n*other.n
+            m2n = self.m2n + other.m2n + (delta**2)*self.n*other.n/n
         else:
-            m2n = self.m2n + other.m2n + np.outer(delta, delta)*self.n*other.n
+            m2n = (self.m2n + other.m2n + 
+                        np.outer(delta, delta)*self.n*other.n/n)
             
         return OnlineSamplingCovariance(self.m, n=n, mean=mean, m2n=m2n)
     
