@@ -62,7 +62,7 @@ def dfridr(f, x, h, fargs=(), fkwargs={}, full_output=False):
             # early.
             break
     if full_output:
-        return ans, err, hh, a
+        return ans, err, hh*CON, a
     else:
         return ans
 
@@ -79,6 +79,45 @@ def gradfridr(f, x, h, fargs=(), fkwargs={}):
         grad[i] = dfridr(f1arg, x[i], hh, fargs, fkwargs)
 
     return grad
+
+class Gradfridr(object):
+    """Apply dfridr to each dimension of x independently, keeping the
+    appropriate h between calls.
+
+    Parameters
+    ----------
+    f - single-value function of multiple variables to be differentiated.
+    h0 - the initial step size.
+
+    Data
+    ----
+    h - the current value of the step size (one less than the last one used).
+    err - an estimate of the error of the last gradient.
+
+    Returns
+    -------
+    grad - the gradient evaluated at a point x (must be at least as long as h).
+    """
+    def __init__(self, f, h0):
+        self.f = f
+        self.h = h0
+
+    def __call__(self, x, fargs=(), fkwargs={}):
+        x = np.atleast_1d(x)
+
+        hhsave = np.zeros_like(x)
+        grad = np.zeros_like(x)
+        err = np.zeros_like(x)
+
+        for i, h in enumerate(self.h):
+            f1arg = lambda xi: self.f(np.r_[x[:i],xi,x[i+1:]],*fargs,**fkwargs)
+
+            grad[i], err[i], hhsave[i], bar = dfridr(f1arg, x[i], h, 
+                                                        full_output=True)
+
+        self.h = hhsave
+        self.err = err
+        return grad
 
 
 def multivalued_dfridr(f, x, h, fargs=(), fkwargs={}, full_output=False):
