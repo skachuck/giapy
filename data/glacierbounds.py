@@ -1,4 +1,3 @@
-# GLACIER AREAS
 class GlacierBounds(object):
     """An object containing lon/lat pairs of vertices for polygons bounding
     separate glacier systems. The following areas are defined:
