@@ -28,7 +28,7 @@ def load(filename):
 
 import earth_tools as earth
 import data_tools as data
-import ice_tools as ice
+import icehistory as ice
 import map_tools as maps
 import giasim as sim
 import giamc as mc
