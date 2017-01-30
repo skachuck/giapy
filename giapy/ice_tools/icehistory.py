@@ -79,7 +79,7 @@ class IceHistory(object):
             self.Lon = trial[0]
             self.Lat = trial[1]
             self.shape = self.Lon.shape
-            self.nlat = len(np.union1d(ice.Lat.flatten(), ice.Lat.flatten()))
+            self.nlat = len(np.union1d(self.Lat.ravel(), self.Lat.ravel()))
             if shape is None: print('Shape assumed {0}'.format(self.shape))
         except ValueError as e:
             raise e
@@ -238,7 +238,7 @@ class IceHistory(object):
         self.Lat = self.Lat[::2**n,::2**n]
         self.shape = self.Lon.shape
 
-    def createAlterationAreas(self, grid, props, areaNames=None):
+    def createAlterationAreas(self, grid, props, areaNames=None, areaVerts=None):
         """Create alteration areas for proportional ice height changes.
 
         The area definitions and proportions are stored in two dictionaries, 
@@ -262,15 +262,22 @@ class IceHistory(object):
             A list of the area names to include. (Default None). If None,
             assumes all the areas in GlacierBounds.areaNames. See
             help(GlacierBounds) for more information about area names.
+        areaVerts : dict
+            A dictionary of area names (as keys) and lists of lon/lat vertices 
+            (as values). If defined, it is preferentially used over areaNames.
         """
         #TODO DO IT WITHOUT THE GRID OBJECT!
-        areaNames = areaNames or GlacierBounds.areaNames
+        if areaVerts is None:
+            areaNames = areaNames or areaNamesGlacierBounds.areaNames
+            # GlacierBounds.outputAsDict outputs  a dictionary of names, one for
+            # each area in areaNames, with the values the vertices of the area.
+            self.areaVerts = GlacierBounds.outputAsDict(areaNames)
+        else:
+            self.areaVerts = areaVerts
+            areaNames = areaVerts.keys()
         
         assert len(props) == len(areaNames)
 
-        # GlacierBounds.outputAsDict outputs  a dictionary of names, one for
-        # each area in areaNames, with the values the vertices of the area.
-        self.areaVerts = GlacierBounds.outputAsDict(areaNames)
         # The alteration mask is an lat/lon array mapping membership to a
         # glacier area to an integer, for fast area locating later on
         # (grid.selectArea is quite slow). The integer of each glacier is
@@ -369,8 +376,43 @@ class PersistentIceHistory(IceHistory):
         metadata = self._getMetaData()
         return PersistentIceHistory(self.stageArray.copy(), metadata)
 
-    def load(self, fname, **kwargs):
-        return self.stageArray[self.fnameDict[fname]] 
+    def __getitem__(self, key):
+        return self.stageArray[self.stageOrder[key]]
+
+    def __iter__(self, alter=True):
+        for stageNum in self.stageOrder:
+            stage = self.stageArray[stageNum]
+            if self.areaProps is not None:
+                self.alterStage(stage, stageNum)
+            yield stage
+
+    def pairIter(self, transform=None):
+        """Iterate over consecutive pairs of ice stages, loading only one at
+        each iteration
+
+        Parameters
+        ----------
+        transform : transformation function
+            If the data are to be transformed before yielding.
+        """
+        stage0 = self.stageOrder[0]
+        ice1, t1 = self[0], self.times[0]
+        if self.areaProps is not None:
+            self.alterStage(ice1, stage0)
+        if transform is not None:
+            ice1 = transform(ice1)
+        
+        #for time, fname in zip(self.times[1:], self.fnames[1:]):
+        for i, stage in enumerate(self.stageOrder[1:], start=1):
+            time = self.times[i]
+            fname = self[stage]
+            ice0, t0, ice1, t1 = ice1, t1, self.stageArray[stage], time
+            if self.areaProps is not None:
+                self.alterStage(ice1, stage)
+            if transform is not None:
+                ice1 = transform(ice1)
+            yield ice0, t0, ice1, t1
+
 
     def applyAlteration(self, names=None):
         """Applies all the proprtional alterations in self.areaProps and
@@ -414,12 +456,63 @@ class PersistentIceHistory(IceHistory):
             del altIce.areaProps[name]
             del altIce.areaVerts[name]
         # The alteration mask is zeroed.
-        altIce._alterationMask *= 0.
+        altIce._alterationMask *= 0
         return altIce
 
+    def interp_to_t(self, t):
+        """Interpolate the ice history to an interior time t (not checked).
+
+        Parameters
+        ----------
+        t : the time to interpolate the ice history to.
+        """
+
+        assert ice.times.min()<=t<=ice.times.max(), 't must be interior.'
+
+        itup = np.argwhere(self.times > t)[-1][0]
+        itdo = itup + 1
+        tup = self.times[itup]
+        
+        dicedt = (self[itdo] - self[itup])/(self.times[itdo] - tup)
+
+        return self[itup] + (dicedt * (t - tup))
+
+    def insert_interp_stage(self, t):
+        """Insert an ice stage at t DURING DEGLACTIATION by interpolating the
+        ice stage and putting it into the appropriate place in the stageArray. 
+        The stageOrder list and time list are both corrected.
+
+        NOTE: It only works for deglaciation stages, and the procedure DOES NOT
+        CHECK.
+
+        Parameters
+        ----------
+        t : the time at which to interpolate and insert.
+        """
+
+        assert t not in ice.times, 't must not be in ice.times.'
+
+        newice = self.interp_to_t(t)
+        itup = np.argwhere(ice.times > t)[-1][0]
+        insertLoc = self.stageOrder[itup]
+
+        # Get indices for stage Orders that need to be incremented to make room
+        # for new stage.
+        stageOrderFixes = self.stageOrder > insertLoc
+
+        self.stageArray = np.vstack([self.stageArray[:insertLoc+1],
+                                     newice[None, :, :],
+                                     self.stageArray[insertLoc+1:]])
+
+        self.stageOrder[stageOrderFixes] = self.stageOrder[stageOrderFixes] + 1
+        self.stageOrder = np.r_[self.stageOrder[:itup+1], 
+                                insertLoc,
+                                self.stageOrder[itup+1:]]
+        self.times = np.r_[self.times[:itup+1], t, self.times[itup+1]]
 
 
-def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
+
+def printMW(ice, grid, areaVerts=None, areaNames=None, oceanarea=3.61e8):
     """Print equivalent meters meltwater for the glaciers.
 
     Parameters
@@ -430,11 +523,13 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
         default = 3.14e8 km^2, current area.
     """
     
-    areaNames = areaNames or GlacierBounds.areaNames
-    areas = GlacierBounds.outputAsList(areaNames)
+    if areaVerts is None:
+        assert areaNames, 'need to specify areaVerts or areaNames'
+        areaNames = areaNames or GlacierBounds.areaNames
+        areaVerts = GlacierBounds.outputAsDict(areaNames)
         
     s = ''
-    for column in ['ka BP']+areaNames+[' Total']:
+    for column in ['ka BP']+areaVerts.keys()+[' Total']:
         s += '{column:{align}{width}} '.format(column=column, align='^',
                                                 width=7)
     print(s)
@@ -445,8 +540,8 @@ def printMW(ice, grid, areaNames=None, oceanarea=3.61e8):
         s = '{num:{align}{width}{base}}  '.format(num=ice.times[i], align='<',
                                                     width=7, base='.2f')
         # Get the glacier volumes by integrating on the grid.
-        vols = grid.integrateAreas(stage, areas)
-        for area in vols:
-            s += '{num:{align}{width}{base}} '.format(num=area['vol']/oceanarea, 
+        vols = grid.integrateAreas(stage, areaVerts)
+        for area in areaVerts.keys()+['whole']:
+            s += '{num:{align}{width}{base}} '.format(num=vols[area]/oceanarea, 
                                                         align='>', width=7, base='.3f')
         print(s)

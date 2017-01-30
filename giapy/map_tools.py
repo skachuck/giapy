@@ -94,20 +94,18 @@ class GridObject(object):
         dV = self.volume(array)
         return dV[inds].sum()
 
-    def integrateAreas(self, array, areaList):
+    def integrateAreas(self, array, areaDict):
         """Integrate an array over areas stored in an AreaDict."""
         dV = self.volume(array)
-        volList = []
+        volDict = {}
         wholeVol = 0
-        for area in areaList:
-            inds = self.selectArea(area['vert'], reduced=1)
-            volList.append({'name' : area['name'],
-                            'vol'  : dV[inds].sum()})
+        for name, verts in areaDict.iteritems():
+            inds = self.selectArea(verts, reduced=1)
+            volDict[name] = dV[inds].sum()
             wholeVol += dV[inds].sum()
-        volList.append({'name' : 'whole',
-                        'vol'  : wholeVol})
+        volDict['whole'] = wholeVol
             
-        return volList
+        return volDict
 
     def create_interper(self, array):
         """Return a 2D interpolation object on the map, in map coordinates.
@@ -159,7 +157,16 @@ class GridObject(object):
         return interper.ev(xs, ys)
 
     def selectArea(self, ptlist, latlon=False, reduced=None):
-        """Select an area of the grid"""
+        """Select an area of the grid.
+        
+        Parameters
+        ----------
+        ptlist : list
+        latlon : bool
+        reduced : int
+            The amount by which the index array should be short (i.e., 1 for
+            basic difference, 2 for center difference).
+        """
         ptlist = np.asarray(ptlist)
         if latlon: 
             ptlist[:,0], ptlist[:,1] = self.basemap(ptlist[:,0], ptlist[:,1])
@@ -182,8 +189,6 @@ class GridObject(object):
         p = self.basemap.pcolormesh(self.Lon, self.Lat, Z, **kwargs)
         return p 
 
-
-
 def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
     """Calculate the distance bewteen two sets of lat/lon pairs.
 
@@ -202,6 +207,14 @@ def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
                         np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2))
 
     return ds
+
+def lonlatmax_area(Lon, Lat, Z, slicer):
+    maxind = np.argmax(Z[slicer])
+    Lonmax = Lon[slicer].ravel()[maxind]
+    Latmax = Lat[slicer].ravel()[maxind]
+    Zmax = Z[slicer].ravel()[maxind]
+
+    return Lonmax, Latmax, Zmax
 
 def loadXYZGridData(fname, shape=None, lonlat=False, **kwargs):
     """Load data on an evenly spaced grid from an XYZ format.

@@ -76,18 +76,20 @@ class EarthParams(object):
                       'eta':     1e+22    ,     # poise = g/cm.s    
                       'mu' :     293.8e+10}     # dyne/cm^2
 
-        self.rCore = prem[0,0]/prem[-1,0]       # earth radii
-        self.denCore = prem[0,1]                # g/cc
+        locprem = prem.copy()
 
-        z = prem[1:,0]/prem[-1, 0]              # Normalized depths in mantle.
-        prem[1:, [2,3]] /= prem[1, 3]           # Normalized elastic props by
+        self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
+        self.denCore = locprem[0,1]                # g/cc
+
+        z = locprem[1:,0]/locprem[-1, 0]              # Normalized depths in mantle.
+        locprem[1:, [2,3]] /= locprem[1, 3]           # Normalized elastic props by
                                                 # shear modulus.
         # Convert the bulk modulus to the first lame parameter.
         #TODO Do we want first lame parameter or bulk modulus?
-        prem[1:, 2] = prem[1:, 2]-2./3.*prem[1:, 3]
+        locprem[1:, 2] = locprem[1:, 2] - (2./3.*locprem[1:, 3])
 
         # Create density gradient, g/cc.earthRadii
-        dend = np.gradient(prem[1:,1])/np.gradient(z)
+        dend = np.gradient(locprem[1:,1])/np.gradient(z)
 
         # Fillers for nonadiabatic density gradients and visocisity.
         filler = np.zeros((len(z), 1))
@@ -102,7 +104,7 @@ class EarthParams(object):
         # 6     Viscosity
         self._paramNames = ['den', 'bulk', 'shear', 'grav', 'dend',
                             'nonad', 'visc']
-        self._paramArray = np.concatenate((prem[1:,1:], dend[:,np.newaxis], 
+        self._paramArray = np.concatenate((locprem[1:,1:], dend[:,np.newaxis], 
                                             filler, filler), axis=1).T
 
         self._interpParams = interp1d(z, self._paramArray)
@@ -148,13 +150,26 @@ class EarthParams(object):
         """visArray is an 2xN array of depths zi and viscosities at those
            depths, in poise."""
         if etaStar is not None:
-            self.norms['eta']
+            self.norms['eta'] = etaStar
         visArray = np.asarray(visArray)
         visArray[1] /= self.norms['eta']        # Normalize viscosities
         self.alterColumn(6, visArray)
 
 
-    def addNonadiabatic(self, z, nonad):
+    def addNonadiabatic(self, nonad, normed=True):
+        """Introduce a nonadiabatic density gradient in the mantle.
+
+        Parameters
+        ----------
+        nonad : np.ndarray
+            A 2xN array of depths and nonadiabatic density gradients.
+            NOTE: must be in g/cc / cm (if normed=False) or
+                             g/cc / earth radii (if normed=True).
+        normed : boolean
+            Are the gradients already normalized to earth radii?
+        """
+        if not normed:
+            nonad[0] = nonad[0]*self.norms['r']
         self.alterColumn(5, nonad)
 
     def addLithosphere(self, D=None, H=None):

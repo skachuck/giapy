@@ -12,6 +12,7 @@ from datetime import datetime
 from subprocess import check_output
 import cPickle as pickle
 
+
 # Obtain the github hash of the current version
 command = 'git log -n 1 | grep commit | sed s/commit\ //'
 script_loc = os.path.abspath(os.path.dirname(__file__))
@@ -24,3 +25,12 @@ def timestamp():
 
 def load(filename):
     return pickle.load(open(filename, 'r'))
+
+import earth_tools as earth
+import data_tools as data
+import ice_tools as ice
+import map_tools as maps
+import giasim as sim
+import giamc as mc
+import plot_tools as plot
+
