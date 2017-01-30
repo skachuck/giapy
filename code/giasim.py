@@ -16,7 +16,7 @@ from .map_tools import GridObject, sealevelChangeByMelt,\
                     volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
                     floatingIceRedistribute
 
-from . import GITVERSION, timestamp
+from .. import GITVERSION, timestamp
 
 class GiaSimGlobal(object):
     def __init__(self, earth, ice, grid=None):

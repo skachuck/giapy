@@ -8,7 +8,7 @@ import time
 from .yearcalib import uncalib_bloom, c14corr
 from .abstractDataClasses import AbsGeoTimeSeries, AbsGeoTimeSeriesContainer
 
-from .. import timestamp
+from ... import timestamp
 
 
 def calcEmergence(sim, emergedata, smooth=True, noise=0):

@@ -13,7 +13,7 @@ import os
 import cPickle as pickle
 import emcee
 
-from . import GITVERSION, timestamp
+from .. import GITVERSION, timestamp
 
 def gen_metadatastr(metadatadict):
     """Generate a string of line-separated metadata from a dictionary.

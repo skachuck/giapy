@@ -11,8 +11,8 @@ import numpy as np
 import cPickle as pickle
 import os
 
-from . import GlacierBounds
-from giapy.map_tools import loadXYZGridData
+#from . import GlacierBounds
+from .map_tools import loadXYZGridData
 
 from progressbar import ProgressBar, ETA, Percentage, Bar
 
