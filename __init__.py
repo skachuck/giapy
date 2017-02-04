@@ -26,11 +26,11 @@ def timestamp():
 def load(filename):
     return pickle.load(open(filename, 'r'))
 
-import earth_tools as earth
-import data_tools as data
-import ice_tools as ice
-import map_tools as maps
-import giasim as sim
-import giamc as mc
-import plot_tools as plot
+import code.earth_tools as earth
+import code.data_tools as data
+import code.icehistory as ice
+import code.map_tools as maps
+import code.giasim as sim
+import code.giamc as mc
+import code.plot_tools as plot
 
