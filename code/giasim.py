@@ -66,8 +66,7 @@ class GiaSimGlobal(object):
 
         # Resolution
         ntrunc = ntrunc or ice.nlat-1
-        if ntrunc >= self.nlat:
-           raise ValueError('ntrunc must be < grid.nlat')
+        assert ntrunc < self.nlat, 'ntrunc must be < grid.nlat'
         ms, ns = spharm.getspecindx(ntrunc)     # the list of degrees, m, and
                                                 # order numbers, n. Sizes of
                                                 # (ntrunc+1)*(ntrunc+2)/2.
@@ -78,8 +77,7 @@ class GiaSimGlobal(object):
         else:
             out_times = out_times
         self.out_times = out_times
-        if out_times is None:
-           raise ValueError('out_times is not set')
+        assert out_times is not None, 'out_times is not set'
         
         # Calculate times of intermediate removal stages.
         diffs = np.diff(ice.times)
