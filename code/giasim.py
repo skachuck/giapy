@@ -1,12 +1,25 @@
+"""
+giasim.py
+Author: Samuel B. Kachuck
+Date  : 08 01 2015
+
+    Main module for the giapy package. It provides the class GiaSimGlobal,
+    which contains the method for computing the glacial isostatic adjustment to
+    an earth with a given rheological decay spectrum to an ice history model.
+
+Methods
+-------
+configure_giasim
+
+Classes
+-------
+GiaSimGlobal
+GiaSimOutput
+
+"""
 import numpy as np
-#import pymc as pm
-import time
-import inspect
-
 import spharm
-
-from scipy.optimize import leastsq
-
+import subprocess
 try:
     from progressbar import ProgressBar, Percentage, Bar, ETA
 except:
@@ -16,14 +29,30 @@ from .map_tools import GridObject, sealevelChangeByMelt,\
                     volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
                     floatingIceRedistribute
 
-from .. import GITVERSION, timestamp
+from .. import GITVERSION, timestamp, MODPATH, call, os
 
 class GiaSimGlobal(object):
-    def __init__(self, earth, ice, grid=None):
+    def __init__(self, earth, ice, grid=None, topo=None):
+        """
+        Compute glacial isostatic adjustment on a globe.
+
+        Paramaters
+        ----------
+        earth : <giapy.code.earth_tools.earthSpherical.SphericalEarth>
+        ice   : <giapy.code.icehistory.IceHistory / PersistentIceHistory>
+        grid  : <giapy.code.map_tools.GridObject>
+        topo  : numpy.ndarray
+
+        Methods
+        -------
+        performConvolution
+            
+
+        """
 
         self.earth = earth
-        self.ice = ice
 
+        self.ice = ice
         self.nlat, self.nlon = ice.shape
         
         # The grid used is a cylindrical projection (equispaced lat/lon grid
@@ -34,6 +63,10 @@ class GiaSimGlobal(object):
             self.grid = GridObject(mapparam={'projection': 'cyl'}, 
                                     shape=ice.shape)
 
+        self.topo = topo
+        
+        # Precompute and store harmonic transform coefficients, for
+        # computational efficiency, but at a memory cost.
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
     def performConvolution(self, out_times=None, ntrunc=None, topo=None,
@@ -48,8 +81,26 @@ class GiaSimGlobal(object):
         ntrunc : int
            The truncation number of the spherical harmonic expansion. Default
            is from the earth model, must be <= ice model's and < grid.nlat
-        emergeCorr : Bool
-            Apply any attached corrections to uplift to get emergence
+        topo   : array
+            Topography on which to compute. If None (default), assumes a flat
+            topography. Must be the same shapt as ice.
+        verbose : boolean
+            Display progress on computation. Depends on progressbar module.
+            Default is False.
+        eliter  : int
+            The maximum number of iterations allowed to compute initial elastic
+            response to redistributed load at each stage. If 0, instantaneous
+            elastic response is not computed. Default 5.
+        nrem   : int
+            Number of removal stages between the provided ice stages
+            (intermediate steps are interpolated linearly). Default 1.
+       
+        Results
+        -------
+        observerDict : GiaSimOutput
+            A dictionary whose keys are fields of interest, such as uplift
+            ('upl'), geoid ('geo'), and solid surface topography ('sstopo'),
+            computed on the input grid at out_times.
         """
  
         DENICE      = 0.934          # g/cc
@@ -63,6 +114,8 @@ class GiaSimGlobal(object):
         earth = self.earth
         ice = self.ice
         grid = self.grid
+        topo = topo or self.topo
+        assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
         ntrunc = ntrunc or ice.nlat-1
@@ -220,7 +273,9 @@ class GiaSimGlobal(object):
                         dLoad = dLoad + dhwUel
                         dwLoad += dhwUel
 
-                        if np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel)) <= 1e-2:
+                        # Truncation error from further iteration
+                        err = np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel))
+                        if err <= 1e-2:
                             break
                         else:
                             dUel = dUel + dUelp
@@ -240,9 +295,6 @@ class GiaSimGlobal(object):
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
                     o.loadStageUpdate(tb, dLoad=dLoad)
-
-
-            
 
             # Transform load change into spherical harmonics.
             loadChangeSpec = self.harmTrans.grdtospec(dLoad)/NREM
@@ -295,7 +347,7 @@ class GiaSimOutput(object):
 
 
 class AbstractGiaSimObserver(object):
-    """The GiaSimObserver mediates between an earth model's respons function
+    """The GiaSimObserver mediates between an earth model's response function
     and the convolved result. It needs to store the harmonic response 
     """
     def __init__(self):

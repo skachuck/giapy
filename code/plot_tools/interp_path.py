@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 import matplotlib.pyplot as plt
 
-from giapy.map_tools import haversine
+from ..map_tools import haversine
 
 class TransectPath(object):
     """Simple container for a transects xs, ys, and distances along, ds"""
