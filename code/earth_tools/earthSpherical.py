@@ -1,3 +1,12 @@
+"""
+earthSphecidal.y
+
+Author: Samuel B. Kachuck
+Date: 
+
+Provides SphericalEarth, a container object for computing, storing, and
+retrieving loading response curves on a spherically symmetric earth.
+"""
 import numpy as np
 from scipy.interpolate import interp1d
 import cPickle as pickle
@@ -24,15 +33,38 @@ class SphericalEarth(object):
     """A class for calculating, storing, and recalling 
 
     Stores decay profiles for each spherical order number up to nmax for
-        1) Surface Uplift
-        2) Elastic Uplift
-        3) Viscous Uplift Rate
-        4) Gravitational potential
-        5) Geoid
-    responses to a unit load.
+        1) ue  : elastic uplift
+        2) uv  : viscous uplift
+        3) ve  : elastic horizontal
+        4) vv  : viscous horizontal
+        5) phi1: gravitational potential
+        6) g1  : gravtiational acceleration
+        7) vel : velocity of uplift
 
-    ntrunc : int
-        maximum spherical order number
+    Note: this object is pickleable - the interp1d object is recreated on load.
+
+    Parameters
+    ----------
+    params : <giapy.earth_tools.earthParams.EarthParams>
+        The Earth parameters to use in this earth model, stored in the giapy
+        EarthParams object. See documantation there.
+
+    Methods
+    -------
+    getResp
+    calcResponse
+    calcElResponse
+    timeEvolve
+
+    Data
+    ____
+    nmax : int, maximum order number calculated in response curves
+    times : ndarray
+        The times at which the responses are computed, stored by calcResponse.
+    respArray : ndarray, size (nmax+1, len(times), 7), with columns numbered above.
+    respInterp : <scipy.interpoate.interp1d>
+        An inteprolation objectect computed in SphericalEarth.calcResponse and
+        stored for fast retrieval.
     """
 
     def __init__(self, params):
@@ -56,8 +88,10 @@ class SphericalEarth(object):
 
     
     def getResp(self, t_dur):
-        """Return an NDarray (nmax+1, 4) of the responses to a one dyne load applied
-        for time t_dur.
+        """Interpolate response curves for response to unit load duration t_dur.
+
+        The response curves (stored SphericalEarth.respArray) are interpolated
+        lineary for each order number, 0 to SperhicalEarth.nmax) and returned.
         """
         return self.respInterp(t_dur)
 
@@ -91,6 +125,36 @@ class SphericalEarth(object):
         self.times = out.times / 3.1536e10  # convert back to thousand years
         self.nmax = nmax
         self.respInterp = interp1d(self.times, self.respArray, axis=1)
+
+    def calcElResponse(self, zarray, nmax):
+        """Compute the elastic loading response of the Earth for order numbers
+        between nstart and nmax.
+
+        Parameters
+        ----------
+        zarray : ndarray. The array of depths to use in relaxation method.
+        nmax   : int. The highest order number to compute.
+
+        Returns
+        -------
+        respArray : ndarray, shape (nmax, 5)
+            An array of instananeous elastic responses to order numbers 1 to
+            nmax. The columns are ue, ve, phi1, g1, vel (see class
+            documentation for description).
+        """
+        
+        respArray = []
+        yE0, yV0 = get_t0_guess(self.params, zarray, n=1)
+        # Use the relaxer to get subsequent order numbers
+        self.relaxer = SphericalEarthRelaxer(self.params,
+                            zarray, yE0, yV0, 1)
+
+        disps = np.zeros_like(zarray)
+        for n in range(1, nmax+1):
+            self.relaxer.changeOrder(n)
+            self.relaxer(0, disps)
+            respArray.append(self.relaxer.solout())
+        return np.array(respArray)
 
     def timeEvolve(self, n, zarray, nstart=None, times=None):
         out = SphericalEarthOutput(times)
