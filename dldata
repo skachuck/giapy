@@ -1,0 +1,4 @@
+#!/bin/bash
+wget http://pages.physics.cornell.edu/~skachuck/giainputs.tar.gz
+tar xzf giainputs.tar.gz -C ./data/
+rm giainputs.tar.gz
