@@ -325,6 +325,61 @@ class GiaSimGlobal(object):
 
         return observerDict
 
+def configure_giasim(configdict):
+    """
+    Convenience function for setting up a GiaSimGlobal object.
+
+    The function uses inputs stored in giapy/data/inputs/, which can be
+    downloaded from pages.physics.cornell.edu/~skachuck/giainputs.tar.gz or
+    using the script giapy/dldata.
+
+    Parameters
+    ----------
+    configdict : dict
+        A dictionary with keys 'earth' and 'ice' and values of the
+        names of these inputs. The key 'topo' is optional, and defaults to a
+        flat initial topography.
+
+    sim        : GiaSimGlobal object
+    """
+
+    #TODO add a defauly configdict somewhere.
+    #configdict = configdict or DEFAULTCONFIG
+    
+    assert configdict.has_key('earth'), 'GiaSimGlobal needs earth specified'
+    assert configdict.has_key('ice'), 'GiaSimGlobal needs ice specified'
+
+    #ppath = os.path.dirname(os.path.split(__file__)[0])
+    dpath = MODPATH + '/data/inputs/' 
+    ename = configdict['earth']+'.earth'
+    iname = configdict['ice']+'.ice'
+
+    filecheck = os.path.isfile(dpath+ename) and os.path.isfile(dpath+iname)
+    
+    topo = configdict.get('topo', None)
+    if topo is not None:
+        tname = topo+'.topo'
+        filecheck = filecheck and os.path.isfile(dpath+tname)
+    
+    if not filecheck:
+        with open(MODPATH+'/data/inputfilelist', 'r') as f:
+            filelist = f.read().splitlines()
+        if ename in filelist and iname in filelist and tname in filelist:
+            print('Downloading inputs')
+            p = subprocess.Popen(os.path.join(MODPATH+'/dldata'), shell=True,
+                                cwd=ppath)
+            p.wait()
+        else:
+            raise IOError('One of the inputs you specified does not exist.')
+
+    earth = np.load(dpath+ename)
+    ice = np.load(dpath+iname)
+    if topo is not None:
+        topo = np.load(dpath+tname)[2]
+    
+    sim = GiaSimGlobal(earth=earth, ice=ice, topo=topo)
+
+    return sim
 
 class GiaSimOutput(object):
     def __init__(self, inputs):
