@@ -208,6 +208,30 @@ def haversine(lat1, lat2, lon1, lon2, r=6371, radians=False):
 
     return ds
 
+def dms2dd(angle, inverse=False):
+    """Convert an angle from (deg,min,sec) to decimal and back (inverse=True).
+
+    If entering a coordinate west as negative, ensure that all entries are
+    negative.
+    """
+    if not inverse:
+        errstr = 'negatives not consistent. W coordinates must all be negative'
+        assert angle[0]>0 or angle[0]<0 and angle[1]<0, errstr
+        dd = angle[0] + angle[1]/60.
+        if len(angle)==3:
+            assert angle[0]>0 or angle[0]<0 and angle[2]<0, errstr
+            dd += angle[2]/3600.
+        return dd
+    else:
+        if angle < 0:
+            sign = -1
+            angle *= sign
+        else:
+            sign = 1
+        mnt, sec = divmod(angle*3600, 60)
+        deg, mnt = divmod(mnt, 60)
+        return sign*deg,sign*mnt,sign*sec
+
 def lonlatmax_area(Lon, Lat, Z, slicer):
     maxind = np.argmax(Z[slicer])
     Lonmax = Lon[slicer].ravel()[maxind]
