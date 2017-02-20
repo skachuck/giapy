@@ -189,6 +189,7 @@ class GiaSimGlobal(object):
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
         for icea, ta, iceb, tb in ice.pairIter():
+            ################### LOAD STAGE CALCULATION ###################
             # Determine the water load redistribution for ice, uplift, and
             # geoid changes between ta and tb,
             if topo is not None:
@@ -307,6 +308,7 @@ class GiaSimGlobal(object):
             # N.B. the n=0 load should be zero in cases of glacial isostasy, as 
             # mass is conserved during redistribution.
 
+            ################# RESPONSE STAGE CALCULATION #################
             # Secondary loop: over output times.
             for inter_time in np.linspace(tb, ta, NREM, endpoint=False)[::-1]:
                 # Perform the time convolution for each output time
@@ -382,6 +384,32 @@ def configure_giasim(configdict):
     return sim
 
 class GiaSimOutput(object):
+    """A container object for computations of glacial isostatic adjustment.
+
+    The results of the GIA computation can be accessed via object attributes or
+    via a dictionary (e.g., if iteration is desired). The object's __repr__
+    gives the computed attributes.
+
+    Parameters
+    ----------
+    inputs : anything
+        anything desired to be stored as inputs. Typically, this will be a
+        GiaSimGlobal object that contains the ice load, earth model, and other
+        necessary objects for reproducing the computation.
+
+    Methods
+    -------
+    addObserver - add an observer to the watchlist
+    removeObserver - remove an observer from the watchlist
+    transformObservers - transform each observer in the watchlist, using each's
+        own transform function (must be provided by observer).
+
+
+    Data
+    ----
+    GITVERSION : the hash of the current giapy git HEAD
+    TIMESTAMP : the datetime of creation (calculation)
+    """
     def __init__(self, inputs):
         self.GITVERSION = GITVERSION
         self.TIMESTAMP = timestamp()
@@ -394,16 +422,31 @@ class GiaSimOutput(object):
     def __iter__(self):
         return self._observerDict.itervalues() 
 
+    def __repr__(self):
+        retstr = ''
+        retstr = 'GIA computed on {}\n'.format(self.TIMESTAMP)
+        retstr += 'Has observers: '+', '.join(self._observerDict)
+        return retstr
+
     def addObserver(self, name, observer):
         self._observerDict[name] = observer
+        setattr(self, name, observer)
 
     def removeObserver(self, name):
         del self._observerDict[name]
+        delattr(self, name)
+
+    def transformObservers(self, inverse=False):
+        for obs in self:
+            obs.transform(self.inputs.harmTrans, inverse=inverse)
 
 
 class AbstractGiaSimObserver(object):
     """The GiaSimObserver mediates between an earth model's response function
-    and the convolved result. It needs to store the harmonic response 
+    and the convolved result. It needs to store the harmonic response
+
+    initialize and update must be overwritten for class to work, all others 
+    simply pass.
     """
     def __init__(self):
         pass
@@ -419,8 +462,7 @@ class AbstractGiaSimObserver(object):
         return self.array.shape
 
     def initialize(self, outTimes, ntrunc):
-        self.array = np.zeros((len(out_times), 
-                                (ntrunc+1)*(ntrunc+2)/2), dtype=complex)
+        raise NotImplemented
 
     def loadStageUpdate(self, *args, **kwargs):
         pass
@@ -429,9 +471,9 @@ class AbstractGiaSimObserver(object):
         pass
 
     def update(self, tout, tdur, dLoad):
-        pass
+        raise NotImplemented
 
-    def untransform(self):
+    def transform(self, trans, inverse=True):
         pass
 
     def locateByTime(self, time):
@@ -439,9 +481,23 @@ class AbstractGiaSimObserver(object):
             raise ValueError('time not in self.outTimes')
         return np.argwhere(self.outTimes == time)[0][0]
 
+    def nearest_to(self, time):
+        """Return a field from outTimes nearest to time.
+        """
+        idx = (np.abs(self.outTimes-time)).argmin()
+        return self[idx]
+
+
 class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
+    """Abstract class for results in spherical harmonic space, updated during
+    the response stage.
+
+    Must implement isolateRespArray to pull proper response curve from the
+    computed earth model.
+    """
     def __init__(self, outTimes, ntrunc, ns):
         self.initialize(outTimes, ntrunc, ns)
+        self.spectral = True
 
     def initialize(self, outTimes, ntrunc, ns):
         self.array = np.zeros((len(outTimes), 
@@ -458,6 +514,14 @@ class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
         n = self.locateByTime(tout)
         resp = self.isolateRespArray(respArray)
         self.array[n] += resp * dLoad
+
+    def transform(self, trans, inverse=True):
+        if not inverse and self.spectral:
+            self.array = trans.spectogrd(self.array.T).T
+            self.spectral = False
+        elif inverse and not self.spectral:
+            self.array = trans.grdtospec(self.array.T).T
+            self.spectral = True
 
     def isolateRespArray(self, respArray):
         raise NotImplemented()
@@ -499,6 +563,9 @@ class AngularMomentumObserver(AbstractEarthGiaSimObserver):
     pass
 
 class HeightObserver(AbstractGiaSimObserver):
+    """General observer for heights computed on the real-space grid and updated
+    during the loadStage.
+    """
     def __init__(self, outTimes, iceShape, name):
         self.initialize(outTimes, iceShape)
         self.name = name
