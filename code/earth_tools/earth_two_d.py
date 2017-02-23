@@ -1,5 +1,5 @@
 import numpy as np
-import cPickle as pickle
+from ... import pickle
 
 def _list2UT(l, N):
     """Return a list of the rows of an NxN upper triangular"""

@@ -1,4 +1,4 @@
-import cPickle as pickle
+from ... import pickle
 
 class AbsGeoTimeSeries(object):
     """Wrapper for time-series data which carries the time-series' meta-data.

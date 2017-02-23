@@ -10,10 +10,10 @@ import numpy as np
 import time
 import sys
 import os
-import cPickle as pickle
+
 import emcee
 
-from .. import GITVERSION, timestamp
+from .. import GITVERSION, timestamp, pickle
 
 def gen_metadatastr(metadatadict):
     """Generate a string of line-separated metadata from a dictionary.

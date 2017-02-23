@@ -1,4 +1,4 @@
-import cPickle as pickle
+from ... import pickle
 import numpy as np
 from scipy.interpolate import interp1d
 
