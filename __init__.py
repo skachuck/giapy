@@ -7,10 +7,13 @@
 #from giapy.data_tools.meltwater import gen_eustatic
 #import giapy.data_tools.emergedata
 
-import os
+import os, sys
 from datetime import datetime
 from subprocess import check_output, call
-import cPickle as pickle
+if sys.version_info < (3,):
+    import cPickle as pickle
+else:
+    import _pickle as pickle
 
 
 # Obtain the github hash of the current version

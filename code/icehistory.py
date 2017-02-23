@@ -8,13 +8,11 @@ icehistory.py
 """
 
 import numpy as np
-import cPickle as pickle
+
 import os
 
-#from . import GlacierBounds
+from .. import pickle
 from .map_tools import loadXYZGridData
-
-from progressbar import ProgressBar, ETA, Percentage, Bar
 
 
 class IceHistory(object):

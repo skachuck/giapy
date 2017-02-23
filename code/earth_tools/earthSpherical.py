@@ -9,7 +9,7 @@ retrieving loading response curves on a spherically symmetric earth.
 """
 import numpy as np
 from scipy.interpolate import interp1d
-import cPickle as pickle
+from ... import pickle
 
 from .earthIntegrator import SphericalEarthOutput, SphericalEarthShooter,\
         SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
