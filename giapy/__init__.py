@@ -1,12 +1,3 @@
-#import giapy.giasim
-#import giapy.earth_tools.earth_two_d
-#import giapy.ice_tools.icehistory
-#import giapy.plot_tools
-#import giapy.map_tools
-
-#from giapy.data_tools.meltwater import gen_eustatic
-#import giapy.data_tools.emergedata
-
 import os, sys
 from datetime import datetime
 from subprocess import check_output, call
@@ -29,11 +20,11 @@ def timestamp():
 def load(filename):
     return pickle.load(open(filename, 'r'))
 
-import code.earth_tools as earth
-import code.data_tools as data
-import code.icehistory as ice
-import code.map_tools as maps
-import code.giasim as sim
-import code.giamc as mc
-import code.plot_tools as plot
+import earth_tools as earth
+import data_tools as data
+import icehistory as ice
+import map_tools as maps
+import giasim as sim
+import giamc as mc
+import plot_tools as plot
 

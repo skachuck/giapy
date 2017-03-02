@@ -1,4 +1,4 @@
-from ... import pickle
+from giapy import pickle
 
 class AbsGeoTimeSeries(object):
     """Wrapper for time-series data which carries the time-series' meta-data.

@@ -5,10 +5,11 @@ This module includes procedures for importing and manipulating emergence data.
 import numpy as np
 import time
 
-from .yearcalib import uncalib_bloom, c14corr
-from .abstractDataClasses import AbsGeoTimeSeries, AbsGeoTimeSeriesContainer
+from giapy.data_tools.yearcalib import uncalib_bloom, c14corr
+from giapy.data_tools.abstractDataClasses import AbsGeoTimeSeries, \
+                                                AbsGeoTimeSeriesContainer
 
-from ... import timestamp
+from giapy import timestamp
 
 
 def calcEmergence(sim, emergedata, smooth=True, noise=0):

@@ -12,10 +12,10 @@ try:
 except:
     pass
 
-from .map_tools import GridObject, redistributeOcean, sealevelChangeByMelt,\
+from giapy.map_tools import GridObject, redistributeOcean, sealevelChangeByMelt,\
                     volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad
 
-from . import GITVERSION, timestamp
+from giapy import GITVERSION, timestamp
 
 class GiaSim(object):
     """

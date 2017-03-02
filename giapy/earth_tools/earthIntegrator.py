@@ -50,7 +50,7 @@ from scipy.integrate import ode, odeint
 from numba import jit, void, int64, float64
 
 #from giapy.numTools.solvde import solvde
-from ..numTools.solvdeJit import solvde
+from giapy.numTools.solvdeJit import solvde
 
         
 

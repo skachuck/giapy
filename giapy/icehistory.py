@@ -11,8 +11,8 @@ import numpy as np
 
 import os
 
-from .. import pickle
-from .map_tools import loadXYZGridData
+from giapy import pickle
+from giapy.map_tools import loadXYZGridData
 
 
 class IceHistory(object):

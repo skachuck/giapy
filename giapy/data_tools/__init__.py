@@ -1,6 +1,6 @@
 """Module data define regular areas for filtering data"""
 
-from ... import MODPATH
+from giapy import MODPATH
 
 sval = {'latmin':76, 'latmax':81, 'lonmin':10, 'lonmax':30}
 nam = {'latmin':-90, 'latmax':90, 'lonmin':-180, 'lonmax':180}

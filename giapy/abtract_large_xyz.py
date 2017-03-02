@@ -4,7 +4,7 @@ that are four dimensional where one dimension (e.g., time) is
 """
 
 import numpy as np
-from .. import pickle
+from giapy import pickle
 
 class Abs_xyzt_data(object):
     
