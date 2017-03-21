@@ -174,7 +174,7 @@ class SphericalEarth(object):
             except:
                 # If Solvde takes too many steps, use shooting method to
                 # generate new guess and continue.
-                print 'Reguessing: n={0}'.format(n)
+                print('Reguessing: n={0}'.format(n))
                 yE0, yV0 = get_t0_guess(self.params, zarray, n=n)
                 self.relaxer = SphericalEarthRelaxer(self.params, 
                                     zarray, yE0, yV0, n)

@@ -123,7 +123,7 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         calc_vector = np.array([item for l in calc_vector for item in l])
         
         if verbose: 
-            print 'Interpolation time: {0}s'.format(time.clock()-time_start)
+            print('Interpolation time: {0}s'.format(time.clock()-time_start))
     
         return calc_vector
 

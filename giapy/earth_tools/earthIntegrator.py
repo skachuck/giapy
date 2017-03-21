@@ -961,9 +961,9 @@ class SphericalEarthShooter(object):
         try:
             coeffs = np.r_[np.linalg.solve(a.T, b), 1]
         except np.linalg.LinAlgError as e:
-            print y
-            print a
-            print b
+            print(y)
+            print(a)
+            print(b)
             raise e
         
         # put the final solution together
