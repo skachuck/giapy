@@ -78,10 +78,10 @@ def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False):
             y[j, k1:k2] -= fac*c[jv, 0, k1:k2]
         
         if verbose:
-            print "Iter."
-            print "{:<11}".format("Error")+"{:<11}".format("FAC")
-            print "{:<8}".format(it)
-            print "{0:5f}{1:<3}".format(err, ' ')+"{0:5f}{1:<3}".format(fac, ' ')
+            print("Iter.")
+            print("{:<11}".format("Error")+"{:<11}".format("FAC"))
+            print("{:<8}".format(it))
+            print("{0:5f}{1:<3}".format(err, ' ')+"{0:5f}{1:<3}".format(fac, ' '))
 
         if err < conv:
             # jit doesn't like return in for loop. Consider break.

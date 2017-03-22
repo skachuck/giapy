@@ -50,7 +50,7 @@ from scipy.integrate import ode, odeint
 from numba import jit, void, int64, float64
 
 #from giapy.numTools.solvde import solvde
-from ..numTools.solvdeJit import solvde
+from giapy.numTools.solvdeJit import solvde
 
         
 
@@ -961,9 +961,9 @@ class SphericalEarthShooter(object):
         try:
             coeffs = np.r_[np.linalg.solve(a.T, b), 1]
         except np.linalg.LinAlgError as e:
-            print y
-            print a
-            print b
+            print(y)
+            print(a)
+            print(b)
             raise e
         
         # put the final solution together

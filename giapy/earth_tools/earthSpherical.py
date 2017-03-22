@@ -9,9 +9,10 @@ retrieving loading response curves on a spherically symmetric earth.
 """
 import numpy as np
 from scipy.interpolate import interp1d
-from ... import pickle
+from giapy import pickle
 
-from .earthIntegrator import SphericalEarthOutput, SphericalEarthShooter,\
+from giapy.earth_tools.earthIntegrator import SphericalEarthOutput,\
+        SphericalEarthShooter,\
         SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
         integrateRelaxationScipy
 
@@ -173,7 +174,7 @@ class SphericalEarth(object):
             except:
                 # If Solvde takes too many steps, use shooting method to
                 # generate new guess and continue.
-                print 'Reguessing: n={0}'.format(n)
+                print('Reguessing: n={0}'.format(n))
                 yE0, yV0 = get_t0_guess(self.params, zarray, n=n)
                 self.relaxer = SphericalEarthRelaxer(self.params, 
                                     zarray, yE0, yV0, n)

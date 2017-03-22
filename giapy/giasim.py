@@ -25,11 +25,11 @@ try:
 except:
     pass
 
-from .map_tools import GridObject, sealevelChangeByMelt,\
+from giapy.map_tools import GridObject, sealevelChangeByMelt,\
                     volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
                     floatingIceRedistribute
 
-from .. import GITVERSION, timestamp, MODPATH, call, os
+from giapy import GITVERSION, timestamp, MODPATH, call, os
 
 class GiaSimGlobal(object):
     def __init__(self, earth, ice, grid=None, topo=None):

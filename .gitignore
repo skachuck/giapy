@@ -2,4 +2,4 @@
 *.py.swp
 *.DS_Store
 
-data/*
+giapy/data/*
