@@ -19,7 +19,7 @@ class solvde(object):
     relaxation."""
 
     def __init__(self, itmax, conv, slowc, scalv, indexv, nb, y, difeq,
-                    verbose=False):
+                    verbose=False, auto_mesh=False):
         self.y = y
         ne, m = y.shape
         nvars = ne*m
@@ -70,18 +70,32 @@ class solvde(object):
 
             # Convergence check, accumulate average error.
             err = 0
-            for j in range(ne):
-                jv = indexv[j]
-                errj = 0.0; vmax = 0.0
-                km = 0
-                for k in range(k1, k2):
-                    vz = np.abs(self.c[jv, 0, k])
-                    if vz > vmax:
-                        vmax = vz
-                        km = k+1
-                    errj += vz
-                err += errj/scalv[j]
-            err = err/nvars
+            if not auto_mesh:
+                for j in range(ne):
+                    jv = indexv[j]
+                    errj = 0.0; vmax = 0.0
+                    km = 0
+                    for k in range(k1, k2):
+                        vz = np.abs(self.c[jv, 0, k])
+                        if vz > vmax:
+                            vmax = vz
+                            km = k+1
+                        errj += vz
+                    err += errj/scalv[j]
+                err = err/nvars
+            else:
+                for j in range(ne-3):
+                    jv = indexv[j]
+                    errj = 0.0; vmax = 0.0
+                    km = 0
+                    for k in range(k1, k2):
+                        vz = np.abs(self.c[jv, 0, k])
+                        if vz > vmax:
+                            vmax = vz
+                            km = k+1
+                        errj += vz
+                    err += errj/scalv[j]
+                err = err/(nvars-3)
 
             # Reduce correction when error is large.
             fac = slowc/err if err > slowc else 1.
