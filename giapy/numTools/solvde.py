@@ -113,6 +113,7 @@ class solvde(object):
 
             if err < conv: 
                 self.y = y
+                self.it = it
                 return
 
         raise ValueError('Too many iterations in solvde')
