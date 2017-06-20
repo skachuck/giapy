@@ -1,3 +1,24 @@
+"""
+__init__.py
+
+Author: Samuel B. Kachuck
+
+Import giapy submodules into convenient namespace and provide useful data to be
+used across the package.
+
+Data
+----
+MODPATH: the path to the package
+GITVERSION: the hashed version of the git (for recording state of code along
+            with computations)
+Methods
+-------
+timestamp: fancy string of the current date and time
+load : filename (str)
+    Convenience function for unpickling an object
+"""
+
+
 import os, sys
 from datetime import datetime
 from subprocess import check_output, call

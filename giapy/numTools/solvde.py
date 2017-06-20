@@ -19,7 +19,7 @@ class solvde(object):
     relaxation."""
 
     def __init__(self, itmax, conv, slowc, scalv, indexv, nb, y, difeq,
-                    verbose=False, auto_mesh=False):
+                    verbose=False, auto_mesh=False, keep_steps=False):
         self.y = y
         ne, m = y.shape
         nvars = ne*m
@@ -46,6 +46,12 @@ class solvde(object):
         ic4=ne
         jc1=0
         jcf=ic3
+
+        # Keep steps keeps all objective values
+        if keep_steps:
+            self.steps = []
+            self.errs = []
+            
 
         for it in xrange(itmax):        # Primary iteration loop.
             k = k1                 # Boundary conditions at first point.
@@ -97,6 +103,10 @@ class solvde(object):
                     err += errj/scalv[j]
                 err = err/(nvars-3)
 
+            if keep_steps:
+                self.errs.append(err)
+                self.steps.append(y.copy())
+
             # Reduce correction when error is large.
             fac = slowc/err if err > slowc else 1.
             
@@ -113,7 +123,8 @@ class solvde(object):
 
             if err < conv: 
                 self.y = y
-                self.it = it
+                # Steps are zero-indexed.
+                self.it = it + 1 
                 return
 
         raise ValueError('Too many iterations in solvde')

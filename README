@@ -1,12 +1,22 @@
+# GIAPY: Glacial Isostatic Adjustment in PYthon
+
+This package provides the classes and functions necessary for calculating
+the Glacial Isostatic Adjustment of the surface of the earth in response to
+shifting surface loads and comparing it to geophysical data. The method being 
+developed is based principally on that of Cathles (1975). 
+
+The primary computation occus in ```giapy.giasim```, which is responsible for 
+combing loads and earth models to compute responses. The method is a spherical,
+gravitationally-consistent, with a redistributing ocean load that obeys shifting
+coastlines. There are modules for manipulating ice models (```giapy.ice```), for 
+computing the response to harmonic loads (```giapy.earth```), and for data 
+integration (```giapy.data```). 
+
+
 *** The current version is not yet ready for public use.
     If you are chomping at the bit, go for it and let me know.
     Otherwise, wait.
 ***
-
-This package provides the classes and functions necessary for calculating
-the Glacial Isostatic Adjustment of the earth and comparing it to geophysical
-data. The method being developed is principally that of Cathles (1975), though
-I hope to expand this in future.
 
 DEPENDENCIES
 basemap : this package does the majority of the geographic plotting and provides 
