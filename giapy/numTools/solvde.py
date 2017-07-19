@@ -19,7 +19,8 @@ class solvde(object):
     relaxation."""
 
     def __init__(self, itmax, conv, slowc, scalv, indexv, nb, y, difeq,
-                    verbose=False, auto_mesh=False, keep_steps=False):
+                    verbose=False, auto_mesh=False, keep_steps=False,
+                    slowc_corr=None):
         self.y = y
         ne, m = y.shape
         nvars = ne*m
@@ -102,6 +103,9 @@ class solvde(object):
                         errj += vz
                     err += errj/scalv[j]
                 err = err/(nvars-3)
+
+            if it == 0 and slowc_corr is not None and err < slowc:
+                slowc = min(slowc, slowc_corr*err)
 
             if keep_steps:
                 self.errs.append(err)
