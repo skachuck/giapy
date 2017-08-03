@@ -60,7 +60,8 @@ def plotStdErrorsOnMap(lons, lats, ses, numPts=None, basemap=None, ax=None,
 
     return ax
 
-def plotLocTimeseries(data, calc, ax=None, title=False, nbr=False, **kwargs):
+def plotLocTimeseries(data, calc, ax=None, title=False, nbr=False,
+                        invert=False,**kwargs):
     if ax is None:
         fig, ax = plt.subplots(1,1)
 
@@ -70,7 +71,12 @@ def plotLocTimeseries(data, calc, ax=None, title=False, nbr=False, **kwargs):
     ms = kwargs.get('ms', 15)
     ls = kwargs.get('ls', 'None')
 
-    ax.plot(data.ts, data.ys, marker=marker, color=color, alpha=alpha,
+    if hasattr(data.timeseries, 'inds'):
+        inds = data.timeseries.inds
+    else:
+        inds = np.s_[0:-1]
+
+    ax.plot(data.ts[inds], data.ys[inds], marker=marker, color=color, alpha=alpha,
             ms=ms, ls=ls)
     ax.plot(calc.ts, calc.ys)
 
@@ -78,5 +84,5 @@ def plotLocTimeseries(data, calc, ax=None, title=False, nbr=False, **kwargs):
         ax.set_title(str(data))
     elif nbr:
         ax.set_title(data.recnbr)
-    ax.invert_xaxis()
+    if invert: ax.invert_xaxis()
     return plt.gca()
