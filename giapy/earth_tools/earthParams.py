@@ -182,27 +182,63 @@ class EarthParams(object):
         return (12 * (1-pois**2) * self.D / young *1e-8)**(0.333)
 
     def _alterColumn(self, col, zy):
+        """
+        Alter a parameter column, while preserving all discontinuities.
+
+        Results in new depth array, with all depth discontinuities from both
+        the original parameter array and new column.
+        """
         z = zy[0]
         y = zy[1]
 
-        interpY = interp1d(z, y)
-        #zDisc = locateDiscontinuities(z)
-        #z = np.union1d(z, zDisc)
+        # Create interpolator to join new array into old
+        interpY = interp1d(z, y) 
 
-        # Generate new interpolation array
-        #self.z = np.union1d(self.z, z)
+        # Find discontinuities in new column
+        idalt = locateDiscontinuities(z)
+        zdalt = z[idalt]
+        # Find discontinuities in old array
+        idold = locateDiscontinuities(self.z)
+        zdold = self.z[idold]
+        # Only need to keep disconstinuities once, in case of overlap
+        zd = np.union1d(zdalt, zdold)
+        # The new z array is created by unioning and then adding
+        # discontinuities back in (once, by previous line)
+        zu = np.union1d(z, self.z)
+        znew = np.sort(np.r_[zu, zd])
 
-        self._paramArray = self._interpParams(self.z)
+        # The discontinuities in the new array.
+        idnew = locateDiscontinuities(znew)
+        zdnew = znew[idnew]
 
-        self._paramArray[col] = interpY(self.z)
+        # We interpolate the new column and old array to new z array
+        newcolumn = interpY(znew)
+        newparamArray = self._interpParams(znew) 
+
+        # ans replace discontinuities one at a time
+        for i, zi in zip(idnew, zdnew):
+            if zi in zdalt:
+                itmp, = np.where(zi == z)
+                newcolumn[i] = y[itmp[0]]
+            if zi in zdold:
+                itmp, = np.where(zi == self.z)
+                newparamArray[:,i] = self._paramArray[:,itmp[0]]
+
+        # Put the new column into the array
+        newparamArray[col] = newcolumn
+
+        # and reset all the class data.
+        self._paramArray = newparamArray
+        self.z = znew
         self._interpParams = interp1d(self.z, self._paramArray)
 
+def locateDiscontinuities(z):
+    """Locate where in an array a value is repeated.
+    
+    Note: it returns the index of the first of each pair of repeated values.
+    """
 
-def locateDiscontinuities(z, eps=None):
-    eps = eps or z.max()*1e-8
     trash, uniqueInds = np.unique(z, return_inverse=True)
-    i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0)
-    zDisc = z[i]
-    zDisc = np.r_[z[i]-eps, z[i]+eps]
-    return zDisc
+    i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0) 
+    return i
 
