@@ -350,7 +350,7 @@ def propMatElas_norm(zarray, n, params, Q=1):
     else:
         return (z_i*a.T).T
 
-def gen_elasb_norm(n, yE, uV, params, zarray, Q=1):
+def gen_elasb_norm(n, uV, params, zarray, Q=1):
     # Check for individual z call
     zarray = np.asarray(zarray)
  
@@ -388,19 +388,20 @@ def gen_elasb_norm(n, yE, uV, params, zarray, Q=1):
     # Lower Boundary Condition inhomogeneity
     b[0,0] = 0.
     b[0,1] = 0.
-    b[0,2] = (denC-rhoC)*gC*uV[0]/(2*n+1)
+    b[0,2] = ((denC-rhoC)*gC*uV[0]/(2.*n+1.)
+                -rhoC*(denC-rhoC)*uV[0]/(2.*n+1)**2)
     b[0,3] = 0.
-    b[0,4] = 0.
-    b[0,5] = 0.
+    b[0,4] = -(denC-rhoC)*uV[0]/(2.*n+1)
+    b[0,5] = -n/params.rCore*(denC-rhoC)*uV[0]/(2.*n+1)**2
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
     b[-1,1] = 0.
-    b[-1,2] = -rhoS/(2*n+1)*uV[-1]
+    b[-1,2] = -rhoS/(2.*n+1.)*uV[-1]
     b[-1,3] = 0.
     b[-1,4] = 0.
     if Q == 1:
-        b[-1,5] = 0.
+        b[-1,5] = -rhoS/(2.*n+1.)*uV[-1]
     else:
         b[-1,5] = 0.
 
@@ -412,9 +413,9 @@ def gen_elasb_norm(n, yE, uV, params, zarray, Q=1):
         bi[1] = 0.
         bi[2] = -g[i]*nonad[i]*hvi
         bi[3] = 0.
-        bi[4] = zarray[i]*nonad[i]*hvi/(2*n+1)
+        bi[4] = zarray[i]*nonad[i]*hvi/(2.*n+1.)
         if Q == 1:
-            bi[5] = -(n+1)*nonad[i]*hvi
+            bi[5] = -(n+1.)*nonad[i]*hvi
         else:
             bi[5] = 0.
 
@@ -431,13 +432,17 @@ class SphericalElasSMat_norm(object):
         self.b = b
 
         self.mpt = len(self.z)
-        self.updateProps()
+        self.updateProps(self.n, self.z, self.b)
         
-    def updateProps(self, n=None, z=None):
+    def updateProps(self, n=None, z=None, b=None):
         self.n = n or self.n
         self.z = self.z if z is None else z
-        zmids = 0.5*(self.z[1:]+self.z[:-1])
-        self.A = propMatElas_norm(zmids, self.n, self.params, self.Q) 
+        # Only recompute A matrix if n or z are changed.
+        if n is not None or z is not None:
+            zmids = 0.5*(self.z[1:]+self.z[:-1])
+            self.A = propMatElas_norm(zmids, self.n, self.params, self.Q)
+        if b is not None:
+            self.b = b
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
         
@@ -495,8 +500,8 @@ class SphericalElasSMat_norm(object):
                 s[5, 6+indexv[4]] = -1/rCore
                 s[5, 6+indexv[5]] = 1.
                 s[5, jsf] = (y[5,0] - denCore/(2*self.n+1)*y[0,0] - 1/rCore*y[4,0])
-            if self.b is not None:
-                s[:,jsf] -= self.b[0]
+            if self.b is not None: 
+                s[[3,4,5],jsf] -= self.b[0, [2,3,5]]
  
                 
 
@@ -547,7 +552,8 @@ class SphericalElasSMat_norm(object):
                 s[2, jsf] = y[5, self.mpt-1] + 1
 
             if self.b is not None:
-                s[:,jsf] -= self.b[-1]
+                s[[0,1,2],jsf] -= self.b[-1, [2,3,5]]
+                
 
         else:           # Finite differences.
             zsep = (self.z[k] - self.z[k-1])
