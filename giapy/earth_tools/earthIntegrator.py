@@ -500,7 +500,7 @@ class SphericalElasSMat(object):
                 s[3, jsf] = y[0,0]
             else:
                 # Radial stress on the core.
-                s[3, 6+indexv[0]] = -denCore*gCore*rstar/mustar
+                s[3, 6+indexv[0]] = -0.33*G*rstar*rCore*denCore**2*rstar/mustar #denCore*gCore*rstar/mustar
                 s[3, 6+indexv[1]] = 0.
                 s[3, 6+indexv[2]] = 1.
                 s[3, 6+indexv[3]] = 0.
