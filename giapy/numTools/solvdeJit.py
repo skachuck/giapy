@@ -86,7 +86,7 @@ def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False):
         if err < conv:
             # jit doesn't like return in for loop. Consider break.
             break
-    return y
+    return it+1
     
     # jit won't raise errors, consider flag.
     #raise ValueError('Too many iterations in solvde')
@@ -215,3 +215,21 @@ def errest(ne, k1, k2, indexv, scalv, c):
         err += errj/scalv[j]
     return err
 
+@jit(void(int64, int64, int64, float64[:,:], float64[:], 
+    float64[:,:], int64[:], float64[:,:]), nopython=True)
+def interior_smatrix_fast(n, k, jsf, A, b, y, indexv, s):
+    """Generates the s matrix used by solvde for interior points for a linear
+    system characterized by linear differential operator A and inhomogeneity b.
+    i.e., dy/dx = A(x).y + b(x).
+    """
+    for i in range(n):
+        rgt = 0.
+        for j in range(n):
+            if i==j:
+                s[i, indexv[j]]   = -1. - A[i,j]
+                s[i, n+indexv[j]] =  1. - A[i,j]
+            else:
+                s[i, indexv[j]]   = -A[i,j]
+                s[i, n+indexv[j]] = -A[i,j]
+            rgt += A[i,j] * (y[j, k] + y[j, k-1])
+        s[i, jsf] = y[i, k] - y[i, k-1] - rgt - b[i]

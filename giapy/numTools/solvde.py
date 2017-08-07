@@ -19,8 +19,7 @@ class solvde(object):
     relaxation."""
 
     def __init__(self, itmax, conv, slowc, scalv, indexv, nb, y, difeq,
-                    verbose=False, auto_mesh=False, keep_steps=False,
-                    slowc_corr=None):
+                    verbose=False, keep_steps=False, slowc_corr=None):
         self.y = y
         ne, m = y.shape
         nvars = ne*m
@@ -77,33 +76,20 @@ class solvde(object):
 
             # Convergence check, accumulate average error.
             err = 0
-            if not auto_mesh:
-                for j in range(ne):
-                    jv = indexv[j]
-                    errj = 0.0; vmax = 0.0
-                    km = 0
-                    for k in range(k1, k2):
-                        vz = np.abs(self.c[jv, 0, k])
-                        if vz > vmax:
-                            vmax = vz
-                            km = k+1
-                        errj += vz
-                    err += errj/scalv[j]
-                err = err/nvars
-            else:
-                for j in range(ne-3):
-                    jv = indexv[j]
-                    errj = 0.0; vmax = 0.0
-                    km = 0
-                    for k in range(k1, k2):
-                        vz = np.abs(self.c[jv, 0, k])
-                        if vz > vmax:
-                            vmax = vz
-                            km = k+1
-                        errj += vz
-                    err += errj/scalv[j]
-                err = err/(nvars-3)
-
+            
+            for j in range(ne):
+                jv = indexv[j]
+                errj = 0.0; vmax = 0.0
+                km = 0
+                for k in range(k1, k2):
+                    vz = np.abs(self.c[jv, 0, k])
+                    if vz > vmax:
+                        vmax = vz
+                        km = k+1
+                    errj += vz
+                err += errj/scalv[j]
+            err = err/nvars
+            
             if it == 0 and slowc_corr is not None and err < slowc:
                 slowc = min(slowc, slowc_corr*err)
 
@@ -232,6 +218,23 @@ class solvde(object):
             vx=self.c[ic,jcf,kc-1]
             s[iz1:iz2, jmf] -= s[iz1:iz2, j]*vx
         self.s = s
+
+def interior_smatrix_fast(n, k, jsf, A, b, y, indexv, s):
+    """Generates the s matrix used by solvde for interior points for a linear
+    system characterized by linear differential operator A and inhomogeneity b.
+    i.e., dy/dx = A(x).y + b(x).
+    """
+    for i in range(n):
+        rgt = 0.
+        for j in range(n):
+            if i==j:
+                s[i, indexv[j]]   = -1. - A[i,j]
+                s[i, n+indexv[j]] =  1. - A[i,j]
+            else:
+                s[i, indexv[j]]   = -A[i,j]
+                s[i, n+indexv[j]] = -A[i,j]
+            rgt += A[i,j] * (y[j, k] + y[j, k-1])
+        s[i, jsf] = y[i, k] - y[i, k-1] - rgt - b[i]
 
 ################### EXAMPLE OF USE ######################
 def main_sfroid(n, mm):
