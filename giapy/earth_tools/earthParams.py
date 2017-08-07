@@ -181,7 +181,7 @@ class EarthParams(object):
         # 1e-8 converts (N m) / (dyne / cm^2) to km^3
         return (12 * (1-pois**2) * self.D / young *1e-8)**(0.333)
 
-    def _alterColumn(self, col, zy):
+    def _alterColumnPresDisc(self, col, zy):
         """
         Alter a parameter column, while preserving all discontinuities.
 
@@ -193,7 +193,7 @@ class EarthParams(object):
 
         # Create interpolator to join new array into old
         interpY = interp1d(z, y) 
-
+        
         # Find discontinuities in new column
         idalt = locateDiscontinuities(z)
         zdalt = z[idalt]
@@ -228,8 +228,17 @@ class EarthParams(object):
         newparamArray[col] = newcolumn
 
         # and reset all the class data.
-        self._paramArray = newparamArray
+        self._paramArray = newparamArray 
         self.z = znew
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def _alterColumn(self, col, zy):
+        z = zy[0]
+        y = zy[1]
+        interpY = interp1d(z, y) 
+        self.z = np.union1d(z, self.z)
+        self._paramArray = self._interpParams(self.z)
+        self._paramArray[col] = interpY(self.z)
         self._interpParams = interp1d(self.z, self._paramArray)
 
 def locateDiscontinuities(z):
