@@ -11,7 +11,7 @@ from giapy.data_tools.abstractDataClasses import AbsGeoTimeSeries, \
 def calcRSL(sim, rsldata, smooth=True, noise=0):
     #TODO This function shouldn't have to know what's inside any object, let
     # alone a complicated one, like sim. Consider calculating rsl first and
-    # passing it and calculated times in (ts, rsl, emergedata).
+    # passing it and calculated times in (ts, rsl).
     # To reference to present day
     #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
     u0 = sim['sstopo'][-1]
@@ -49,6 +49,9 @@ def calcRSL(sim, rsldata, smooth=True, noise=0):
             timeseries = np.array([ts, 
                     np.interp(tsint, 
                                 sim['sstopo'].outTimes, uAtLoc)]).T
+
+        # Mean reference, so that mean of data and prediction are same.
+        timeseries[:,1] += np.mean(loc.ys[loc.inds]) - np.mean(timeseries[:,1])
 
         #Apply the noise (default 0)
         scatter = noise*np.random.randn(len(timeseries[:,1]))
@@ -292,6 +295,10 @@ class RLR(np.ndarray):
 class RSLDatum(AbsGeoTimeSeries):
     def __repr__(self):
         return 'RLR( {0}, {1} )'.format(self.sitename, self.type)
+
+    @property
+    def inds(self):
+        return self.timeseries.inds
 
 class RSLData(AbsGeoTimeSeriesContainer):
     def __init__(self, nbrs=None, data=None, typ='monthly'):
