@@ -74,6 +74,10 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         self.form_long_vectors()
         self.W = None
         self.TIMESTAMP = timestamp()
+
+    def __repr__(self):
+        for loc in self:
+            print(loc.recnbr, loc)
         
     def transform_locs(self, basemap, inverse=False):
         xs, ys = basemap(self.locs[:,0], self.locs[:,1], inverse=inverse)
