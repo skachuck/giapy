@@ -19,23 +19,38 @@ class EarthParams(object):
 
     Parameters
     ----------
+    model : str
+        The elastic model to use. Needs to be .txt in MODPATH/data/earth/ with
+        columns:      radius   density   shear   bulk (or first lame)   gravity 
+        (default PREM).
     visArray : np.ndarray
         The array of depths and viscosities (in poise, 1e-1 Pa s). If visArray
         is None, assumes a uniform 1e21 Pa s mantle. visArray should be a 2xN 
         array or depths and viscosities. Can be changed later using 
         EarthParams.addViscosity.
-
     D : float
         The flexural rigidity of the lithosphere (in N). Can be changed later
         using EarthParams.addLithosphere (with either D, the flexural rigidity,
         or H, the elastic thickness of the lithospehre).
+    bulk : boolean
+        Indicates whether the model uses bulk of lame parameters so that it can
+        be converted to the first lame parameter if necessary (default True).
+    normmode: 'dim', 'larry', or 'love'
+        Indicates which normalization to use for the parameters. This can be
+        either 'dim' for dimensional parameters (in cgs, for now), 'larry'
+        which nondimensionalizes elastic parameters, radii, and viscosities, or
+        'love' which nondimensionalizes everything for use with direct Love
+        number computation.
     """
-    def __init__(self, model='prem', visArray=None, D=0, bulk=True):        
+    def __init__(self, model='prem', visArray=None, D=0, bulk=True,
+                    normmode='larry'):        
         self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
         
+        self.normmode = 'larry'
         self.norms = {'r'  :     6.371e+8 ,     # cm
                       'eta':     1e+22    ,     # poise = g/cm.s    
-                      'mu' :     293.8e+10}     # dyne/cm^2
+                      'mu' :     293.8e+10,     # dyne/cm^2
+                      'g'  :     981.56   }     # cm/s^2
 
         try:
             locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
@@ -88,6 +103,8 @@ class EarthParams(object):
         # Flexural rigidity is assumed 0 (no lithosphere)
         self.D = D
 
+        self.normalize(normmode)
+
     def __call__(self, z, depth=False):
         return self.getParams(z, depth)
 
@@ -98,6 +115,78 @@ class EarthParams(object):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def normalize(self, normmode='love'):
+        """Normalize or dimensionalize the parameters.
+        
+        normmode: 'dim', 'larry', or 'love'
+            Indicates which normalization to use for the parameters. This can be
+            either 'dim' for dimensional parameters (in cgs, for now), 'larry'
+            which nondimensionalizes elastic parameters, radii, and viscosities, or
+            'love' which nondimensionalizes everything for use with direct Love
+            number computation.
+            """
+
+        assert normmode in ['love', 'larry', 'dim'], \
+            'normmode {} not supported. See docstring.'.format(normmode)
+
+        # If the object is already in this mode, do nothing.
+        if normmode == self.normmode: return
+
+        # Putting units back in.
+        if normmode == 'dim':
+            if self.normmode == 'love': 
+                re = self.norms['r']
+                g0 = self.norms['g']
+                rhobar = g0/self.G/re
+
+                self._paramArray[[0,4,5]] *= rhobar
+                self._paramArray[[1,2]] *= rhobar*re*g0   
+                self._paramArray[3] *= g0
+                self._paramArray[6] *= self.norms['eta']
+
+                self.rCore *= re
+                self.denCore *= rhobar
+
+            elif self.normmode == 'larry':
+                self._paramArray[[0,4,5]] *= 1.
+                self._paramArray[[1,2]] *= self.norms['mu']
+                self._paramArray[3] *= 1.
+                self._paramArray[6] *= self.norms['eta']
+
+                self.rCore *= self.norms['r']
+                self.denCore *= 1.
+                
+        # Removing (some) units.
+        else:
+            # First, redimensionalize,
+            self.normalize('dim')
+            # then nondimensionalize.
+            if normmode == 'love':
+                re = self.norms['r']
+                g0 = self.norms['g']
+                rhobar = g0/self.G/re
+
+                self._paramArray[[0,4,5]] /= rhobar
+                self._paramArray[[1,2]] /= rhobar*re*g0   
+                self._paramArray[3] /= g0
+                self._paramArray[6] /= self.norms['eta']
+
+                self.rCore /= re
+                self.denCore /= rhobar
+            elif normmode == 'larry':
+                self._paramArray[[0,4,5]] /= 1.
+                self._paramArray[[1,2]] /= self.norms['mu']
+                self._paramArray[3] /= 1.
+                self._paramArray[6] /= self.norms['eta']
+
+                self.rCore /= self.norms['r']
+                self.denCore /= 1.
+
+        # Set the normmode for reference later and recreate interpolation
+        # object.
+        self.normmode = normmode
         self._interpParams = interp1d(self.z, self._paramArray)
 
     def getParams(self, z, depth=False):
