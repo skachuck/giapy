@@ -15,7 +15,7 @@ Date: April 1, 2017
 
 import numpy as np
 from giapy.earth_tools.earthParams import EarthParams
-from giapy.numTools.solvde import solvde, interior_smatrix_fast
+from giapy.numTools.solvdeJit import interior_smatrix_fast
 from numba import jit, void, int64, float64
 
 def propMatElas(zarray, n, params, Q=1):
@@ -443,10 +443,7 @@ class SphericalElasSMat_norm(object):
         if b is not None:
             self.b = b
 
-    def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
-        
-        paramSurf = self.params(1.)
-        rhobar = paramSurf['grav']/self.params.G/self.params.norms['r']
+    def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
         Q = self.Q
 
         l = 2.*self.n+1.

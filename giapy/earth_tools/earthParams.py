@@ -322,6 +322,7 @@ class EarthParams(object):
         self._interpParams = interp1d(self.z, self._paramArray)
 
     def _alterColumn(self, col, zy):
+        #self._alterColumnPresDisc(col, zy)
         z = zy[0]
         y = zy[1]
         interpY = interp1d(z, y) 

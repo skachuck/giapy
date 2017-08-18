@@ -311,7 +311,7 @@ class SphericalEarthRelaxer(object):
         #solvde = Solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3, 
         #                    self.yE, self.difeqElas, verbose)
         #self.yE = solvde.y              # Store results for next initial guess.
-        self.yE = solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3,
+        self.yE, = solvde(stepmax, 1e-14, slowc, scalvElas, indexv, 3,
                             self.yE, self.difeqElas, verbose)
         self.updateElProfs(self.yE)      # Update communication profiles.
 
@@ -325,7 +325,7 @@ class SphericalEarthRelaxer(object):
         #solvde = Solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2, 
         #                    self.yV, self.difeqVisc, verbose)
         #self.yV = solvde.y              # Store results for next initial guess.
-        self.yV = solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2,
+        self.yV, = solvde(stepmax, 1e-14, slowc, scalvVisc, indexv, 2,
                             self.yV, self.difeqVisc, verbose)
 
         rstar   = self.earthparams.norms['r']
@@ -352,6 +352,7 @@ class SphericalEarthRelaxer(object):
         self.difeqVisc.updateProps(n=n)
         self.yE = self.yEt0.copy()
         self.yV = self.yVt0.copy()
+        self.alpha = self.earthparams.getLithFilter(n=n)
 
     def initCommProfs(self, zarray):
         """Initialize the interpolation object for communicating profiles
