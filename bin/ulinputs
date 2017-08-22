@@ -1,5 +1,5 @@
 #!/bin/bash/
-ls ./giapy/data/inputs > ./giapy/data/inputfilelist
-tar -czvf giainputs.tar.gz ./giapy/data/inputs/
-scp giainputs.tar.gz skachuck@secure.physics.cornell.edu:~/public_html
-rm giainputs.tar.gz
+ls -R ./giapy/data > ./giapy/data/inputfilelist
+tar -czvf giapydata.tar.gz ./giapy/data/
+scp giapydata.tar.gz skachuck@secure.physics.cornell.edu:~/public_html
+rm giapydata.tar.gz
