@@ -365,7 +365,7 @@ def oceanUpliftLoad(h, Ta, upl):
     # The new topography
     Tb = Ta + upl - h
     #               Newly submerged.            Newly emerged.
-    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Ta*(Tb>0)*(Ta<0)
+    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Tb*(Tb>0)*(Ta<0)
     return hw
 
 def sealevelChangeByUplift(upl, topo, grid):
