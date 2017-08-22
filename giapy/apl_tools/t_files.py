@@ -78,3 +78,61 @@ def write_case_files(casename, result):
         f.write('ages: {}\n'.format('\t'.join([str(t) for t in outTimes])))
         
 
+def write_data_files(casename, result, emergedata=None, rsldata=None,
+                        gpsdata=None):
+    try: 
+        os.mkdir(casename)
+    except:
+        pass
+
+    coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
+    outTimes = result.upl.outTimes 
+   
+    if emergedata is not None:
+        u0 = result['sstopo'].nearest_to(0)
+
+        uAtLocs = []
+        for ut in result['sstopo']:
+            ut = u0 - ut
+            interpfunc = result.inputs.grid.create_interper(ut.T)
+            uAtLocs.append(interpfunc.ev(emergedata.lons, emergedata.lats))
+
+        output = np.zeros((len(emergedata.lons), len(outTimes)+3))
+
+        output[:, 3:] = np.asarray(uAtLocs).T
+        output[:, 0] = [loc.recnbr for loc in emergedata]
+        output[:, 1] = emergedata.lons
+        output[:, 2] = emergedata.lats
+
+        fname = '{}/py_file_emerge.txt'.format(casename)
+        header = 'case: {} emergence interpolation\n'.format(casename) + coltit
+        np.savetxt(fname, output, header=header)
+
+    if rsldata is not Nonew:
+        u0 = result['sstopo'].nearest_to(0)
+
+        uAtLocs = []
+        for ut in result['sstopo']:
+            ut = u0 - ut
+            interpfunc = result.inputs.grid.create_interper(ut.T)
+            uAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))
+
+        output = np.zeros((len(rsldata.lons), len(outTimes)+3))
+
+        output[:, 3:] = np.asarray(uAtLocs).T
+        output[:, 0] = [loc.recnbr for loc in emergedata]
+        output[:, 1] = emergedata.lons
+        output[:, 2] = emergedata.lats
+
+        fname = '{}/py_file_emerge.txt'.format(casename)
+        header = 'case: {} emergence interpolation\n'.format(casename) + coltit
+        np.savetxt(fname, output, header=header)
+
+
+    #with open('{}/py_file_inf.txt'.format(casename), 'w') as f:
+    #    f.write('case: {}\n'.format(casename))
+    #    f.write('date: {}\n'.format(result.TIMESTAMP))
+    #    f.write('vers: {}\n'.format(result.GITVERSION))
+    #    f.write('files: {}\n'.format('\t'.join(fnames)))
+    #    f.write('mMW: {}\n'.format('\t'.join([str(t) for t in result.esl.array])))
+    #    f.write('ages: {}\n'.format('\t'.join([str(t) for t in outTimes])))

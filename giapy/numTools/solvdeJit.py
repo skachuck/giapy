@@ -13,9 +13,33 @@ solvde.py
 import numpy as np
 from numba import jit, void, int64, float64
 
-def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False):
+def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False,
+            it_count=False):
     """Driver routine for solution of two-point boundary value problems by
-    relaxation."""
+    relaxation accelerated using numba.
+    
+    Parameters
+    ----------
+    itmax : int, the maximum number of iterations allowed before failure.
+    conv : float, the average error tolerance.
+    slowc : float, the error, above which, to slow convergence (by slowc/err).
+    scalv : array
+        An array the same length as the solution vector, giving a typical scale
+        of the solution variables, for error calculation.
+    indexv : array
+        An array giving the indices of the reordered solution variables so that
+        the variables constrained by boundary conditions are first.
+    nb : int, the number of bottom boundary conditions.
+    y : array
+        The initial estimate of the solution. The solution is changed in place,
+        so input a copy if you wish to save the original guess.
+    difeq : class
+        A class that provides the smatrix routine for filling the s matrix with
+        boundary conditions and internal couplings. It's call signature must be
+        difeq.smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y)
+    verbose : Boolean, print step number and error info (default: False)
+    it_count : return iteration number in addition to solution (default: False)
+    """
 
     ne, m = y.shape
     nvars = ne*m
@@ -86,7 +110,10 @@ def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False):
         if err < conv:
             # jit doesn't like return in for loop. Consider break.
             break
-    return it+1
+    if it_count:
+        return y, it+1
+    else:
+        return y,
     
     # jit won't raise errors, consider flag.
     #raise ValueError('Too many iterations in solvde')

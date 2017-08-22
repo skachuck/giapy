@@ -15,7 +15,8 @@ Date: April 1, 2017
 
 import numpy as np
 from giapy.earth_tools.earthParams import EarthParams
-from giapy.numTools.solvde import solvde, interior_smatrix_fast
+from giapy.numTools.solvdeJit import interior_smatrix_fast
+from numba import jit, void, int64, float64
 
 def propMatElas(zarray, n, params, Q=1):
     """Generate the propagator matrix at all points in zarray. Should have
@@ -41,8 +42,8 @@ def propMatElas(zarray, n, params, Q=1):
     mu = muStar*parvals['shear']
     rho = parvals['den']
     g = parvals['grav']
-    grad_rho = np.gradient(parvals['den'])/np.gradient(zarray)#parvals['dend']/r
-    #grad_rho_na = parvals['nonad']
+    grad_rho = np.gradient(parvals['den'])/np.gradient(zarray)
+    
 
     beta_i = 1./(lam+2*mu)
     gamma = mu*(3*lam+2*mu)*beta_i
@@ -53,6 +54,19 @@ def propMatElas(zarray, n, params, Q=1):
 
     a = np.zeros((len(zarray), 6, 6))
 
+    matFill(a, n, G, zarray, z_i, lam, mu, rho, g, grad_rho, beta_i, gamma,
+                delsq, Q)
+
+    if singz:
+        return z_i*a[0]
+    else:
+        return (z_i*a.T).T
+
+@jit(void(float64[:,:,:], int64, float64, float64[:], float64[:], float64[:],
+    float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
+    float64, int64), nopython=True)
+def matFill(a, n, G, zarray, z_i, lam, mu, rho, g, grad_rho, beta_i, gamma,
+                delsq, Q):
     for i in range(len(zarray)):
         
         # r dU_L/dr
@@ -111,11 +125,6 @@ def propMatElas(zarray, n, params, Q=1):
             a[i,5,3] = 0.
             a[i,5,4] = 0
             a[i,5,5] = n-1
-
-    if singz:
-        return z_i*a[0]
-    else:
-        return (z_i*a.T).T
 
 class SphericalElasSMat(object):
     """Class that provides smatrix to Solvde for Elastic solutions."""
@@ -264,6 +273,7 @@ def propMatElas_norm(zarray, n, params, Q=1):
     mu = parvals['shear']
     rho = parvals['den']
     g = parvals['grav']
+    grad_rho = np.gradient(parvals['den'])/np.gradient(zarray)
 
     # Common values
     beta_i = 1./(lam+2*mu)
@@ -274,6 +284,17 @@ def propMatElas_norm(zarray, n, params, Q=1):
 
     a = np.zeros((len(zarray), 6, 6))
 
+    matFill_norm(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q)
+    
+    if singz:
+        return z_i*a[0]
+    else:
+        return (z_i*a.T).T
+
+@jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
+    float64[:], float64[:], float64[:], float64[:], float64[:], float64,
+    float64, int64), nopython=True)
+def matFill_norm(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
     for i in range(len(zarray)):
         
         # r dh/dr
@@ -334,10 +355,6 @@ def propMatElas_norm(zarray, n, params, Q=1):
             a[i,5,4] = 0
             a[i,5,5] = n-1.
 
-    if singz:
-        return z_i*a[0]
-    else:
-        return (z_i*a.T).T
 
 def gen_elasb_norm(n, uV, params, zarray, Q=1):
     assert params.normmode == 'love', 'Must normalize parameters'
@@ -426,10 +443,7 @@ class SphericalElasSMat_norm(object):
         if b is not None:
             self.b = b
 
-    def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
-        
-        paramSurf = self.params(1.)
-        rhobar = paramSurf['grav']/self.params.G/self.params.norms['r']
+    def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
         Q = self.Q
 
         l = 2.*self.n+1.
