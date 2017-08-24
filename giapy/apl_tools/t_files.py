@@ -83,13 +83,12 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
     try: 
         os.mkdir(casename)
     except:
-        pass
-
-    coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
-    outTimes = result.upl.outTimes 
+        pass 
    
     if emergedata is not None:
         u0 = result['sstopo'].nearest_to(0)
+        coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
+        outTimes = result.upl.outTimes 
 
         uAtLocs = []
         for ut in result['sstopo']:
@@ -109,6 +108,8 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         np.savetxt(fname, output, header=header)
 
     if rsldata is not Nonew:
+        coltit = 'recnbr\tlongitude\tlatitude\trsl_i'
+        outTimes = result.upl.outTimes
         u0 = result['sstopo'].nearest_to(0)
 
         uAtLocs = []
@@ -120,12 +121,12 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         output = np.zeros((len(rsldata.lons), len(outTimes)+3))
 
         output[:, 3:] = np.asarray(uAtLocs).T
-        output[:, 0] = [loc.recnbr for loc in emergedata]
-        output[:, 1] = emergedata.lons
-        output[:, 2] = emergedata.lats
+        output[:, 0] = [loc.stid for loc in rsldata]
+        output[:, 1] = rsldata.lons
+        output[:, 2] = rsldata.lats
 
-        fname = '{}/py_file_emerge.txt'.format(casename)
-        header = 'case: {} emergence interpolation\n'.format(casename) + coltit
+        fname = '{}/py_file_rsl.txt'.format(casename)
+        header = 'case: {} rsl interpolation\n'.format(casename) + coltit
         np.savetxt(fname, output, header=header)
 
 
