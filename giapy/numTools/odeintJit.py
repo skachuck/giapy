@@ -10,7 +10,7 @@ odeint.py
         [1] Press, Flannery, Teukolsky, and Vetterling. Numerical Recipes.
         Cambridge University Press, Cambridge UK.
 """
-
+from __future__ import division
 import numpy as np
 import numexpr as ne
 from numba import jit, void, int64, float64
@@ -33,7 +33,11 @@ class Odeint(object):
 	derivs is the user-supplied routine for calculating the right-hand side
 	derivative."""
 
-        nvar = len(ystart)
+        if isinstance(ystart, float):
+            nvar = 1
+            ystart = np.atleast_1d(ystart)
+        else:
+            nvar = len(ystart)
         self.y = np.zeros(nvar)
         self.dydx = np.zeros(nvar)
         self.ystart = ystart
@@ -49,13 +53,13 @@ class Odeint(object):
 
         self.hmin = hmin
         if xsave is None:
-            self.out = Output(x1, x2, nsave)
+            self.out = Output(x1, x2, nsave, nvar)
         else:
-            self.out = ArbitraryArrayOutput(x1, x2, xsave)
+            self.out = ArbitraryArrayOutput(x1, x2, xsave, nvar)
 
         self.dense = self.out.dense
         self.derivs = derivs
-	self.h = np.sign(x2-x1)*h
+	self.h = float(np.sign(x2-x1)*h)
 
         self.stepper = stepper(self.y, self.dydx, self.x, atol, rtol, self.dense, **kwargs)
 
@@ -114,18 +118,22 @@ class StepperBase(object):
 	self.yerr = np.zeros(self.n)	# and error estimate
 
 class Output(object):
-    def __init__(self, x1, x2, nsave):
-	self.nsave = nsave
-        #TODO Allocate arrays first.
-        self.xsave = []
-        self.ysave = []
+    def __init__(self, x1, x2, nsave, ny):
+	self.nsave = nsave 
 	if self.nsave > 0:
 	    self.dense = True
-	elif self.nsave < 0:
+            self.i = 0
+            # Preallocate the save arrays 
+            self.xsave = np.zeros(nsave+1)
+            self.ysave = np.zeros((ny, nsave+1))
+	elif self.nsave < 0 and self.nsave is not None:
 	    self.dense = False
 	    return
 	else:
 	    self.dense = False
+            #TODO How to preallocate unkown space?
+            self.xsave = []
+            self.ysave = []
 
 	if self.dense:
 	    self.x1 = x1
@@ -134,12 +142,16 @@ class Output(object):
 	    self.dxout = float(x2-x1)/nsave
 
     def save_dense(self, stepper, xout, h):
-	self.ysave.append(stepper.denseOut(xout, h))
-	self.xsave.append(xout)
+	self.save(xout, stepper.denseOut(xout, h))
 
     def save(self, x, y):
-	self.ysave.append(y)
-	self.xsave.append(x)
+        if self.dense:
+	    self.ysave[:,self.i] = y[:]
+	    self.xsave[self.i] = x
+            self.i += 1
+        else:
+            self.ysave.append(y)
+            self.xsave.append(x)
 
     def out(self, nstp, x, y, stepper, h):
         """Typically called by Odeint to produce dense output. Input variables
@@ -226,6 +238,14 @@ class StepperDopr5(StepperBase):
     """Dormand-Prince fifth-order Runge-Kutta step with monitoring of local
     truncation error to ensure accuracy and adjust stepsize.
     
+    Parameters
+    ----------
+    kwargs: Stepsize controller keyword arguments (only as keyword arguments)
+        beta : 
+        safe :
+        minscale :
+        maxscale : 
+
     Attributes
     ----------
 
@@ -274,9 +294,9 @@ class StepperDopr5(StepperBase):
 	by their new values, hdid is the stepsize that was actually
 	accomplished, and hnext is the estimated next stepsize."""
 
-	self.h = htry
+	self.h = float(htry)
 
-	self.dy(self.h, derivs)
+	#self.dy(self.h, derivs)
 	while True:
 	    self.dy(self.h, derivs)
 	    err = self.error()
@@ -291,7 +311,7 @@ class StepperDopr5(StepperBase):
 	self.dydx = self.dydxnew.copy()
 	self.y = self.yout
 	self.xold = self.x
-	self.hdid = self.h
+	self.hdid = float(self.h)
 	self.x += self.hdid
         return self.x, self.y
 
@@ -369,7 +389,7 @@ class StepperDopr5(StepperBase):
         d4=-10690763975./1880347072.; d5=701980252875./199316789632.;
         d6=-1453857185./8226518144.;  d7=69997945./29380423.;
 
-	self.rcont1 = self.y
+	self.rcont1 = self.y.copy()
 	ydiff = self.yout - self.y
 	self.rcont2 = ydiff
 	bspl = h*self.dydx - ydiff
@@ -380,18 +400,18 @@ class StepperDopr5(StepperBase):
 
     def denseOut(self, x, h):
 	"""Evaluate interpolating polynomial for y at location x, where
-	xold <= x <= xold+h."""
-	#s = (x-self.xold)/h
-        #s1 = 1.-s
+	xold <= x <= xold+h."""    
+        if isinstance(x, float):
+            s = (x - self.xold)/h
+            s1 = 1. - s
+            ynew =  self.rcont1 + s*(self.rcont2 + s1*(self.rcont3 +
+                            s*(self.rcont4 + s1*self.rcont5)))
+        else:
+            ynew = np.zeros((len(x), self.n))
 
-	#ynew = self.rcont1 + s*(self.rcont2 + s1*(self.rcont3 + s*(self.rcont4 + \
-	#			s1*self.rcont5)))
-    
-        ynew = np.zeros((len(x), self.n))
-
-        denseOutJit(ynew, x, self.xold, h, self.rcont1, self.rcont2,
-                    self.rcont3, self.rcont4, self.rcont5, len(x),
-                    self.n)
+            denseOutJit(ynew, x, self.xold, h, self.rcont1, self.rcont2,
+                        self.rcont3, self.rcont4, self.rcont5, len(x),
+                        self.n)
 
 	return ynew
 
@@ -418,9 +438,9 @@ class StepperDopr5(StepperBase):
 		if scale>self.maxscale: scale=self.maxscale
 
 	    if self.reject:			 # Don' let step increase if last
-		self.hnext = self.h*min(scale, 1.)    # one was just rejected.
+		self.hnext = float(self.h*min(scale, 1.))    # one was just rejected.
 	    else:
-		self.hnext = self.h*scale
+		self.hnext = float(self.h*scale)
 
 	    self.errold = max(err, 1e-4)        # Bookkeeping for next call.
 	    self.reject = False
@@ -428,7 +448,7 @@ class StepperDopr5(StepperBase):
 
 	else:                   # Truncation error too large, reduce stepsize.
 	    scale = max(self.safe*err**(-self.alpha), self.minscale)
-	    self.h *= scale
+	    self.h *= float(scale)
 	    self.reject = True
 	    return False
 
@@ -488,16 +508,16 @@ def rk4(y, dydx, x, h, derivs, args=()):
     yout[0..n-1]. The user supplies the routine derivs(x,y), which returns
     derivatives dydx at x.
     """
-    n = len(y)
+
     hh = h*0.5
     h6 = h/6.
     xh = x+hh
 
     yt = y + hh*dydx		    # First step.
-    dyt = np.zeros(n)
+    dyt = np.zeros_like(y)
     derivs(xh, yt, dyt, *args)	    # Second step.
     yt = y + hh*dyt
-    dym = np.zeros(n)
+    dym = np.zeros_like(y)
     derivs(xh, yt, dym, *args)	    # Third step.
     yt = y + h*dym
     dym += dyt
@@ -517,4 +537,69 @@ class VanDerPol(object):
 
 ###### TESTING ######
 if __name__ == '__main__':
-    pass
+    # Sine function
+    def derivs(x, y, dy):
+        for i in range(len(dy)):
+            dy[i] = np.cos(x)
+
+    try:
+        ode = Odeint(derivs, 0., 0., 2*np.pi, StepperDopr5, 1e-8, 1e-8, 0.001,
+                        0.0001)
+        out = ode.integrate()
+        check = np.allclose(np.squeeze(out.ysave), np.sin(out.xsave))
+        print('Dopr5 sine accuracy check: {}'.format(check))
+    except:
+        print('Dopr 5 sine failed')
+
+    try:
+        # Runge Kutta method check
+        y = np.array([0.])
+        x = 0.
+        xs = [x]
+        ys = [y]
+        dydx = np.array([1.])
+        while x <= 2*np.pi:
+            y = rk4(y, dydx, x, 0.01, derivs)
+            x += 0.01
+            derivs(x, y, dydx)
+            xs.append(x)
+            ys.append(y)
+        check = np.allclose(np.squeeze(np.array(ys)), np.sin(xs))
+        print('Runge kutta sine accuracy check: {}'.format(check))
+    except:
+        print('Runge kutta failed')
+
+    # Exp decay
+    def derivs(x, y, dy):
+        for i in range(len(dy)):
+            dy[i] = -y
+
+    try:
+        ode = Odeint(derivs, 1., 0., 2*np.pi, StepperDopr5, 1e-8, 1e-8, 0.01,
+                        0.00001)
+        out = ode.integrate()
+        check = np.allclose(np.squeeze(out.ysave), np.exp(-np.array(out.xsave)))
+        print('Dopr5 exp check: {}'.format(check))
+    except:
+        print('Dopr5 exp failed')
+
+    #Dense output check
+    try:
+        ode = Odeint(derivs, 1., 0., 2*np.pi, StepperDopr5, 1e-8, 1e-8, 0.01,
+                        0.00001, nsave=100)
+        out = ode.integrate()
+        check = np.allclose(np.squeeze(out.ysave), np.sin(out.xsave))
+        print('Dopr5 exp dense output check: {}'.format(check))
+    except:
+        print('Dopr5 dense output failed')
+
+    # 2d solution check
+    try:
+        derivs = VanDerPol(0.5)
+        ode = Odeint(derivs, np.array([0, 1]), 0, 10., StepperDopr5, 1e-6,
+                        1e-6, 0.01, 0.0001, nsave=100)
+        out = ode.integrate()
+        print('2d solution works')
+    except:
+        print('2d solution failed')
+
