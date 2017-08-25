@@ -114,7 +114,8 @@ class GiaSimGlobal(object):
         earth = self.earth
         ice = self.ice
         grid = self.grid
-        topo = topo or self.topo
+        if topo is None:
+            topo = self.topo
         assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
