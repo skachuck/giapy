@@ -48,7 +48,7 @@ class SphericalLoveVelocities(object):
         self.indexvE = np.array([3,4,0,1,5,2])
         self.indexvV = np.array([2,3,0,1])
 
-    def __call__(self, t, hvLv, ys=None, Q=1, itmax=500, tol=1e-14, slowc=1):
+    def __call__(self, t, hvLv, dydt, Q=1, itmax=500, tol=1e-14, slowc=1):
     
         # Extract initial guesses, if provided, otherwise generate ones.
         #if ys is not None:
@@ -63,7 +63,7 @@ class SphericalLoveVelocities(object):
         be = gen_elasb_norm(self.n, hv, self.params, self.zmid, self.Q)
         #difeqElas = SphericalElasSMat_norm(n, zs, params, Q=Q, b=be)
         self.difeqElas.updateProps(b=be)
-        self.yE = solvde(itmax, tol, slowc, np.ones(6), self.indexvE, 
+        self.yE, = solvde(itmax, tol, slowc, np.ones(6), self.indexvE, 
                                 3, self.yE, self.difeqElas)
     
         # Compute the viscous profiles
@@ -71,13 +71,13 @@ class SphericalLoveVelocities(object):
         
         #difeqVisc = SphericalViscSMat_norm(n, za, params, Q=Q, b=bv)
         self.difeqVisc.updateProps(b=bv)
-        self.yV = solvde(itmax, tol, slowc, np.ones(4), self.indexvV, 
+        self.yV, = solvde(itmax, tol, slowc, np.ones(4), self.indexvV, 
                                 2, self.yV, self.difeqVisc)
 
         # Extract the velocities
-        hLdv = self.yV[[0,1],:].flatten()
+        dydt[:] = self.yV[[0,1],:].flatten()
     
-        return hLdv
+        #return hLdv
 
     def solout(self):
         """Returns 
@@ -89,7 +89,14 @@ class SphericalLoveVelocities(object):
 
 class SphericalEarthOutput(object):
     """Class for organizing the recording of solution points while calculating
-    viscoelastic relaxation in response to surface load.
+    viscoelastic love number relaxation in response to surface load.
+
+    Parameters
+    ----------
+    times : the times to save.
+    zsave : an array of radii to save the love numbers at.
+    zs : the array of depths used to compute profiles at each time step
+    inds : list of indices to save from relaxation objects.
 
     Attributes
     ----------
@@ -152,6 +159,7 @@ class SphericalEarthOutput(object):
         self.outArray[ind, :, 6] = hdv[self.inds]
         self.outArray[ind, :, 7] = f.yE[2, self.inds]
         self.outArray[ind, :, 8] = f.yV[2, self.inds]
+
 
 
 def integrateRelaxationScipy(f, out):

@@ -12,7 +12,9 @@ Date: July 13, 2017
     $$Q_2=4\pi G U_L+\frac{\ell+1}{r}\Psi+\frac{\partial \Psi}{\partial r}.$$
 """
 
+from __future__ import division
 import numpy as np
+from giapy.numTools.solvdeJit import interior_smatrix_fast
 
 def propMatVisc(zarray, n, params, Q=1):
     """Generate the propagator matrix at all points in zarray. Should have
@@ -91,10 +93,7 @@ def gen_viscb(n, yE, uV, params, zarray, Q=1):
     paramSurf = params.getParams(1.)
     g0 = paramSurf['grav']
     re = params.norms['r']
-    rhobar = g0/params.G/re
-    
-    g = g
-    rho = rho
+  
     eta = parvals['visc']*params.norms['eta']
 
     paramCore = params.getParams(params.rCore)
@@ -118,7 +117,7 @@ def gen_viscb(n, yE, uV, params, zarray, Q=1):
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
     b[-1,1] = 0.
-    b[-1,2] = -rhoS*uV[-1]
+    b[-1,2] = -rhoS*g0*uV[-1]
     b[-1,3] = 0.
 
     # Interior points
@@ -254,8 +253,9 @@ def propMatVisc_norm(zarray, n, params, Q=1):
     Returns
     -------
     a : numpy.ndarray of the propagator matrix. Has shape (len(zarray), 6, 6) 
-        or (6,6).
+        or (4,4).
     """
+    assert params.normmode == 'love', 'Must normalize parameters'
     # Check for individual z call
     zarray = np.asarray(zarray)
     singz = False
@@ -302,33 +302,25 @@ def propMatVisc_norm(zarray, n, params, Q=1):
         return (z_i*a.T).T
 
 def gen_viscb_norm(n, yE, uV, params, zarray, Q=1):
+    assert params.normmode == 'love', 'Must normalize parameters'
+    
     # Check for individual z call
     zarray = np.asarray(zarray)
- 
-    re = params.norms['r']
-    G = params.G
-    
-    parvals = params.getParams(zarray)
+   
+    parvals = params.getParams(np.r_[params.rCore, zarray, 1.])
 
-    rho = parvals['den']
-    g = parvals['grav']
-    nonad = parvals['nonad']
-    
-    paramSurf = params.getParams(1.)
-    g0 = paramSurf['grav']
-    re = params.norms['r']
-    rhobar = g0/params.G/re
-    
-    g = g/g0
-    rho = rho/rhobar
-    eta = parvals['visc']
+    rho = parvals['den'][1:-1]
+    g = parvals['grav'][1:-1]
+    nonad = parvals['nonad'][1:-1] 
+    eta = parvals['visc'][1:-1]
 
-    paramCore = params.getParams(params.rCore)
-    rhoC = paramCore['den']/rhobar
-    gC = paramCore['grav']/g0
-    denC = params.denCore/rhobar
-    rhoS = paramSurf['den']/rhobar
-    nonad = nonad/rhobar
+
+
+    rhoC = parvals['den'][0]
+    gC = parvals['grav'][0]
+    denC = params.denCore
+    rhoS = parvals['den'][-1]
+
 
     z_i = 1./zarray
 
@@ -338,8 +330,8 @@ def gen_viscb_norm(n, yE, uV, params, zarray, Q=1):
     b[0,0] = 0.
     b[0,1] = 0.
     b[0,2] = ((denC-rhoC)*gC*uV[0] + denC*yE[4,0] +
-                0.33*params.rCore*denC**2*yE[0,0]
-                -rhoC*(denC-rhoC)*uV[0]/(2.*n+1.))/(2.*n+1.)
+                0.33*params.rCore*denC**2*yE[0,0])/(2*n+1)
+                #-rhoC*(denC-rhoC)*uV[0]/(2.*n+1.))/(2.*n+1.)
     b[0,3] = 0.
 
     # Upper Boundary Condition inhomogeneity
@@ -360,14 +352,15 @@ def gen_viscb_norm(n, yE, uV, params, zarray, Q=1):
         bi[1] = 0.
         if Q == 1:
             bi[2] = (rho[i]*(qi +
-                    (rho[i] - 4*g[i]*z_i[i])/(2*n+1)*hi +
-                    g[i]*z_i[i]*(n+1.)/(2.*n+1.)*Li)
-                    + g[i]*nonad[i]*hvi)
+                    (rho[i] - 4*g[i]*z_i[i])/(2*n+1)*hi
+                    + g[i]*z_i[i]*(n+1.)/(2.*n+1.)*Li)
+                    - g[i]*nonad[i]*hvi)
         else:
-            bi[2] = rho[i]*(qi - g[i]*hvi +
+            bi[2] = (rho[i]*(qi +
                     - 4*g[i]*z_i[i]/(2.*n+1.)*hi
                     + g[i]*z_i[i]*(n+1.)/(2.*n+1.)*Li
-                    + z_i*(n+1.)/(2.*n+1.)*ki)
+                    + z_i[i]*(n+1.)/(2.*n+1.)*ki)
+                    - g[i]*nonad[i]*hvi)
         bi[3] = rho[i]*(g[i]*hi + ki)*n/(2.*n+1.)*z_i[i]
 
     return b
@@ -396,26 +389,13 @@ class SphericalViscSMat_norm(object):
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
         Q = self.Q
-        if k == k1:      # Core-Mantle boundary conditions.
-            rCore = self.params.rCore
-            paramsCore = self.params(rCore)
-            rhoCore = paramsCore['den']
-            gCore = paramsCore['grav']
-            
-            denCore = self.params.denCore
-            difden = denCore-rhoCore
-            G = self.params.G
-
-            rstar = self.params.norms['r']
-            mustar = self.params.norms['mu']
-            
+        if k == k1:      # Core-Mantle boundary conditions.            
             # Radial stress on the core.
             s[2, 4+indexv[0]] = 0.
             s[2, 4+indexv[1]] = 0.
             s[2, 4+indexv[2]] = 1.
             s[2, 4+indexv[3]] = 0.
-            s[2, jsf] = y[2,0]#(y[2,0] - 0.33*G*rstar*rCore*denCore**2*y[0,0] - 
-                            #denCore*y[4,0])
+            s[2, jsf] = y[2,0] 
                                             
             # Poloidal stress on the core.
             s[3, 4+indexv[0]] = 0.
@@ -456,16 +436,3 @@ class SphericalViscSMat_norm(object):
             interior_smatrix_fast(4, k, jsf, A, b, y, indexv, s) 
                       
         return s
-
-def interior_smatrix_fast(n, k, jsf, A, b, y, indexv, s):
-    for i in range(n):
-        rgt = 0.
-        for j in range(n):
-            if i==j:
-                s[i, indexv[j]]   = -1. - A[i,j]
-                s[i, n+indexv[j]] =  1. - A[i,j]
-            else:
-                s[i, indexv[j]]   = -A[i,j]
-                s[i, n+indexv[j]] = -A[i,j]
-            rgt += A[i,j] * (y[j, k] + y[j, k-1])
-        s[i, jsf] = y[i, k] - y[i, k-1] - rgt - b[i]
