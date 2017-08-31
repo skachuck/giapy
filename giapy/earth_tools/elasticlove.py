@@ -566,3 +566,169 @@ class SphericalElasSMat_norm(object):
         return bot, top
 
 
+class SphericalElasSMat_norm_scale(object):
+    """Class that provides smatrix to Solvde for Elastic solutions."""
+    def __init__(self, n, N, params, Q=1, b=None):
+        self.n = n
+        # Make sure parameters are normalized properly.
+        params.normalize('love')
+        self.params = params
+
+  
+        chic = np.exp((2*n+1.)*(params.rCore - 1))
+ 
+ 
+
+        self.chis = np.linspace(chic, 1., N)
+        self.z = np.log(self.chis)/(2*n+1.) + 1
+        self.z[0] = params.rCore
+
+
+
+        self.Q = Q
+        self.b = b
+
+        self.mpt = len(self.z)
+        self.updateProps(self.n, self.z, self.b)
+        
+    def updateProps(self, n=None, z=None, b=None):
+        self.n = n or self.n
+        self.z = self.z if z is None else z
+        # Only recompute A matrix if n or z are changed.
+        if n is not None or z is not None:
+            zmids = 0.5*(self.z[1:]+self.z[:-1])
+            chimids = 0.5*(self.chis[1:]+self.chis[:-1])
+            
+            self.A = (propMatElas_norm(zmids, self.n, self.params, self.Q).transpose(1, 2,
+                                    0)/chimids/(2*n+1.)).transpose(2, 0, 1)
+        if b is not None:
+            self.b = b
+
+    def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
+        Q = self.Q
+
+        l = 2.*self.n+1.
+        li = 1./l
+        
+        if k == k1:      # Core-Mantle boundary conditions.
+                
+            rCore = self.params.rCore
+            paramsCore = self.params(rCore)
+            gCore = paramsCore['grav']
+            
+            denCore = self.params.denCore
+            difden = (self.params.denCore - paramsCore['den'])
+            
+            # Radial stress on the core.
+            s[3, 6+indexv[0]] = -0.33*rCore*denCore**2*li
+            s[3, 6+indexv[1]] = 0.
+            s[3, 6+indexv[2]] = 1.
+            s[3, 6+indexv[3]] = 0.
+            s[3, 6+indexv[4]] = -denCore*li
+            s[3, 6+indexv[5]] = 0.
+            s[3, jsf] = (y[2,0] - 0.33*rCore*denCore**2*li*y[0,0] - 
+                            denCore*li*y[4,0])
+                                            
+            # Poloidal stress on the core.
+            s[4, 6+indexv[0]] = 0.          
+            s[4, 6+indexv[1]] = 0.          
+            s[4, 6+indexv[2]] = 0.          
+            s[4, 6+indexv[3]] = 1.          
+            s[4, 6+indexv[4]] = 0.          
+            s[4, 6+indexv[5]] = 0.
+            s[4, jsf] = y[3,0]
+
+            # gravitational potential perturbation on core.
+            if Q == 1:
+                s[5, 6+indexv[0]] = -difden*li
+                s[5, 6+indexv[1]] = 0.
+                s[5, 6+indexv[2]] = 0.
+                s[5, 6+indexv[3]] = 0
+                s[5, 6+indexv[4]] = -self.n*li/rCore
+                s[5, 6+indexv[5]] = 1.
+                s[5, jsf] = (y[5,0] - difden*li*y[0,0]
+                                    - self.n*li/rCore*y[4,0])
+            else:
+                s[5, 6+indexv[0]] = -denCore*li
+                s[5, 6+indexv[1]] = 0.
+                s[5, 6+indexv[2]] = 0.
+                s[5, 6+indexv[3]] = 0
+                s[5, 6+indexv[4]] = -1/rCore
+                s[5, 6+indexv[5]] = 1.
+                s[5, jsf] = (y[5,0] - denCore*li*y[0,0] - 1/rCore*y[4,0])
+            if self.b is not None: 
+                s[[3,4,5],jsf] -= self.b[0, [2,3,5]]
+
+            if self.chis[0] < 1e-40:
+                s[3:,6:12] *= 0
+                s[3, 6+indexv[2]] = 1.
+                s[4, 6+indexv[3]] = 1.          
+                s[5, 6+indexv[5]] = 1.
+                s[[3,4,5], jsf] = [y[2,0], y[3,0], y[5,0]]
+ 
+                
+
+        elif k >= k2:     # Surface boundary conditions.   
+            paramsSurf = self.params(1.) 
+            rhoSurf = paramsSurf['den']
+
+            # Radial stress on surface.
+            s[0, 6+indexv[0]] = 0.
+            s[0, 6+indexv[1]] = 0.
+            s[0, 6+indexv[2]] = 1.
+            s[0, 6+indexv[3]] = 0.
+            s[0, 6+indexv[4]] = 0.
+            s[0, 6+indexv[5]] = 0.
+            s[0, jsf] = (y[2, self.mpt-1] + 1.)
+
+            # Poloidal stress on surface.
+            s[1, 6+indexv[0]] = 0.
+            s[1, 6+indexv[1]] = 0.
+            s[1, 6+indexv[2]] = 0.    
+            s[1, 6+indexv[3]] = 1.    
+            s[1, 6+indexv[4]] = 0.    
+            s[1, 6+indexv[5]] = 0.    
+            s[1, jsf] = y[3, self.mpt-1]
+                                      
+            # gravitational acceleration perturbation on surface.
+            if Q == 1:
+                s[2, 6+indexv[0]] = rhoSurf*li
+            else:
+                s[2, 6+indexv[0]] = 0.
+            s[2, 6+indexv[1]] = 0.    
+            s[2, 6+indexv[2]] = 0.    
+            s[2, 6+indexv[3]] = 0.
+            if Q == 1:
+                s[2, 6+indexv[4]] = (self.n+1.)*li
+            else:
+                s[2, 6+indexv[4]] = 0.
+            s[2, 6+indexv[5]] = 1.
+            if Q == 1:
+                s[2, jsf] = (y[5, self.mpt-1] + 1 
+                                + rhoSurf*li*y[0,self.mpt-1]
+                                + (self.n+1.)*li*y[4,self.mpt-1])
+            else:
+                s[2, jsf] = y[5, self.mpt-1] + 1
+
+            if self.b is not None:
+                s[[0,1,2],jsf] -= self.b[-1, [2,3,5]]
+                
+
+        else:           # Finite differences.
+            zsep = (self.chis[k] - self.chis[k-1])
+            A = 0.5*zsep*self.A[k-1]
+            if self.b is None:
+                b = np.zeros_like(self.z)
+            else:
+                b = zsep*self.b[k+1]
+            interior_smatrix_fast(6, k, jsf, A, b, y, indexv, s) 
+                      
+        return s
+
+    def checkbc(self, y, indexv):
+        """Check the error at the boundary conditions for a solution array y.
+        """
+        s = np.zeros((6, 13))
+        bot = self.smatrix(0,0,1,12,0,0,indexv, s, y)[[3,4,5],12]
+        top = self.smatrix(1,0,1,12,0,0,indexv, s, y)[[0,1,2],12]
+        return bot, top
