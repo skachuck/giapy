@@ -1,15 +1,21 @@
 from setuptools import setup, find_packages
 
 setup(name='giapy',
-      version='0.1',
+      version='1.0.0',
       description='Compute glacial isostacy in python',
+      long_description=""" """,
       url='http://github.com/skachuck/giapy/',
       author='Samuel B Kachuck',
       author_email='sbk83@cornell.edu',
       license='MIT',
-      packages=find_packages(),
-      install_requires=[
-            'basemap',
-            'pyspharm'
+      classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python 2',
+        'Programming Language :: Python 3',
+        'Topic :: Scientific/Engineering :: Physics'
       ],
-      zip_safe=False)
+      keywords='geophysics deformation isostasy',
+      packages=find_packages(exclude=[]),
+      package_data={)
