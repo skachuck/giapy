@@ -1,4 +1,0 @@
-#!/bin/bash
-wget http://pages.physics.cornell.edu/~skachuck/giapydata.tar.gz
-tar xzf giapydata.tar.gz -C ./
-rm giapydata.tar.gz

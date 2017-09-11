@@ -25,7 +25,7 @@ from subprocess import check_output, call
 if sys.version_info < (3,):
     import cPickle as pickle
 else:
-    import _pickle as pickle
+    import pickle as pickle
 
 
 # Obtain the github hash of the current version
@@ -42,11 +42,3 @@ def load(filename):
     return pickle.load(open(filename, 'r'))
 
 import giapy.earth_tools
-#import giapy.earth_tools as earth
-import giapy.data_tools
-#import giapy.data_tools as data
-import giapy.icehistory as ice
-import giapy.map_tools as maps
-import giapy.giasim as sim
-import giapy.plot_tools as plot
-
