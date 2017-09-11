@@ -5,6 +5,64 @@ import re
 from urllib2 import urlopen, HTTPError
 from scipy.signal import get_window
 from scipy.stats import pearsonr
+from giapy.data_tools.abstractDataClasses import AbsGeoTimeSeries, \
+                                                AbsGeoTimeSeriesContainer
+
+def calcRSL(sim, rsldata, smooth=True, noise=0):
+    #TODO This function shouldn't have to know what's inside any object, let
+    # alone a complicated one, like sim. Consider calculating rsl first and
+    # passing it and calculated times in (ts, rsl).
+    # To reference to present day
+    #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
+    u0 = sim['sstopo'][-1]
+
+    uAtLocs = []
+    for ut in sim['sstopo']:
+        ut = u0 - ut
+        interpfunc = sim.inputs.grid.create_interper(ut.T*1000)
+        uAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))
+
+    uAtLocs = np.array(uAtLocs).T
+
+    calcTimes = sim['sstopo'].outTimes
+    if np.all(np.diff(calcTimes)<0):
+        reverse = True
+    else:
+        reverse=False
+        
+
+    data = {}
+    for uAtLoc, loc in zip(uAtLocs, rsldata):
+        if smooth:
+            ts = np.union1d(np.sort(loc.ts), np.linspace(0, loc.ts.max()))
+        else:
+            ts = np.sort(loc.ts)
+
+        # Sim objects output times in thousands of years relative to present
+        tsint = (2015 - ts)/1000.
+
+        if reverse:
+            timeseries = np.array([ts, 
+                    np.interp(tsint, 
+                                sim['sstopo'].outTimes[::-1], uAtLoc[::-1])]).T
+        else:
+            timeseries = np.array([ts, 
+                    np.interp(tsint, 
+                                sim['sstopo'].outTimes, uAtLoc)]).T
+
+        # Mean reference, so that mean of data and prediction are same.
+        timeseries[:,1] += np.mean(loc.ys[loc.inds]) - np.mean(timeseries[:,1])
+
+        #Apply the noise (default 0)
+        scatter = noise*np.random.randn(len(timeseries[:,1]))
+        timeseries[:,1] = timeseries[:,1] + scatter
+        data[loc.stid] = RSLDatum(timeseries, 
+                                        lat=loc.lat, 
+                                        lon=loc.lon,
+                                        sitename=loc.sitename,
+                                        stid=loc.stid)
+
+    return RSLData(data=data)
 
 class RLR(np.ndarray):
     """Download a Revised Local Reference for sea level from the PSMSL.
@@ -43,11 +101,16 @@ class RLR(np.ndarray):
         except HTTPError:
             raise ValueError("{0} is an invalid station id".format(num))
         
+        # Format of data is: date | mean sea level | missing record | flag
         if typ=='annual':
+            # In annual data, third column indicates whether the record was
+            # missing 30 days ('Y') or not ('N')
             converters = {2: lambda s: (0 if s=='N' else 1)}
         else:
             converters = None
         _data = np.loadtxt(_response, delimiter=';', converters=converters)
+        # Protect against sites with only one data point
+        _data = np.atleast_2d(_data)
 
         # the metadata
         _murl = 'http://www.psmsl.org/data/obtaining/stations/'
@@ -106,7 +169,22 @@ class RLR(np.ndarray):
         if obj is None: return
         self.metadata = getattr(obj, 'metadata', None)
         self.inds = getattr(obj, 'inds', None)
+    
+    def __reduce__(self):
+        # Get the parent's __reduce__ tuple
+        pickled_state = super(RLR, self).__reduce__()
+        # Create our own tuple to pass to __setstate__
+        new_state = pickled_state[2] + (self.inds,self.metadata)
+        # Return a tuple that replaces the
+        # parent's __setstate__ tuple with our
+        # own
+        return (pickled_state[0], pickled_state[1], new_state)
 
+    def __setstate__(self, state):
+        self.inds, self.metadata = state[-2], state[-1]  # Set the info attribute
+        # Call the parent's __setstate__ with the other tuple elements.
+        super(RLR, self).__setstate__(state[0:-2])
+        
     def __str__(self):
         return 'RLR( {0}, {1} )'.format(self.metadata['sitename'],
                         self.metadata['type'])
@@ -214,28 +292,37 @@ class RLR(np.ndarray):
         ax.plot(self[self.inds, 0], self[self.inds, 1], *args, **kwargs)
         return ax
 
-class RSLData(object):
-    def __init__(self, nbrs=None, data=None):
+class RSLDatum(AbsGeoTimeSeries):
+    def __repr__(self):
+        return 'RLR( {0}, {1} )'.format(self.sitename, self.type)
+
+    @property
+    def inds(self):
+        return self.timeseries.inds
+
+class RSLData(AbsGeoTimeSeriesContainer):
+    def __init__(self, nbrs=None, data=None, typ='monthly'):
         if nbrs is not None:
             self.data = {}
-            self.download(nbrs)
+            self.download(nbrs, typ)
         elif data is not None:
             self.data = data
+        self.form_long_vectors()
 
     def __getitem__(self, key):
         return self.data.__getitem__(key)
         
     def __iter__(self):
-        return self.data.__iter__()
+        return self.data.itervalues()
 
     def __len__(self):
         return len(self.data)
 
-    def download(self, nbrs):
+    def download(self, nbrs, typ):
         for n in nbrs:
             try:
-                loc = RLR(n)
-                self.data[n] = loc
+                loc = RLR(n, typ=typ)
+                self.data[n] = RSLDatum(loc, **loc.metadata)
             except ValueError as e:
                 print e.message
                 continue
@@ -249,6 +336,31 @@ class RSLData(object):
             self.data = result
         else:
             return RSLData(nbrs=None, data=result)
+
+    def form_long_vectors(self):
+        """Update the long lists: long_data, long_time, and locs with currently
+        encapsulated data.
+        
+        Certain numbers are stored twice, for convenience in calculating the 
+        residuals, in the form of long lists. These are every emergence height, 
+        every emergence time, and every lon,lat pair. The one-time storage 
+        overhead is worth the time saved from not recreating these lists on
+        every iteration of an inversion.
+        """
+        
+        self.long_data = np.array([None])
+        self.long_time = np.array([None])
+        self.locs = np.array([None, None])
+        for loc in self:
+            self.locs = np.vstack((self.locs, loc.loc))
+            self.long_time = np.concatenate((self.long_time, loc.ts))
+            self.long_data = np.concatenate((self.long_data, loc.ys))
+        self.long_data = self.long_data[1:]
+        self.long_time = self.long_time[1:]
+        self.locs = self.locs[1:]
+
+def download_all_rlr(ns=range(1,2400), typ='monthly'):
+    return RSLData(ns, typ=typ)
         
 
 def argmaxcontsect(inds):

@@ -9,7 +9,7 @@ from giapy.data_tools.yearcalib import uncalib_bloom, c14corr
 from giapy.data_tools.abstractDataClasses import AbsGeoTimeSeries, \
                                                 AbsGeoTimeSeriesContainer
 
-from giapy import timestamp
+from giapy import timestamp, MODPATH
 
 
 def calcEmergence(sim, emergedata, smooth=True, noise=0):
@@ -74,6 +74,10 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         self.form_long_vectors()
         self.W = None
         self.TIMESTAMP = timestamp()
+
+    def printall(self):
+        for loc in self:
+            print(loc.recnbr, loc)
         
     def transform_locs(self, basemap, inverse=False):
         xs, ys = basemap(self.locs[:,0], self.locs[:,1], inverse=inverse)
@@ -165,7 +169,7 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         self.long_time = self.long_time[1:]
         self.locs = self.locs[1:]
 
-def importEmergeDataFromFile(filename):
+def importEmergeDataFromFile(filename=None):
     """Reads emergence data from a file where it is stored in the form...
     
     Stores the emergence data in a list self.data of dictionaries with keys:
@@ -189,6 +193,9 @@ def importEmergeDataFromFile(filename):
     ----------
     filename - the file containing the data to be imported
     """
+
+    if filename is None:
+        filename = MODPATH+'/data/obs/Emergence_Data_seqnr_2014.txt'
     
     data = {}                         # Initialize the array,
     

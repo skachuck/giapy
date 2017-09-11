@@ -5,51 +5,12 @@
 import numpy as np
 from scipy.interpolate import interp1d
 
-############ PRELIMINARY EARTH REFERENCE MODEL FOR MANTLE #############
-#          (first entry is the core)
-#          Radius     Density     Bulk mod    Shear mod   Gravity
-#          (km)       (g/cc)      (GPa)       (GPa)       (cm/s^2)
-prem = \
-np.array([[ 3480.    ,  9.90349  ,   644.1   ,     0.    ,    1068.23],
-          [ 3480.    ,  5.56645  ,   655.6   ,   293.8   ,    1068.23],
-          [ 3600.    ,  5.50642  ,   644.    ,   290.7   ,    1052.04],
-          [ 3630.    ,  5.49145  ,   641.2   ,   289.9   ,    1048.44],
-          [ 3630.    ,  5.49145  ,   641.2   ,   289.9   ,    1048.44],
-          [ 3800.    ,  5.40681  ,   609.5   ,   279.4   ,    1030.95],
-          [ 4000.    ,  5.30724  ,   574.4   ,   267.5   ,    1015.8 ],
-          [ 4200.    ,  5.20713  ,   540.9   ,   255.9   ,    1005.35],
-          [ 4400.    ,  5.1059   ,   508.5   ,   244.5   ,     998.59],
-          [ 4600.    ,  5.00299  ,   476.6   ,   233.1   ,     994.74],
-          [ 4800.    ,  4.89783  ,   444.8   ,   221.5   ,     993.14],
-          [ 5000.    ,  4.78983  ,   412.8   ,   209.8   ,     993.26],
-          [ 5200.    ,  4.67844  ,   380.3   ,   197.9   ,     994.67],
-          [ 5400.    ,  4.56307  ,   347.1   ,   185.6   ,     996.98],
-          [ 5600.    ,  4.44317  ,   313.3   ,   173.    ,     999.85],
-          [ 5600.    ,  4.44317  ,   313.3   ,   173.    ,     999.85],
-          [ 5701.    ,  4.38071  ,   299.9   ,   154.8   ,    1001.43],
-          [ 5701.    ,  3.99214  ,   255.6   ,   123.9   ,    1001.43],
-          [ 5771.    ,  3.97584  ,   248.9   ,   121.    ,    1000.38],
-          [ 5771.    ,  3.97584  ,   248.9   ,   121.    ,    1000.38],
-          [ 5871.    ,  3.8498   ,   218.1   ,   105.1   ,     998.83],
-          [ 5971.    ,  3.72378  ,   189.9   ,    90.6   ,     996.86],
-          [ 5971.    ,  3.54325  ,   173.5   ,    80.6   ,     996.86],
-          [ 6061.    ,  3.48951  ,   163.    ,    77.3   ,     993.61],
-          [ 6151.    ,  3.43578  ,   152.9   ,    74.1   ,     990.48],
-          [ 6151.    ,  3.3595   ,   127.    ,    65.6   ,     990.48],
-          [ 6221.    ,  3.3671   ,   128.7   ,    66.5   ,     987.83],
-          [ 6291.    ,  3.37471  ,   130.3   ,    67.4   ,     985.53],
-          [ 6291.    ,  3.37471  ,   130.3   ,    67.4   ,     985.53],
-         #[ 6371.    ,  3.38076  ,   131.5   ,    68.2   ,     983.94]])
-         [ 6346.6   ,  3.38076  ,   131.5   ,    68.2   ,     983.94],
-         [ 6346.6   ,  2.900    ,    75.3   ,    44.1   ,     983.94],
-         [ 6356.    ,  2.900    ,    75.3   ,    44.1   ,     983.32],
-         [ 6356.    ,  2.600    ,    52.    ,    26.6   ,     983.32],
-         [ 6371.    ,  2.600    ,    52.    ,    26.6   ,     982.22]])
+from giapy import MODPATH
 
 ############# UNITS ############
 # 1 dyne = 1 g cm / s^2 = 1e-5 N = 1e-5 kg m / s^2
 # 1 GPa  = 1e9 Pa = 1e9 N/m^2
-# 1 GPa = 1e-10 dyne / cm^2
+# 1 GPa = 1e10 dyne / cm^2
 
 class EarthParams(object):
     """Store and interpolate Earth's material parameters.
@@ -58,35 +19,54 @@ class EarthParams(object):
 
     Parameters
     ----------
+    model : str
+        The elastic model to use. Needs to be .txt in MODPATH/data/earth/ with
+        columns:      radius   density   shear   bulk (or first lame)   gravity 
+        (default PREM).
     visArray : np.ndarray
         The array of depths and viscosities (in poise, 1e-1 Pa s). If visArray
         is None, assumes a uniform 1e21 Pa s mantle. visArray should be a 2xN 
         array or depths and viscosities. Can be changed later using 
         EarthParams.addViscosity.
-
     D : float
         The flexural rigidity of the lithosphere (in N). Can be changed later
         using EarthParams.addLithosphere (with either D, the flexural rigidity,
         or H, the elastic thickness of the lithospehre).
+    bulk : boolean
+        Indicates whether the model uses bulk of lame parameters so that it can
+        be converted to the first lame parameter if necessary (default True).
+    normmode: 'dim', 'larry', or 'love'
+        Indicates which normalization to use for the parameters. This can be
+        either 'dim' for dimensional parameters (in cgs, for now), 'larry'
+        which nondimensionalizes elastic parameters, radii, and viscosities, or
+        'love' which nondimensionalizes everything for use with direct Love
+        number computation.
     """
-    def __init__(self, visArray=None, D=0):        
+    def __init__(self, model='prem', visArray=None, D=0, bulk=True,
+                    normmode='larry'):        
         self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
         
+        self.normmode = 'larry'
         self.norms = {'r'  :     6.371e+8 ,     # cm
                       'eta':     1e+22    ,     # poise = g/cm.s    
-                      'mu' :     293.8e+10}     # dyne/cm^2
+                      'mu' :     293.8e+10,     # dyne/cm^2
+                      'g'  :     981.56   }     # cm/s^2
 
-        locprem = prem.copy()
+        try:
+            locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
+        except:
+            raise
 
         self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
         self.denCore = locprem[0,1]                # g/cc
 
-        z = locprem[1:,0]/locprem[-1, 0]              # Normalized depths in mantle.
+        self.z = locprem[1:,0]/locprem[-1, 0]              # Normalized depths in mantle.
+        z = self.z
         locprem[1:, [2,3]] /= locprem[1, 3]           # Normalized elastic props by
                                                 # shear modulus.
         # Convert the bulk modulus to the first lame parameter.
-        #TODO Do we want first lame parameter or bulk modulus?
-        locprem[1:, 2] = locprem[1:, 2] - (2./3.*locprem[1:, 3])
+        if bulk:
+            locprem[1:, 2] = locprem[1:, 2] - (2./3.*locprem[1:, 3])
 
         # Create density gradient, g/cc.earthRadii
         dend = np.gradient(locprem[1:,1])/np.gradient(z)
@@ -110,9 +90,9 @@ class EarthParams(object):
         self._interpParams = interp1d(z, self._paramArray)
 
         zDisc = locateDiscontinuities(z)        # Save discontinuities.
-        self.z = np.union1d(z, zDisc)
-        self._paramArray = self._interpParams(self.z)
-        self._interpParams = interp1d(self.z, self._paramArray)
+        #self.z = np.union1d(self.z, zDisc)
+        #self._paramArray = self._interpParams(self.z)
+        #self._interpParams = interp1d(self.z, self._paramArray)
 
         # Set up viscosity profile with uniform viscosity
         if visArray is None:
@@ -122,6 +102,8 @@ class EarthParams(object):
 
         # Flexural rigidity is assumed 0 (no lithosphere)
         self.D = D
+
+        self.normalize(normmode)
 
     def __call__(self, z, depth=False):
         return self.getParams(z, depth)
@@ -133,6 +115,78 @@ class EarthParams(object):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def normalize(self, normmode='love'):
+        """Normalize or dimensionalize the parameters.
+        
+        normmode: 'dim', 'larry', or 'love'
+            Indicates which normalization to use for the parameters. This can be
+            either 'dim' for dimensional parameters (in cgs, for now), 'larry'
+            which nondimensionalizes elastic parameters, radii, and viscosities, or
+            'love' which nondimensionalizes everything for use with direct Love
+            number computation.
+            """
+
+        assert normmode in ['love', 'larry', 'dim'], \
+            'normmode {} not supported. See docstring.'.format(normmode)
+
+        # If the object is already in this mode, do nothing.
+        if normmode == self.normmode: return
+
+        # Putting units back in.
+        if normmode == 'dim':
+            if self.normmode == 'love': 
+                re = self.norms['r']
+                g0 = self.norms['g']
+                rhobar = g0/self.G/re
+
+                self._paramArray[[0,4,5]] *= rhobar
+                self._paramArray[[1,2]] *= rhobar*re*g0   
+                self._paramArray[3] *= g0
+                self._paramArray[6] *= self.norms['eta']
+
+                self.rCore *= re
+                self.denCore *= rhobar
+
+            elif self.normmode == 'larry':
+                self._paramArray[[0,4,5]] *= 1.
+                self._paramArray[[1,2]] *= self.norms['mu']
+                self._paramArray[3] *= 1.
+                self._paramArray[6] *= self.norms['eta']
+
+                self.rCore *= self.norms['r']
+                self.denCore *= 1.
+                
+        # Removing (some) units.
+        else:
+            # First, redimensionalize,
+            self.normalize('dim')
+            # then nondimensionalize.
+            if normmode == 'love':
+                re = self.norms['r']
+                g0 = self.norms['g']
+                rhobar = g0/self.G/re
+
+                self._paramArray[[0,4,5]] /= rhobar
+                self._paramArray[[1,2]] /= rhobar*re*g0   
+                self._paramArray[3] /= g0
+                self._paramArray[6] /= self.norms['eta']
+
+                self.rCore /= re
+                self.denCore /= rhobar
+            elif normmode == 'larry':
+                self._paramArray[[0,4,5]] /= 1.
+                self._paramArray[[1,2]] /= self.norms['mu']
+                self._paramArray[3] /= 1.
+                self._paramArray[6] /= self.norms['eta']
+
+                self.rCore /= self.norms['r']
+                self.denCore /= 1.
+
+        # Set the normmode for reference later and recreate interpolation
+        # object.
+        self.normmode = normmode
         self._interpParams = interp1d(self.z, self._paramArray)
 
     def getParams(self, z, depth=False):
@@ -153,7 +207,7 @@ class EarthParams(object):
             self.norms['eta'] = etaStar
         visArray = np.asarray(visArray)
         visArray[1] /= self.norms['eta']        # Normalize viscosities
-        self.alterColumn(6, visArray)
+        self._alterColumn(6, visArray)
 
 
     def addNonadiabatic(self, nonad, normed=True):
@@ -170,7 +224,7 @@ class EarthParams(object):
         """
         if not normed:
             nonad[0] = nonad[0]*self.norms['r']
-        self.alterColumn(5, nonad)
+        self._alterColumn(5, nonad)
 
     def addLithosphere(self, D=None, H=None):
         """Append a lithosphere with flexural rigidity D (N m) or of thickness
@@ -216,28 +270,74 @@ class EarthParams(object):
         # 1e-8 converts (N m) / (dyne / cm^2) to km^3
         return (12 * (1-pois**2) * self.D / young *1e-8)**(0.333)
 
-    def alterColumn(self, col, zy):
+    def _alterColumnPresDisc(self, col, zy):
+        """
+        Alter a parameter column, while preserving all discontinuities.
+
+        Results in new depth array, with all depth discontinuities from both
+        the original parameter array and new column.
+        """
         z = zy[0]
         y = zy[1]
 
-        interpY = interp1d(z, y)
-        zDisc = locateDiscontinuities(z)
-        z = np.union1d(z, zDisc)
+        # Create interpolator to join new array into old
+        interpY = interp1d(z, y) 
+        
+        # Find discontinuities in new column
+        idalt = locateDiscontinuities(z)
+        zdalt = z[idalt]
+        # Find discontinuities in old array
+        idold = locateDiscontinuities(self.z)
+        zdold = self.z[idold]
+        # Only need to keep disconstinuities once, in case of overlap
+        zd = np.union1d(zdalt, zdold)
+        # The new z array is created by unioning and then adding
+        # discontinuities back in (once, by previous line)
+        zu = np.union1d(z, self.z)
+        znew = np.sort(np.r_[zu, zd])
 
-        # Generate new interpolation array
-        self.z = np.union1d(self.z, z)
+        # The discontinuities in the new array.
+        idnew = locateDiscontinuities(znew)
+        zdnew = znew[idnew]
 
+        # We interpolate the new column and old array to new z array
+        newcolumn = interpY(znew)
+        newparamArray = self._interpParams(znew) 
+
+        # ans replace discontinuities one at a time
+        for i, zi in zip(idnew, zdnew):
+            if zi in zdalt:
+                itmp, = np.where(zi == z)
+                newcolumn[i] = y[itmp[0]]
+            if zi in zdold:
+                itmp, = np.where(zi == self.z)
+                newparamArray[:,i] = self._paramArray[:,itmp[0]]
+
+        # Put the new column into the array
+        newparamArray[col] = newcolumn
+
+        # and reset all the class data.
+        self._paramArray = newparamArray 
+        self.z = znew
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def _alterColumn(self, col, zy):
+        #self._alterColumnPresDisc(col, zy)
+        z = zy[0]
+        y = zy[1]
+        interpY = interp1d(z, y) 
+        self.z = np.union1d(z, self.z)
         self._paramArray = self._interpParams(self.z)
-
         self._paramArray[col] = interpY(self.z)
         self._interpParams = interp1d(self.z, self._paramArray)
 
+def locateDiscontinuities(z):
+    """Locate where in an array a value is repeated.
+    
+    Note: it returns the index of the first of each pair of repeated values.
+    """
 
-def locateDiscontinuities(z, eps=None):
-    eps = eps or z.max()*1e-8
     trash, uniqueInds = np.unique(z, return_inverse=True)
-    i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0)
-    zDisc = z[i]
-    zDisc = np.r_[z[i]-eps, z[i]+eps]
-    return zDisc
+    i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0) 
+    return i
 

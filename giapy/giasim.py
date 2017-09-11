@@ -114,7 +114,8 @@ class GiaSimGlobal(object):
         earth = self.earth
         ice = self.ice
         grid = self.grid
-        topo = topo or self.topo
+        if topo is None:
+            topo = self.topo
         assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
@@ -141,20 +142,34 @@ class GiaSimGlobal(object):
         remTimes = np.union1d(ice.times, addRemovalTimes)[::-1]
         calcTimes = np.union1d(remTimes, out_times)[::-1]
                  
-        # Initialize the return object
+        # Initialize the return object to include...
+        # ... values desired at output times
+        #   [1] Uplift
         uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
+        #   [2] Horizontal deformation
         horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
-        gravObserver = GravObserver(out_times, ntrunc, ns)
-        loadObserver = HeightObserver(remTimes, ice.shape, 'dLoad')
-        wloadObserver = HeightObserver(remTimes, ice.shape, 'dwLoad')
-        geoObserver = GeoidObserver(out_times, ntrunc, ns)
-
-        eslUplObserver = TotalUpliftObserver(remTimes, ntrunc, ns)
-        eslGeoObserver = GeoidObserver(remTimes, ntrunc, ns)
-        topoObserver = HeightObserver(remTimes, ice.shape, 'topo')
-        eslObserver = EslObserver(remTimes)
+        #   [3] Uplift velocities
         velObserver = VelObserver(out_times, ntrunc, ns)
-        rslObserver = HeightObserver(remTimes, ice.shape, 'sstopo')
+        #   [4] Geoid perturbations
+        geoObserver = GeoidObserver(out_times, ntrunc, ns)
+        #   [5] Gravitational acceleration perturbations
+        gravObserver = GravObserver(out_times, ntrunc, ns) 
+
+        # ... and values needed to perform the convolution
+        #   [1] Uplift for ocean redistribution
+        eslUplObserver = TotalUpliftObserver(calcTimes, ntrunc, ns)
+        #   [2] Geoid for ocean redistribution
+        eslGeoObserver = GeoidObserver(calcTimes, ntrunc, ns)
+        #   [3] Topography (to top of ice) to find floating ice
+        topoObserver = HeightObserver(calcTimes, ice.shape, 'topo')
+        #   [4] Load (total water + ice load in water equivalent)
+        loadObserver = HeightObserver(calcTimes, ice.shape, 'dLoad')
+        #   [5] Water load
+        wloadObserver = HeightObserver(calcTimes, ice.shape, 'dwLoad') 
+        #   [6] Solid surface topography for ocean redistribution
+        rslObserver = HeightObserver(calcTimes, ice.shape, 'sstopo')
+        #   [7] Eustatic sea level, with average uplift and geoid over oceans.
+        eslObserver = EslObserver(calcTimes) 
 
         observerDict = GiaSimOutput(self)
         observerDict.addObserver('upl'   , uplObserver)
@@ -324,6 +339,7 @@ class GiaSimGlobal(object):
 
         # Don't keep the intermediate uplift stages for water redistribution
         observerDict.removeObserver('eslUpl')
+        observerDict.removeObserver('eslGeo')
 
         return observerDict
 

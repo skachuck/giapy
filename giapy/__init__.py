@@ -1,3 +1,24 @@
+"""
+__init__.py
+
+Author: Samuel B. Kachuck
+
+Import giapy submodules into convenient namespace and provide useful data to be
+used across the package.
+
+Data
+----
+MODPATH: the path to the package
+GITVERSION: the hashed version of the git (for recording state of code along
+            with computations)
+Methods
+-------
+timestamp: fancy string of the current date and time
+load : filename (str)
+    Convenience function for unpickling an object
+"""
+
+
 import os, sys
 from datetime import datetime
 from subprocess import check_output, call
@@ -20,12 +41,12 @@ def timestamp():
 def load(filename):
     return pickle.load(open(filename, 'r'))
 
-import giapy.earth_tools as earth
+import giapy.earth_tools
+#import giapy.earth_tools as earth
 import giapy.data_tools
-import giapy.data_tools as data
+#import giapy.data_tools as data
 import giapy.icehistory as ice
 import giapy.map_tools as maps
 import giapy.giasim as sim
-#import giapy.giamc as mc
 import giapy.plot_tools as plot
 
