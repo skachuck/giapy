@@ -1,4 +1,5 @@
 ############ PRELIMINARY EARTH REFERENCE MODEL FOR MANTLE #############
+#  The crustal parameters have been removed from this model.
 #  (first entry is the core)
 #  Radius     Density     Bulk mod    Shear mod   Gravity
 #  (km)       (g/cc)      (GPa)       (GPa)       (cm/s^2)
@@ -31,8 +32,4 @@
 6221.    	  3.3671   	   128.7   	    66.5   	     987.83
 6291.    	  3.37471  	   130.3   	    67.4   	     985.53
 6291.    	  3.37471  	   130.3   	    67.4   	     985.53
-6346.6   	  3.38076  	   131.5   	    68.2   	     983.94
-6346.6   	  2.900    	    75.3   	    44.1   	     983.94
-6356.    	  2.900    	    75.3   	    44.1   	     983.32
-6356.    	  2.600    	    52.    	    26.6   	     983.32
-6371.    	  2.600    	    52.    	    26.6   	     982.22
+6371.    	  3.38076  	   131.5   	    68.2   	     983.94
