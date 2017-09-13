@@ -35,8 +35,10 @@ def read_t_files(directory, filenames, data_col=2):
     return Lat, Lon, height
 
 def write_case_files(casename, result): 
-
-    os.mkdir(casename)
+    try: 
+        os.mkdir(casename)
+    except:
+        pass 
 
     coltit = 'longitude\tlatitude\tTotUpl\tTotUpl\tRateUpl\tGeoid\t'
     coltit += 'emergence\twload\tload\tload\ticeload\tocean\ttopomap0'
@@ -48,6 +50,7 @@ def write_case_files(casename, result):
     outTimes = result.upl.outTimes 
     fnames = []
 
+    u0 = result.sstopo.nearest_to(0)
     for i, t in enumerate(outTimes):
         ai = np.vstack([result.inputs.grid.Lon.flatten(), 
                    result.inputs.grid.Lat.flatten(), 
@@ -55,7 +58,7 @@ def write_case_files(casename, result):
                    result.upl[i].flatten(),
                    result.vel[i].flatten(),
                    result.geo[i].flatten(),
-                   (result.sstopo[i] - result.sstopo[-1]).flatten(),
+                   (result.sstopo[i] - u0).flatten(),
                    result.wload[i].flatten(),
                    result.load[i].flatten(),
                    result.load[i].flatten(),
@@ -88,7 +91,7 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
     if emergedata is not None:
         u0 = result['sstopo'].nearest_to(0)
         coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
-        outTimes = result.upl.outTimes 
+        outTimes = result.sstopo.outTimes 
 
         uAtLocs = []
         for ut in result['sstopo']:
@@ -107,9 +110,9 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         header = 'case: {} emergence interpolation\n'.format(casename) + coltit
         np.savetxt(fname, output, header=header)
 
-    if rsldata is not Nonew:
+    if rsldata is not None:
         coltit = 'recnbr\tlongitude\tlatitude\trsl_i'
-        outTimes = result.upl.outTimes
+        outTimes = result.sstopo.outTimes
         u0 = result['sstopo'].nearest_to(0)
 
         uAtLocs = []
