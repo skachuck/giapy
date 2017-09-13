@@ -62,132 +62,72 @@ def propMatElas(zarray, n, params, Q=1):
     else:
         return (z_i*a.T).T
 
-if numba_load:
-    @jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
-        float64[:], float64[:], float64[:], float64[:], float64[:], float64,
-        float64, int64), nopython=True)
-    def matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
-        for i in range(len(zarray)):
-            
-            # r dh/dr
-            a[i,0,0] = -2*lam[i]*beta_i[i]
-            a[i,0,1] = lam[i]*beta_i[i]*(n+1)
-            a[i,0,2] = beta_i[i]*zarray[i]*l
-            
-            # r dL/dr
-            a[i,1,0] = -n
-            a[i,1,1] = 1.
-            a[i,1,2] = 0.
-            a[i,1,3] = zarray[i]/mu[i]*l
-            
-            # r df_L/dr
-            if Q == 1:
-                a[i,2,0] = (4*gamma[i]*z_i[i] - 4*rho[i]*g[i] 
-                                    + (rho[i]**2)*zarray[i])*li
-            else:
-                a[i,2,0] = 4*(gamma[i]*z_i[i] - rho[i]*g[i])*li
-            a[i,2,1] = -(2*gamma[i]*z_i[i] - rho[i]*g[i])*(n+1)*li
-            a[i,2,2] = -4*mu[i]*beta_i[i]
-            a[i,2,3] = (n+1.)
-            if Q == 2:
-                a[i,2,4] = -rho[i]*(n+1)*li
-            a[i,2,5] = zarray[i]*rho[i]
-            
-            # r dF_M/dr
-            a[i,3,0] = (rho[i]*g[i]-2*gamma[i]*z_i[i])*n*li
-            a[i,3,1] = 2*mu[i]*z_i[i]*(2*n*(n+1)*(lam[i]+mu[i])*beta_i[i] - 1)*li
-            a[i,3,2] = -lam[i]*beta_i[i]*n
-            a[i,3,3] = -3
-            a[i,3,4] = rho[i]*n*li
-            
-            # r dk_d/dr
-            if Q == 2:
-                a[i,4,0] = -rho[i]*zarray[i]
-            a[i,4,1] = 0.
-            a[i,4,2] = 0.
-            a[i,4,3] = 0.
-            if Q == 2:
-                a[i,4,4] = -(n+1)
-            a[i,4,5] = zarray[i]*l
-            
-            # r dq/dr
-            if Q == 1:
-                a[i,5,0] = -(grad_rho[i]*zarray[i] 
-                                + 4*mu[i]*rho[i]*beta_i[i])*li
-                a[i,5,1] = 2*mu[i]*rho[i]*beta_i[i]*(n+1)*li
-                a[i,5,2] = -rho[i]*zarray[i]*beta_i[i]
-                a[i,5,3] = 0.
-                a[i,5,4] = z_i[i]*n*(n+1.)*li
-                a[i,5,5] = -2
-            else:
-                a[i,5,0] = -rho[i]*(n+1)*li
-                a[i,5,1] = rho[i]*(n+1)*li
-                a[i,5,2] = 0
-                a[i,5,3] = 0.
-                a[i,5,4] = 0
-                a[i,5,5] = n-1.
-else:
-    def matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
-        for i in range(len(zarray)):
-            
-            # r dh/dr
-            a[i,0,0] = -2*lam[i]*beta_i[i]
-            a[i,0,1] = lam[i]*beta_i[i]*(n+1)
-            a[i,0,2] = beta_i[i]*zarray[i]*l
-            
-            # r dL/dr
-            a[i,1,0] = -n
-            a[i,1,1] = 1.
-            a[i,1,2] = 0.
-            a[i,1,3] = zarray[i]/mu[i]*l
-            
-            # r df_L/dr
-            if Q == 1:
-                a[i,2,0] = (4*gamma[i]*z_i[i] - 4*rho[i]*g[i] 
-                                    + (rho[i]**2)*zarray[i])*li
-            else:
-                a[i,2,0] = 4*(gamma[i]*z_i[i] - rho[i]*g[i])*li
-            a[i,2,1] = -(2*gamma[i]*z_i[i] - rho[i]*g[i])*(n+1)*li
-            a[i,2,2] = -4*mu[i]*beta_i[i]
-            a[i,2,3] = (n+1.)
-            if Q == 2:
-                a[i,2,4] = -rho[i]*(n+1)*li
-            a[i,2,5] = zarray[i]*rho[i]
-            
-            # r dF_M/dr
-            a[i,3,0] = (rho[i]*g[i]-2*gamma[i]*z_i[i])*n*li
-            a[i,3,1] = 2*mu[i]*z_i[i]*(2*n*(n+1)*(lam[i]+mu[i])*beta_i[i] - 1)*li
-            a[i,3,2] = -lam[i]*beta_i[i]*n
-            a[i,3,3] = -3
-            a[i,3,4] = rho[i]*n*li
-            
-            # r dk_d/dr
-            if Q == 2:
-                a[i,4,0] = -rho[i]*zarray[i]
-            a[i,4,1] = 0.
-            a[i,4,2] = 0.
-            a[i,4,3] = 0.
-            if Q == 2:
-                a[i,4,4] = -(n+1)
-            a[i,4,5] = zarray[i]*l
-            
-            # r dq/dr
-            if Q == 1:
-                a[i,5,0] = -(grad_rho[i]*zarray[i] 
-                                + 4*mu[i]*rho[i]*beta_i[i])*li
-                a[i,5,1] = 2*mu[i]*rho[i]*beta_i[i]*(n+1)*li
-                a[i,5,2] = -rho[i]*zarray[i]*beta_i[i]
-                a[i,5,3] = 0.
-                a[i,5,4] = z_i[i]*n*(n+1.)*li
-                a[i,5,5] = -2
-            else:
-                a[i,5,0] = -rho[i]*(n+1)*li
-                a[i,5,1] = rho[i]*(n+1)*li
-                a[i,5,2] = 0
-                a[i,5,3] = 0.
-                a[i,5,4] = 0
-                a[i,5,5] = n-1.
 
+def matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
+    for i in range(len(zarray)):
+        
+        # r dh/dr
+        a[i,0,0] = -2*lam[i]*beta_i[i]
+        a[i,0,1] = lam[i]*beta_i[i]*(n+1)
+        a[i,0,2] = beta_i[i]*zarray[i]*l
+        
+        # r dL/dr
+        a[i,1,0] = -n
+        a[i,1,1] = 1.
+        a[i,1,2] = 0.
+        a[i,1,3] = zarray[i]/mu[i]*l
+        
+        # r df_L/dr
+        if Q == 1:
+            a[i,2,0] = (4*gamma[i]*z_i[i] - 4*rho[i]*g[i] 
+                                + (rho[i]**2)*zarray[i])*li
+        else:
+            a[i,2,0] = 4*(gamma[i]*z_i[i] - rho[i]*g[i])*li
+        a[i,2,1] = -(2*gamma[i]*z_i[i] - rho[i]*g[i])*(n+1)*li
+        a[i,2,2] = -4*mu[i]*beta_i[i]
+        a[i,2,3] = (n+1.)
+        if Q == 2:
+            a[i,2,4] = -rho[i]*(n+1)*li
+        a[i,2,5] = zarray[i]*rho[i]
+        
+        # r dF_M/dr
+        a[i,3,0] = (rho[i]*g[i]-2*gamma[i]*z_i[i])*n*li
+        a[i,3,1] = 2*mu[i]*z_i[i]*(2*n*(n+1)*(lam[i]+mu[i])*beta_i[i] - 1)*li
+        a[i,3,2] = -lam[i]*beta_i[i]*n
+        a[i,3,3] = -3
+        a[i,3,4] = rho[i]*n*li
+        
+        # r dk_d/dr
+        if Q == 2:
+            a[i,4,0] = -rho[i]*zarray[i]
+        a[i,4,1] = 0.
+        a[i,4,2] = 0.
+        a[i,4,3] = 0.
+        if Q == 2:
+            a[i,4,4] = -(n+1)
+        a[i,4,5] = zarray[i]*l
+        
+        # r dq/dr
+        if Q == 1:
+            a[i,5,0] = -(grad_rho[i]*zarray[i] 
+                            + 4*mu[i]*rho[i]*beta_i[i])*li
+            a[i,5,1] = 2*mu[i]*rho[i]*beta_i[i]*(n+1)*li
+            a[i,5,2] = -rho[i]*zarray[i]*beta_i[i]
+            a[i,5,3] = 0.
+            a[i,5,4] = z_i[i]*n*(n+1.)*li
+            a[i,5,5] = -2
+        else:
+            a[i,5,0] = -rho[i]*(n+1)*li
+            a[i,5,1] = rho[i]*(n+1)*li
+            a[i,5,2] = 0
+            a[i,5,3] = 0.
+            a[i,5,4] = 0
+            a[i,5,5] = n-1.
+
+if numba_load:
+    matFill = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
+        float64[:], float64[:], float64[:], float64[:], float64[:], float64,
+        float64, int64), nopython=True)(matFill)
 
 def gen_elasb(n, uV, params, zarray, Q=1):
     assert params.normmode == 'love', 'Must normalize parameters'
