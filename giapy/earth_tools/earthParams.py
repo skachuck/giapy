@@ -1,6 +1,12 @@
 """
+earthParams.py
+Author: Samuel B. Kachuck
+Date: Sept 10, 2014
+
+    Store and manipulate (normalize/interpolate)  material parameters for earth.
+
     NOTE ON UNITS:
-    This module uses cgs units.
+    This module uses a combination of units.
 """
 import numpy as np
 from scipy.interpolate import interp1d
@@ -15,7 +21,8 @@ from giapy import MODPATH
 class EarthParams(object):
     """Store and interpolate Earth's material parameters.
 
-    Uses PREM (Dziewonski & Anderson 1981) for density and elastic parameters.
+    Uses PREM (Dziewonski & Anderson 1981) for density and elastic parameters
+    by default.
 
     Parameters
     ----------
@@ -42,20 +49,23 @@ class EarthParams(object):
         'love' which nondimensionalizes everything for use with direct Love
         number computation.
     """
-    def __init__(self, model='prem', visArray=None, D=0, bulk=True,
-                    normmode='larry'):        
-        self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
+    def __init__(self, model='prem', modelpath=None, visArray=None, D=0, 
+                    bulk=True, normmode='larry'):        
+        self.G = 4*np.pi*6.674e-11              # m^3/kg.s^2
         
         self.normmode = 'larry'
-        self.norms = {'r'  :     6.371e+8 ,     # cm
+        self.norms = {'r'  :     6.371e+6 ,     # m
                       'eta':     1e+22    ,     # poise = g/cm.s    
-                      'mu' :     293.8e+10,     # dyne/cm^2
-                      'g'  :     981.56   }     # cm/s^2
+                      'mu' :     293.8e+9 ,     # N/m^2
+                      'g'  :     9.8156   }     # m/s^2
 
-        try:
-            locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
-        except:
-            raise
+        if modelpath is not None:
+            locprem = np.loadtxt(modelpath)
+        else:
+            try:
+                locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
+            except:
+                raise
 
         self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
         self.denCore = locprem[0,1]                # g/cc
@@ -86,21 +96,16 @@ class EarthParams(object):
                             'nonad', 'visc']
         self._paramArray = np.concatenate((locprem[1:,1:], dend[:,np.newaxis], 
                                             filler, filler), axis=1).T
-
+        # Initialize interpolation object
         self._interpParams = interp1d(z, self._paramArray)
 
-        zDisc = locateDiscontinuities(z)        # Save discontinuities.
-        #self.z = np.union1d(self.z, zDisc)
-        #self._paramArray = self._interpParams(self.z)
-        #self._interpParams = interp1d(self.z, self._paramArray)
-
-        # Set up viscosity profile with uniform viscosity
+        # Set up viscosity profile with uniform viscosity by default
         if visArray is None:
             visArray = np.array([[z[0]      , z[-1]      ],
                                  [1e22      , 1e22       ]])
         self.addViscosity(visArray)
 
-        # Flexural rigidity is assumed 0 (no lithosphere)
+        # Flexural rigidity
         self.D = D
 
         self.normalize(normmode)
