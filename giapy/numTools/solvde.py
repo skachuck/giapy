@@ -19,7 +19,8 @@ class solvde(object):
     relaxation."""
 
     def __init__(self, itmax, conv, slowc, scalv, indexv, nb, y, difeq,
-                    verbose=False, keep_steps=False, slowc_corr=None):
+                    verbose=False, keep_steps=False, slowc_corr=None,
+                    it_count=False):
         self.y = y
         ne, m = y.shape
         nvars = ne*m
@@ -114,8 +115,11 @@ class solvde(object):
             if err < conv: 
                 self.y = y
                 # Steps are zero-indexed.
-                self.it = it + 1 
-                return
+                self.it = it + 1
+                if it_count:
+                    return self, self.it
+                else:
+                    return self,
 
         raise ValueError('Too many iterations in solvde')
     def __getitem__(self, key):

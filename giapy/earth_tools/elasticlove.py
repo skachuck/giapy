@@ -5,6 +5,17 @@ Date: April 1, 2017
 
     Compute Elastic Love Numbers.
 
+    Methods
+    -------
+    compute_love_numbers
+    exp_pt_density
+    propMatElas
+    gen_elas_b
+
+    Classes
+    -------
+    SphericalElasSMat
+
     Note on gravity perturbation. This code supports two definitions of the
     gravity perturbation, using the keyword Q. Q=1 is simply the radial
     derivative of the perturbation of the gravtiational potential. Q=2
@@ -13,20 +24,140 @@ Date: April 1, 2017
 
 """
 
+from __future__ import division
 import numpy as np
+import sys
 from giapy.earth_tools.earthParams import EarthParams
-# Check for numba, use if present.
+# Check for numba, use if present otherwise, skip.
 try:
-    from giapy.numTools.solvdeJit import interior_smatrix_fast
+    from giapy.numTools.solvdeJit import interior_smatrix_fast, solvde
     from numba import jit, void, int64, float64
     numba_load = True
 except ImportError:
-    from giapy.numTools.solvde import interior_smatrix_fast
+    from giapy.numTools.solvde import interior_smatrix_fast, solvde
     numba_load = False
 
-def propMatElas(zarray, n, params, Q=1):
-    """Generate the propagator matrix at all points in zarray. Should have
-    shape (len(zarray), 6, 6)
+def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=False,
+                             zgen=False, args=[], kwargs={}):
+    """Compute surface elastic load love numbers for harmonic order numbers ns.
+
+    Parameters
+    ----------
+    ns : array of order numbers
+    zarrayorgen : array or funtion that makes array (see zgen)
+    params : <giapy.earth_tools.earthParams.EarthParams> object 
+        for interpolation of earth parameters to relevant points.
+    err : float, maximum tolerated error for relaxation method.
+
+    it_counts : Boolean
+        Whether counts of relaxation iterations are output (default False)
+    zgen : Boolean
+        Is zarrayorgen a function to make zarrays (True) or an array (False)
+        (default False)
+    args, kwargs: optional arguments for the zaarrayorgen function.
+
+    Returns
+    -------
+    hLk : (len(ns), 3) array of h, L, and k_d. 
+        To get the total gravitational love number, k=n*(1+k_d).
+    its : len(ns) array of iteration numbers for relaxation method 
+        (if it_counts=True).
+    """
+
+    hLk = []
+    if it_counts:
+        its = []
+    if zgen:
+        zarray = zarrayorgen(ns[0], *args, **kwargs)
+    else:
+        zarray = zarrayorgen
+
+    # Setup for relaxation method
+    scalvElas = np.array([1., 1., 1., 1., 1., 1.])
+    indexv = np.array([3,4,0,1,5,2])
+    slowc = 1
+
+    # Initial guess - subsequent orders use previous solution.
+    y0 = (scalvElas*np.ones((6, len(zarray))).T).T
+    
+    # Main order number loop.
+    #TODO add adaptive n stepsize and interpolate to interior orders.
+    for n in ns:
+        sys.stdout.write('Computing love number {}\r'.format(n))
+        if zgen: 
+            zarray = zarrayorgen(n, *args, **kwargs)
+            # If not first order num, update relaxation object...
+            try:
+                difeqElas.updateProps(n=n, z=zarray)
+            # ... otherwise create it.
+            except:
+                difeqElas = SphericalElasSMat(ns[0], zarray, params, Q=2)
+        else:
+            # If not first order num, update relaxation object...
+            try:
+                difeqElas.updateProps(n=n)
+            # ... otherwise create it.
+            except:
+                difeqElas = SphericalElasSMat(ns[0], zarray, params, Q=Q)
+
+        # Perform the relaxation for the order number and store results.
+        y0, it = solvde(500, err, slowc, scalvElas, indexv, 3,
+                                y0, difeqElas, False, it_count=True)
+        hLk.append(y0[[0,1,4], -1])
+        if it_counts:
+            its.append(it)
+    sys.stdout.write('\n')
+
+    hLk=np.array(hLk).T
+
+    # Correct n=1 case
+    if ns[0] == 1:
+        hLk[:2,0] += (1+hLk[2,0])
+        hLk[2,0] -= (1+hLk[2,0])
+
+    if it_counts:
+        its=np.array(its)
+
+    if it_counts:
+        return hLk, its
+    else:
+        return hLk
+
+def exp_pt_density(nz, delta=1., x0=0., x1=1., normed_delta=True):
+    """Generate a point distribution with exponential spacing.
+
+    Parameters
+    ----------
+    nz : integer - number of points to generate
+    delta : float
+        The exponential rate of increase (decrease if negative) of point 
+        density. It is assumed to be normalized to the distance x1-x0 unless
+        normed_delta=False. (Default 1.)
+    x0, x1 : the range over which to distribute points (Defaults 0 to 1)
+    """
+    qs = np.arange(nz, dtype=float)
+    if normed_delta:
+        xs = (x1-x0)*delta * np.log(qs/(nz-1)*(np.exp(1./delta) - 1) + 1) + x0
+    else:
+        xs = x1* np.log(qs/(nz-1)*(np.exp((x1-x0)/delta) - 1) + 1) + x0
+    return xs
+
+def propMatElas(zarray, n, params, Q=2):
+    """Generate the propagator matrix at all points in zarray.
+
+    Parameters
+    ----------
+    zarray : array of radius values (can be singleton, returns one 6x6 array)
+    n : int. The order number
+    params : <giapy.earth_tools.earthParams.EarthParams> object 
+        for interpolation of earth parameters to relevant points.
+    Q : 1 or 2
+        Flag for the definition of the gravity perturbation (see note at top of
+        module).
+
+    Returns
+    -------
+    a : (len(zarray), 6, 6) or (6,6). The array (or single) propagator matrix
     
     """
     assert params.normmode == 'love', 'Must normalize parameters'
@@ -39,6 +170,7 @@ def propMatElas(zarray, n, params, Q=1):
         zarray[zarray>1] = 1
         singz = True
             
+    # Interpolate the material parameters to solution points zarray.
     parvals = params.getParams(zarray)
     lam = parvals['bulk']
     mu = parvals['shear']
@@ -55,7 +187,8 @@ def propMatElas(zarray, n, params, Q=1):
 
     a = np.zeros((len(zarray), 6, 6))
 
-    matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q)
+    # Fill the matrix. It's a long for loop that can be accelerated with numba.
+    _matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q)
     
     if singz:
         return z_i*a[0]
@@ -63,7 +196,8 @@ def propMatElas(zarray, n, params, Q=1):
         return (z_i*a.T).T
 
 
-def matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
+def _matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
+    """Fill the propagator matrix a, used internally by propMatElas."""
     for i in range(len(zarray)):
         
         # r dh/dr
@@ -124,30 +258,56 @@ def matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, 
             a[i,5,4] = 0
             a[i,5,5] = n-1.
 
-if numba_load:
-    matFill = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
+# numba speeds up the filling of the propagator matrix dramatically.
+if numba_load: 
+    _matFill = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
         float64[:], float64[:], float64[:], float64[:], float64[:], float64,
-        float64, int64), nopython=True)(matFill)
+        float64, int64), nopython=True)(_matFill)
 
-def gen_elasb(n, uV, params, zarray, Q=1):
-    assert params.normmode == 'love', 'Must normalize parameters'
+def gen_elasb(n, hV, params, zarray, Q=1):
+    """Generate viscous gravitational source terms for elastic eqs.
 
+    Parameters
+    ----------
+    n : int. Order number of computation.
+    hV : array of viscous vertical deformation mantle love numbers.
+    params : <giapy.earth_tools.earthParams.EarthParams> object 
+        for interpolation of earth parameters to relevant points.
+    zarray : array of radius values (can be singleton, returns (3, 6) array)
+    Q : 1 or 2
+        Flag for the definition of the gravity perturbation (see note at top of
+        module).
+
+    Returns
+    -------
+    b - (len(zarray) + 2, 6) array
+        The array of inhomogeneities (gravity sources from viscous deformation)
+        at the two boundaries, and the interior mantle points.
+    """
     # Check for individual z call
     zarray = np.asarray(zarray)
+    singz = False
+    if zarray.shape == ():
+        zarray = zarray[np.newaxis]
+        zarray[zarray>1] = 1
+        singz = True
+    assert params.normmode == 'love', 'Must normalize parameters' 
      
-    parvals = params.getParams(zarray)
-    rho = parvals['den']
-    g = parvals['grav']
-    nonad = parvals['nonad']
-    eta = parvals['visc']
-
-    paramCore = params.getParams(params.rCore)
-    rhoC = paramCore['den']
-    gC = paramCore['grav']
+    parvals = params.getParams(np.r_[params.rCore, zarray, 1.])
+    # CMB values (mantle side)
+    rhoC = parvals['den'][0]
+    gC = parvals['grav'][0]
+    # CMB values (core side)
     denC = params.denCore
 
-    paramSurf = params.getParams(1.)
-    rhoS = paramSurf['den']
+    # Mantle values.
+    rho = parvals['den'][1:-1]
+    g = parvals['grav'][1:-1]
+    nonad = parvals['nonad'][1:-1]
+    eta = parvals['visc'][1:-1]
+
+    # Surface values.
+    rhoS = paramSurf['den'][-1]
 
     z_i = 1./zarray
     l = (2.*n+1.)
@@ -158,26 +318,26 @@ def gen_elasb(n, uV, params, zarray, Q=1):
     # Lower Boundary Condition inhomogeneity
     b[0,0] = 0.
     b[0,1] = 0.
-    b[0,2] = ((denC-rhoC)*gC*uV[0]*li
-                -rhoC*(denC-rhoC)*uV[0]*li**2)
+    b[0,2] = ((denC-rhoC)*gC*hV[0]*li
+                -rhoC*(denC-rhoC)*hV[0]*li**2)
     b[0,3] = 0.
-    b[0,4] = -(denC-rhoC)*uV[0]/(2.*n+1)
-    b[0,5] = -n/params.rCore*(denC-rhoC)*uV[0]*li**2
+    b[0,4] = -(denC-rhoC)*hV[0]/(2.*n+1)
+    b[0,5] = -n/params.rCore*(denC-rhoC)*hV[0]*li**2
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
     b[-1,1] = 0.
-    b[-1,2] = -rhoS*li*uV[-1]
+    b[-1,2] = -rhoS*li*hV[-1]
     b[-1,3] = 0.
     b[-1,4] = 0.
     if Q == 1:
-        b[-1,5] = -rhoS*li*uV[-1]
+        b[-1,5] = -rhoS*li*hV[-1]
     else:
         b[-1,5] = 0.
 
     # Interior points
     for i, bi in enumerate(b[1:-1]):
-        hvi = 0.5*(uV[i] + uV[i+1]) 
+        hvi = 0.5*(hV[i] + hV[i+1]) 
 
         bi[0] = 0.
         bi[1] = 0.
