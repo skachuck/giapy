@@ -67,6 +67,11 @@ class EarthParams(object):
             except:
                 raise
 
+        self.norms = {'r'  : locprem[-1,0]*1e3, # m
+                      'eta': 1e22             , # poise = g/cm.s
+                      'mu' : locprem[1,3]*1e9 , # N/m^2
+                      'g'  : locprem[-1,4]    } # m/s^2
+
         self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
         self.denCore = locprem[0,1]                # g/cc
 
