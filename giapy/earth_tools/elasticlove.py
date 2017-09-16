@@ -123,6 +123,19 @@ def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=Fals
     else:
         return hLk
 
+def hLK_asymptotic(params):
+    params.normalize('love')
+    paramSurf = params(1.)
+    mu = paramSurf['shear']
+    lam = paramSurf['bulk']
+    rho = paramSurf['den']
+
+    h = -(lam+2*mu)/mu/(lam+mu)
+    L = 1/(lam+mu)
+    K = rho/(2*mu)
+
+    return(h, L, K)
+
 def exp_pt_density(nz, delta=1., x0=0., x1=1., normed_delta=True):
     """Generate a point distribution with exponential spacing.
 
