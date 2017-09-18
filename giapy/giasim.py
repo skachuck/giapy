@@ -556,6 +556,10 @@ class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
         # 1/100 makes the response in m displacement / dyne ice
         return (respArray[self.ns,2] + respArray[self.ns,3])/100
 
+    def transform(self, trans):      
+        u, v = trans.getuv(np.zeros_like(self.array), self.array)
+        return u, v
+
 class GeoidObserver(AbstractEarthGiaSimObserver):
     def isolateRespArray(self, respArray):
         # Divide the negative potential by PREM surface gravity,
