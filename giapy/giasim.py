@@ -343,7 +343,7 @@ class GiaSimGlobal(object):
 
         return observerDict
 
-def configure_giasim(configdict):
+def configure_giasim(configdict=None):
     """
     Convenience function for setting up a GiaSimGlobal object.
 
@@ -361,8 +361,12 @@ def configure_giasim(configdict):
     sim        : GiaSimGlobal object
     """
 
-    #TODO add a defauly configdict somewhere.
-    #configdict = configdict or DEFAULTCONFIG
+    DEFAULTCONFIG = {'earth': '75km0p04Asth_4e23Lith',
+                     'ice'  : 'AA2_Tail_nochange5_hightres_Pers_288_square',
+                     'topo' : 'sstopo288'}
+
+    
+    configdict = configdict or DEFAULTCONFIG
     
     assert configdict.has_key('earth'), 'GiaSimGlobal needs earth specified'
     assert configdict.has_key('ice'), 'GiaSimGlobal needs ice specified'
