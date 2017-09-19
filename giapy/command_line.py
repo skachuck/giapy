@@ -79,7 +79,7 @@ number at supplied (very large) l (if present, defaults to l=50000)''')
     # Write them out.
     fmt = '{0:'+'{0:.0f}'.format(1+np.floor(np.log10(args.lmax)))+'d}\t{1}\t{2}\t{3}\n'
     for l, hLk in zip(ls, hLks.T):
-        args.outfile.write(fmt.format(l, hLk[0], hLk[1], l*(1+hLk[2])))
+        args.outfile.write(fmt.format(l, hLk[0], hLk[1]/l, -(1+hLk[2])))
 
     if args.conv:
         hLk_inf = np.array(hLK_asymptotic(params))

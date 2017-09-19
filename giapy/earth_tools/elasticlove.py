@@ -112,8 +112,8 @@ def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=Fals
 
     # Correct n=1 case
     if ns[0] == 1:
-        hLk[:2,0] += (1+hLk[2,0])
-        hLk[2,0] -= (1+hLk[2,0])
+        hLk[:2,0] += hLk[2,0]
+        hLk[2,0] -= hLk[2,0]
 
     if it_counts:
         its=np.array(its)
