@@ -18,9 +18,7 @@ setup(name='giapy',
     ],
     keywords='geophysics deformation isostasy',
     packages=find_packages(),
-    package_data={
-        'giapy': ['data/prem.txt'],
-    },
+    include_package_data=True,
     entry_points={
         'console_scripts': ['giapy-ellove=giapy.command_line:ellove'],
     },
