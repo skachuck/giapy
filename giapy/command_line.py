@@ -22,7 +22,7 @@ def ellove():
             --lstart LSTART    starting order number (default: 1). Cannot be less than
                                1.
             --params PARAMS    material parameter table
-            --nlayers NLAYERS  number of layers (default: 50)
+            --nlayers NLAYERS  number of layers (default: 100)
             -- conv [CONV]     perform convergence check for asymptotic love
                                number at supplied (very large) l (if flag
                                present, defaults to l=50000).
@@ -36,7 +36,7 @@ def ellove():
     parser.add_argument('--params', default=None,
                         help="""material parameter table with columns: r (km) 
 density (kg/m^3) bulk mod (GPa) shear mod (GPa) g (m/2^2) (default: PREM)""") 
-    parser.add_argument('-n', '--nlayers', type=int, default=50,
+    parser.add_argument('-n', '--nlayers', type=int, default=100,
                         help='number of layers (default: %(default)s)')
     parser.add_argument('outfile', nargs='?', type=FileType('w'),
                         default=sys.stdout,
