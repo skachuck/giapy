@@ -12,7 +12,7 @@ In future releases, I will include methods for the viscoelastic relaxation and s
 Run ```$ python setup.py build && python setup.py install``` to register the command line tool ```giapy-ellove```.
 
 ## Use
-Try ```$ giapy-ellove 100```, which will output the first 100 elastic love numbers, see ```$ giapy-ellove -h``` to customize use.
+Try ```$ giapy-ellove 100```, which will output the first 100 elastic love numbers h', l', k', suitable for input into, e.g., [REAR](https://github.com/danielemelini/rear) (Melini et al., 2014). See ```$ giapy-ellove -h``` to customize use.
 
 ## Dependencies
 [numpy](http://www.numpy.org) : Numerical computing package.
@@ -29,5 +29,8 @@ This work is distributed under the MIT license ('LICENSE').
 Cathles, L.M. (1975). *The Viscosity of the Earth's Mantle.* Princeton University Press. Princeton, NJ. 
 
 Kachuck, S.B. and Cathles, L.M. (2017, September). *Normalized relaxation method for efficient computation of elastic Love numbers.* Oral presentation at the 1st circular Workshop on Glacial Isostatic Adjustment and Elastic Deformation, Reykjavik, Iceland.
+
+Melini D., Gegout P., Spada G, King M. (2014) REAR - a regional ElAstic Rebound calculator.
+User manual for version 1.0, available on–line at: http://hpc.rm.ingv.it/rear.
 
 &copy; S.B. Kachuck 2017
