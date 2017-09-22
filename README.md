@@ -33,4 +33,4 @@ Kachuck, S.B. and Cathles, L.M. (2017, September). *Normalized relaxation method
 Melini D., Gegout P., Spada G, King M. (2014) REAR - a regional ElAstic Rebound calculator.
 User manual for version 1.0, available on–line at: http://hpc.rm.ingv.it/rear.
 
-&copy; S.B. Kachuck 2017
+&copy; 2017 S.B. Kachuck
