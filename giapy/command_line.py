@@ -78,6 +78,8 @@ number at supplied (very large) l (if present, defaults to l=50000)''')
 
     # Write them out.
     fmt = '{0:'+'{0:.0f}'.format(1+np.floor(np.log10(args.lmax)))+'d}\t{1}\t{2}\t{3}\n'
+    # Write out header
+    args.outfile.write("n\th'\tl'\tk'\n")
     for l, hLk in zip(ls, hLks.T):
         args.outfile.write(fmt.format(l, hLk[0], hLk[1]/l, -(1+hLk[2])))
 
