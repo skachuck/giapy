@@ -18,7 +18,7 @@ def calcEmergence(sim, emergedata, smooth=True, noise=0):
     # passing it and calculated times in (ts, rsl, emergedata).
     # To reference to present day
     #u0 = sim.inputs.harmTrans.spectogrd(sim['topo'][-1])
-    u0 = sim['sstopo'][-1]
+    u0 = sim.sstopo.nearest_to(0)
 
     uAtLocs = []
     for ut in sim['sstopo']:
