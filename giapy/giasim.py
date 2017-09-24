@@ -141,60 +141,10 @@ class GiaSimGlobal(object):
         addRemovalTimes = np.array(addRemovalTimes).flatten()
         remTimes = np.union1d(ice.times, addRemovalTimes)[::-1]
         calcTimes = np.union1d(remTimes, out_times)[::-1]
-                 
-        # Initialize the return object to include...
-        # ... values desired at output times
-        #   [1] Uplift
-        uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
-        #   [2] Horizontal deformation
-        horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
-        #   [3] Uplift velocities
-        velObserver = VelObserver(out_times, ntrunc, ns)
-        #   [4] Geoid perturbations
-        geoObserver = GeoidObserver(out_times, ntrunc, ns)
-        #   [5] Gravitational acceleration perturbations
-        gravObserver = GravObserver(out_times, ntrunc, ns) 
 
-        # ... and values needed to perform the convolution
-        #   [1] Uplift for ocean redistribution
-        eslUplObserver = TotalUpliftObserver(calcTimes, ntrunc, ns)
-        #   [2] Geoid for ocean redistribution
-        eslGeoObserver = GeoidObserver(calcTimes, ntrunc, ns)
-        #   [3] Topography (to top of ice) to find floating ice
-        topoObserver = HeightObserver(calcTimes, ice.shape, 'topo')
-        #   [4] Load (total water + ice load in water equivalent)
-        loadObserver = HeightObserver(calcTimes, ice.shape, 'dLoad')
-        #   [5] Water load
-        wloadObserver = HeightObserver(calcTimes, ice.shape, 'dwLoad') 
-        #   [6] Solid surface topography for ocean redistribution
-        rslObserver = HeightObserver(calcTimes, ice.shape, 'sstopo')
-        #   [7] Eustatic sea level, with average uplift and geoid over oceans.
-        eslObserver = EslObserver(calcTimes) 
-
-        observerDict = GiaSimOutput(self)
-        observerDict.addObserver('upl'   , uplObserver)
-        observerDict.addObserver('hor'   , horObserver)
-        observerDict.addObserver('grav'  , gravObserver)
-        observerDict.addObserver('load'  , loadObserver)
-        observerDict.addObserver('wload' , wloadObserver)
-        observerDict.addObserver('vel'   , velObserver)
-        observerDict.addObserver('geo'   , geoObserver)
-
-        observerDict.addObserver('eslUpl', eslUplObserver)
-        observerDict.addObserver('eslGeo', eslGeoObserver)
-        observerDict.addObserver('topo'  , topoObserver)
-        observerDict.addObserver('esl'   , eslObserver)
-        observerDict.addObserver('sstopo', rslObserver)
-
-
-        # Use progressbar to track calculation if desired.
-        if verbose:
-           try:
-               widgets = ['Convolution: ', Bar(), ' ', ETA()]
-               pbar = ProgressBar(widgets=widgets, maxval=len(ice.times)+1)
-               pbar.start()
-           except NameError:
-               raise ImportError('progressbar not loaded')
+        # Initialize output observer         
+        observerDict = initialize_output(out_times, calc_times, ntrunc, 
+                                            ns, ice.shape) 
 
         for o in observerDict:
             o.loadStageUpdate(ice.times[0], sstopo=topo)
@@ -214,10 +164,8 @@ class GiaSimGlobal(object):
                 Ta = observerDict['sstopo'].array[nta]
 
                 # Redistribute the ocean by change in ocean floor / surface.
-                upla = observerDict['eslUpl'].array[nta]
-                uplb = observerDict['eslUpl'].array[nta+1]
-                geoa = observerDict['eslGeo'].array[nta]
-                geob = observerDict['eslGeo'].array[nta+1]
+                upla, uplb = observerDict['eslUpl'].array[[nta, nta+1]]
+                geoa, geob = observerDict['eslGeo'].array[[nta, nta+1]]
                 dU = self.harmTrans.spectogrd(uplb-upla)
                 dG = self.harmTrans.spectogrd(geob-geoa)
                 dhwBarU = sealevelChangeByUplift(dU-dG, Ta+DENICE/DENSEA*icea, 
@@ -331,15 +279,10 @@ class GiaSimGlobal(object):
                     respArray = earth.getResp(inter_time-t_out)
                     for o in observerDict:
                         o.respStageUpdate(t_out, respArray, 
-                                            DYNEperM*loadChangeSpec)
-                               
-            if verbose: pbar.update(i+1)
-            i+=1
-        if verbose: pbar.finish()
+                                            DYNEperM*loadChangeSpec) 
 
         # Don't keep the intermediate uplift stages for water redistribution
-        observerDict.removeObserver('eslUpl')
-        observerDict.removeObserver('eslGeo')
+        observerDict.removeObserver('eslUpl', 'eslGeo') 
 
         return observerDict
 
@@ -399,6 +342,52 @@ def configure_giasim(configdict):
 
     return sim
 
+def initialize_output(out_times, calc_times, ntrunc, ns, shape):
+    # Initialize the return object to include...
+    # ... values desired at output times
+    #   [1] Uplift
+    uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
+    #   [2] Horizontal deformation
+    horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
+    #   [3] Uplift velocities
+    velObserver = VelObserver(out_times, ntrunc, ns)
+    #   [4] Geoid perturbations
+    geoObserver = GeoidObserver(out_times, ntrunc, ns)
+    #   [5] Gravitational acceleration perturbations
+    gravObserver = GravObserver(out_times, ntrunc, ns) 
+
+    # ... and values needed to perform the convolution
+    #   [1] Uplift for ocean redistribution
+    eslUplObserver = TotalUpliftObserver(calcTimes, ntrunc, ns)
+    #   [2] Geoid for ocean redistribution
+    eslGeoObserver = GeoidObserver(calcTimes, ntrunc, ns)
+    #   [3] Topography (to top of ice) to find floating ice
+    topoObserver = HeightObserver(calcTimes, shape, 'topo')
+    #   [4] Load (total water + ice load in water equivalent)
+    loadObserver = HeightObserver(calcTimes, shape, 'dLoad')
+    #   [5] Water load
+    wloadObserver = HeightObserver(calcTimes, shape, 'dwLoad') 
+    #   [6] Solid surface topography for ocean redistribution
+    rslObserver = HeightObserver(calcTimes, shape, 'sstopo')
+    #   [7] Eustatic sea level, with average uplift and geoid over oceans.
+    eslObserver = EslObserver(calcTimes) 
+
+    observerDict = GiaSimOutput(self)
+    observerDict.addObserver('upl'   , uplObserver)
+    observerDict.addObserver('hor'   , horObserver)
+    observerDict.addObserver('grav'  , gravObserver)
+    observerDict.addObserver('load'  , loadObserver)
+    observerDict.addObserver('wload' , wloadObserver)
+    observerDict.addObserver('vel'   , velObserver)
+    observerDict.addObserver('geo'   , geoObserver)
+
+    observerDict.addObserver('eslUpl', eslUplObserver)
+    observerDict.addObserver('eslGeo', eslGeoObserver)
+    observerDict.addObserver('topo'  , topoObserver)
+    observerDict.addObserver('esl'   , eslObserver)
+    observerDict.addObserver('sstopo', rslObserver)
+    return observerDict
+
 class GiaSimOutput(object):
     """A container object for computations of glacial isostatic adjustment.
 
@@ -448,9 +437,10 @@ class GiaSimOutput(object):
         self._observerDict[name] = observer
         setattr(self, name, observer)
 
-    def removeObserver(self, name):
-        del self._observerDict[name]
-        delattr(self, name)
+    def removeObserver(self, *names):
+        for name in names:
+            del self._observerDict[name]
+            delattr(self, name)
 
     def transformObservers(self, inverse=False):
         for obs in self:
