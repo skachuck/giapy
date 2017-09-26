@@ -76,6 +76,8 @@ class SphericalLoveVelocities(object):
 
         # Extract the velocities
         dydt[:] = self.yV[[0,1],:].flatten()
+
+        #return self.yV[[0,1],:].flatten()
     
         #return hLdv
 
@@ -117,7 +119,7 @@ class SphericalEarthOutput(object):
         is met.
         
     """
-    def __init__(self, times=None, zsave=None, zs=None, inds=None):
+    def __init__(self, f, times=None, zsave=None, zs=None, inds=None):
      
         if times is not None:
             self.times = times[:]
@@ -137,11 +139,14 @@ class SphericalEarthOutput(object):
         else:
             self.inds = inds
             self.zsave = None
+        self.f = f
+        self.nz = len(self.f.yE[0])
        
         #   he  Le  hv  Lv  psi  q  hdv
         self.outArray = np.zeros((len(self.times), len(self.inds), 9))
 
-    def out(self, t, hv, Lv, f):
+    #def out(self, t, hv, Lv, f):
+    def out(self, t, hvLv):
         ind = np.argwhere(self.times == t)
         try:
             self.maxind = ind[0][0]
@@ -149,7 +154,9 @@ class SphericalEarthOutput(object):
         except IndexError:
             raise IndexError("SphericalEarthOutput received a time t={0:.3f}".format(t)+
                             " that was not in its output times.")
-        he, Le, psi, q, hdv = f.solout()
+        self.f(t, hvLv.copy(), 0*hvLv)
+        he, Le, psi, q, hdv = self.f.solout()
+        hv, Lv = hvLv[:self.nz], hvLv[self.nz:]
         self.outArray[ind, :, 0] = he[self.inds]
         self.outArray[ind, :, 1] = hv[self.inds]
         self.outArray[ind, :, 2] = Le[self.inds]
@@ -157,8 +164,8 @@ class SphericalEarthOutput(object):
         self.outArray[ind, :, 4] = psi[self.inds]
         self.outArray[ind, :, 5] = q[self.inds]
         self.outArray[ind, :, 6] = hdv[self.inds]
-        self.outArray[ind, :, 7] = f.yE[2, self.inds]
-        self.outArray[ind, :, 8] = f.yV[2, self.inds]
+        self.outArray[ind, :, 7] = self.f.yE[2, self.inds]
+        self.outArray[ind, :, 8] = self.f.yV[2, self.inds]
 
 
 

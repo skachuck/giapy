@@ -22,7 +22,7 @@ class Odeint(object):
     EPS = np.finfo(float).eps
 
     def __init__(self, derivs, ystart, x1, x2, stepper, atol, rtol, h, hmin,
-	nsave=None, xsave=None, **kwargs):
+	nsave=None, xsave=None, extout=None, **kwargs):
         """Constructor sets everything up. The routine integrates starting
 	values ystart[0..nvar-1] from x1 to x2 with absolute tolerance atol and
 	relative tolerance rtol. The quantity h1 should be set as a guessed
@@ -54,8 +54,10 @@ class Odeint(object):
         self.hmin = hmin
         if xsave is None:
             self.out = Output(x1, x2, nsave, nvar)
+        elif extout is not None:
+            self.out = ExternalOutput(x1, x2, xsave, extout)
         else:
-            self.out = ArbitraryArrayOutput(x1, x2, xsave, nvar)
+            self.out = ArbitraryOutput(x1, x2, xsave, nvar)
 
         self.dense = self.out.dense
         self.derivs = derivs
@@ -171,21 +173,20 @@ class Output(object):
 		self.xout += self.dxout
 
 class ArbitraryOutput(Output):
-    def __init__(self, x1, x2, xsave=None):
+    def __init__(self, x1, x2, xsave, ny):
         self.xsave = []
         self.ysave = []
-
-        if xsave is None:
-            self.dense = False
-            return
-        else:
-            self.xsaveiter = iter(xsave)
-            self.dense = True
-
-        if self.dense:
-            self.x1 = x1
-            self.x2 = x2
-            self.xout = x1
+        nsave = len(xsave)
+        self.xsave = np.zeros(nsave+1)
+        self.ysave = np.zeros((ny, nsave+1))
+        self.i = 0
+ 
+        self.xsaveiter = iter(xsave)
+        self.dense = True
+  
+        self.x1 = x1
+        self.x2 = x2
+        self.xout = x1
 
     def out(self, nstp, x, y, stepper, h):
         if not self.dense:
@@ -232,6 +233,30 @@ class ArbitraryArrayOutput(Output):
             xout = self.xsave[np.logical_and(self.xsave<=x,
                             self.xsave>x-h)]
 	    self.save_dense(stepper, xout, h)
+
+
+class ExternalOutput(Output):
+    def __init__(self, x1, x2, xsave, extout):
+        self.xsave = xsave
+        self.xsaveiter = iter(xsave)
+        self.dense = True
+        self.x1 = x1
+        self.x2 = x2
+        self.xout = x1
+        self.extout = extout
+
+    def out(self, nstp, x, y, stepper, h):
+        if not self.dense:
+            raise ValueError("dense output not set in Output!")
+        if nstp == -1:
+            #self.save(x, y)
+            self.extout.out(self.xout, y)
+            self.xout = self.xsaveiter.next()
+        else:
+            while (x-self.xout)*(self.x2-self.x1) > 0.0:
+                self.extout.out(self.xout, stepper.denseOut(self.xout, h))
+	
+		self.xout = self.xsaveiter.next()
 
 
 class StepperDopr5(StepperBase):
