@@ -1,5 +1,5 @@
 import numpy as np
-import time
+
 
 from giapy.map_tools import haversine
 
@@ -8,13 +8,16 @@ class TiltData(object):
        self.locs = np.array([[5, 60.3], [6, 62], [10, 63.75],
                              [16, 68.5], [27.25, 71]])
        self.long_data = np.array([1.3, 1.3, 1.6, 1.1, 0.6])
+       self.long_time_i = np.array([12, 12, 12, 12, 12])
+       self.long_time_f = np.array([0,0,0,0,0])
+       self.long_recnbrs = np.array([1, 2, 3, 4, 5])
 
     def transform_locs(self, basemap, inverse=False):
         xs, ys = basemap(self.locs[:,0], self.locs[:,1], inverse=inverse)
         self.locs[:,0], self.locs[:,1] = xs, ys
 
     def interp(self, simobject, verbose=False):
-        time_start = time.clock()
+
 
         grid = simobject.grid
         uplift = simobject.uplift[np.where(simobject.out_times==13)[0][0]]

@@ -1,6 +1,8 @@
 import numpy as np
 import os
 
+from giapy.data_tools.tiltdata import calcTilts
+
 def read_t_files(directory, filenames, data_col=2):
     """Read in a full comma-delimitted ice file in x-y-z format.
 
@@ -78,16 +80,20 @@ def write_case_files(casename, result):
         f.write('vers: {}\n'.format(result.GITVERSION))
         f.write('files: {}\n'.format('\t'.join(fnames)))
         f.write('mMW: {}\n'.format('\t'.join([str(t) for t in result.esl.array])))
+        f.write('mMW: {}\n'.format('\t'.join([str(result.inputs.grid.integrate(icet)/3.61e8) 
+                                                for icet in results.inputs.ice])))
         f.write('ages: {}\n'.format('\t'.join([str(t) for t in outTimes])))
         
 
 def write_data_files(casename, result, emergedata=None, rsldata=None,
-                        gpsdata=None):
+                        gpsdata=None, tiltdata=None):
     try: 
         os.mkdir(casename)
     except:
         pass 
-   
+    
+    result.upl.transform(result.inputs.harmTrans, inverse=False)
+
     if emergedata is not None:
         u0 = result['sstopo'].nearest_to(0)
         coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
@@ -133,6 +139,21 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         np.savetxt(fname, output, header=header)
 
 
+    if tiltdata is not None:
+        coltit = 'recnbr\tlongitude\tlatitude\tstart\tend\tcalc\tobs'
+        writeout = 'case: {} tilt interpolation\n'+coltit+'\n'
+        for ti, tf, loc, obs, recnbr in zip(tiltdata.long_times_i,
+                                    tiltdata.long_times_f, tiltdata.locs,
+                                    tiltdata.long_data, tiltdata.long_recnbrs):
+            diffup = (result.uplift.nearest_to(tf) -
+                            result.uplift.nearest_to(ti))
+            tilt = calcTilts(diffup, result.inputs.grid.Lon,
+                                    result.inputs.grid.Lat)
+            calc = result.inputs.grid.interp(tilt, loc[0], loc[1])
+            writeout += '{}\n'.format('\t'.join([recnbr, loc[0], loc[1], ti,
+                                        tf, calc, obs]))
+        with open('{}/py_file_tilt.txt'.format(casename)) as f:
+            f.write(writeout)
     #with open('{}/py_file_inf.txt'.format(casename), 'w') as f:
     #    f.write('case: {}\n'.format(casename))
     #    f.write('date: {}\n'.format(result.TIMESTAMP))
