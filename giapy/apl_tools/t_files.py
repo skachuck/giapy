@@ -138,6 +138,36 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         header = 'case: {} rsl interpolation\n'.format(casename) + coltit
         np.savetxt(fname, output, header=header)
 
+    if gpsdata is not None:
+        coltit = 'sitename\tlongitude\tlatitude\tve\tvn\tvu\n'
+        result.upl.transform(result.inputs.harmTrans, inverse=False)
+        vu = (result.upl.nearest_to(-0.1) - result.upl.nearest_to(0.1))/.2
+
+        up, vp = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-3]).T,
+                                                result.hor.array[-3].T)
+
+        um, vm = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-1]).T,
+                                                result.hor.array[-1].T)
+
+        ve = (um - up)/0.2/1e7
+        vn = (vm - vp)/0.2/1e7
+
+        interpfunc = result.inputs.grid.create_interper(vu)
+        vuAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats)
+        interpfunc = result.inputs.grid.create_interper(ve)
+        veAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats) 
+        interpfunc = result.inputs.grid.create_interper(ve)
+        vnAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats)
+
+        fname = '{}/py_file_gps.txt'.format(casename)
+        header = 'case: {} gps interpolation\n'.format(casename) + coltit
+
+        with open(fname, 'w') as f:
+            f.write(header)
+            for loc, vu, ve, vn in zip(gpsdata, vuAtLocs, veAtLocs, vnAtLocs):
+                f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(loc.sitename, loc.lon,
+                                                    loc.lat, ve, vn, vu))
+
 
     if tiltdata is not None:
         coltit = 'recnbr\tlongitude\tlatitude\tstart\tend\tcalc\tobs'

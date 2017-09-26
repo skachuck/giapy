@@ -4,3 +4,6 @@
 
 giapy/data/*
 nbs/*
+build/*
+dist/*
+giapy.egg-info/*
