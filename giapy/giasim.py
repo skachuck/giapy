@@ -143,7 +143,7 @@ class GiaSimGlobal(object):
         calcTimes = np.union1d(remTimes, out_times)[::-1]
 
         # Initialize output observer         
-        observerDict = initialize_output(out_times, calc_times, ntrunc, 
+        observerDict = initialize_output(self, out_times, calcTimes, ntrunc, 
                                             ns, ice.shape) 
 
         for o in observerDict:
@@ -346,7 +346,7 @@ def configure_giasim(configdict=None):
 
     return sim
 
-def initialize_output(out_times, calc_times, ntrunc, ns, shape):
+def initialize_output(sim, out_times, calcTimes, ntrunc, ns, shape):
     # Initialize the return object to include...
     # ... values desired at output times
     #   [1] Uplift
@@ -376,7 +376,7 @@ def initialize_output(out_times, calc_times, ntrunc, ns, shape):
     #   [7] Eustatic sea level, with average uplift and geoid over oceans.
     eslObserver = EslObserver(calcTimes) 
 
-    observerDict = GiaSimOutput(self)
+    observerDict = GiaSimOutput(sim)
     observerDict.addObserver('upl'   , uplObserver)
     observerDict.addObserver('hor'   , horObserver)
     observerDict.addObserver('grav'  , gravObserver)
