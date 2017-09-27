@@ -55,18 +55,25 @@ class IceHistory(object):
         self.times = []
 
         for fname in os.listdir(self.path):
-            resp = raw_input('Include '+fname+'? [Time (in ka bp)/n/end] ')
             try:
-                year = float(resp)
-                self.fnames.append(fname)
-                self.times.append(year)
+                year = float(os.path.splitext(fname))/1000.
             except:
-                if resp == 'end':
-                    break
-                elif resp == 'n':
-                    continue
-                else:
-                    'Did not understand. Add file using self.addFile'
+                year = ''
+            resp = raw_input('Include '+fname+'? [y/Time (in ka bp)/n/end] '+str(year))
+            if resp == 'y':
+                pass
+            elif resp == 'end':
+                break
+            elif resp == 'n':
+                continue
+            else:
+                try:
+                    year = float(resp)
+                except:
+                    'Did not understand. Add file using self.addFile' 
+
+            self.fnames.append(fname)
+            self.times.append(year)
         # Sort files by decreasing time
         self.sortByTime()
 
