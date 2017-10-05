@@ -79,10 +79,10 @@ def write_case_files(casename, result):
         f.write('date: {}\n'.format(result.TIMESTAMP))
         f.write('vers: {}\n'.format(result.GITVERSION))
         f.write('files: {}\n'.format('\t'.join(fnames)))
-        f.write('mMW: {}\n'.format('\t'.join([str(t) for t in result.esl.array])))
-        f.write('mMW: {}\n'.format('\t'.join([str(result.inputs.grid.integrate(icet)/3.61e8) 
-                                                for icet in results.inputs.ice])))
-        f.write('ages: {}\n'.format('\t'.join([str(t) for t in outTimes])))
+        f.write('eus (m): {}\n'.format('\t'.join([str(t) for t in result.esl.array])))
+        f.write('mMW (m): {}\n'.format('\t'.join([str(result.inputs.grid.integrate(icet)/3.61e8) 
+                                                for icet in result.inputs.ice])))
+        f.write('ages (ka): {}\n'.format('\t'.join([str(t) for t in outTimes])))
         
 
 def write_data_files(casename, result, emergedata=None, rsldata=None,
@@ -96,7 +96,7 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
 
     if emergedata is not None:
         u0 = result['sstopo'].nearest_to(0)
-        coltit = 'recnbr\tlongitude\tlatitude\temerge_i'
+        coltit = 'recnbr\tlongitude\tlatitude\temerge_i (m)'
         outTimes = result.sstopo.outTimes 
 
         uAtLocs = []
@@ -117,19 +117,26 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         np.savetxt(fname, output, header=header)
 
     if rsldata is not None:
-        coltit = 'recnbr\tlongitude\tlatitude\trsl_i'
+        coltit = 'recnbr\tlongitude\tlatitude\trsl_i (m)\tupl_i (m)'
         outTimes = result.sstopo.outTimes
-        u0 = result['sstopo'].nearest_to(0)
+        s0 = result['sstopo'].nearest_to(0)
+        u0 = result.upl.nearest_to(0)
 
+        sAtLocs = []
         uAtLocs = []
-        for ut in result['sstopo']:
+        for st, ut in zip(result['sstopo'], result['upl']):
+            st = s0 - st
+            interpfunc = result.inputs.grid.create_interper(st.T)
+            sAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))
+
             ut = u0 - ut
-            interpfunc = result.inputs.grid.create_interper(ut.T)
+            interpfunc = result.inputs.grid.create_interper(ut)
             uAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))
 
-        output = np.zeros((len(rsldata.lons), len(outTimes)+3))
+        output = np.zeros((len(rsldata.lons), 2*len(outTimes)+3))
 
-        output[:, 3:] = np.asarray(uAtLocs).T
+        output[:, 3:3+len(outTimes)] = np.asarray(sAtLocs).T
+        output[:, 3+len(outTimes):] = np.asarray(uAtLocs).T
         output[:, 0] = [loc.stid for loc in rsldata]
         output[:, 1] = rsldata.lons
         output[:, 2] = rsldata.lats
@@ -139,8 +146,9 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         np.savetxt(fname, output, header=header)
 
     if gpsdata is not None:
-        coltit = 'sitename\tlongitude\tlatitude\tve\tvn\tvu\n'
-        result.upl.transform(result.inputs.harmTrans, inverse=False)
+        coltit ='''sitename\tlongitude\tlatitude\tve (mm/yr)\tvn (mm/yr)\tvu (mm/yr)\t
+ve_obs (mm/yr)\tvn_obs (mm/yr)\tvu_obs (mm/yr)\tsige (mm/yr)\tsign (mm/yr)\tsigu (mm/yr)\n'''
+        #result.upl.transform(result.inputs.harmTrans, inverse=False)
         vu = (result.upl.nearest_to(-0.1) - result.upl.nearest_to(0.1))/.2
 
         up, vp = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-3]).T,
@@ -156,7 +164,7 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         vuAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats)
         interpfunc = result.inputs.grid.create_interper(ve)
         veAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats) 
-        interpfunc = result.inputs.grid.create_interper(ve)
+        interpfunc = result.inputs.grid.create_interper(vn)
         vnAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats)
 
         fname = '{}/py_file_gps.txt'.format(casename)
@@ -165,24 +173,27 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
         with open(fname, 'w') as f:
             f.write(header)
             for loc, vu, ve, vn in zip(gpsdata, vuAtLocs, veAtLocs, vnAtLocs):
-                f.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(loc.sitename, loc.lon,
-                                                    loc.lat, ve, vn, vu))
+                f.write('{}\n'.format('\t'.join([str(i) for i in [loc.sitename, loc.lon,
+                                                    loc.lat, ve, vn, vu,
+                                                    loc.ve, loc.vn, loc.vu,
+                                                    loc.sige, loc.sign,
+                                                    loc.sigu]])))
 
 
     if tiltdata is not None:
-        coltit = 'recnbr\tlongitude\tlatitude\tstart\tend\tcalc\tobs'
+        coltit = 'recnbr\tlongitude\tlatitude\tstart (ka)\tend (ka)\tcalc\ (m/km)tobs (m/km)'
         writeout = 'case: {} tilt interpolation\n'+coltit+'\n'
-        for ti, tf, loc, obs, recnbr in zip(tiltdata.long_times_i,
-                                    tiltdata.long_times_f, tiltdata.locs,
+        for ti, tf, loc, obs, recnbr in zip(tiltdata.long_time_i,
+                                    tiltdata.long_time_f, tiltdata.locs,
                                     tiltdata.long_data, tiltdata.long_recnbrs):
-            diffup = (result.uplift.nearest_to(tf) -
-                            result.uplift.nearest_to(ti))
+            diffup = (result.upl.nearest_to(tf) -
+                            result.upl.nearest_to(ti))
             tilt = calcTilts(diffup, result.inputs.grid.Lon,
                                     result.inputs.grid.Lat)
             calc = result.inputs.grid.interp(tilt, loc[0], loc[1])
-            writeout += '{}\n'.format('\t'.join([recnbr, loc[0], loc[1], ti,
-                                        tf, calc, obs]))
-        with open('{}/py_file_tilt.txt'.format(casename)) as f:
+            writeout += '{}\n'.format('\t'.join([str(i) for i in [recnbr, loc[0], loc[1], ti,
+                                        tf, calc, obs]]))
+        with open('{}/py_file_tilt.txt'.format(casename), 'w') as f:
             f.write(writeout)
     #with open('{}/py_file_inf.txt'.format(casename), 'w') as f:
     #    f.write('case: {}\n'.format(casename))
