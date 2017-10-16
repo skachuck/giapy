@@ -95,8 +95,8 @@ class Odeint(object):
             if (self.x-self.x2)*(self.x2-self.x1) >= 0.0:            # Are we done?
                 for i,yi in enumerate(self.y):     # Update ystart.
                     self.ystart[i]=yi
-                if abs(out.xsave[-1]-self.x2)>100.0*abs(self.x2)*self.EPS:
-                    out.save(self.x, self.y)       # Make sure last step gets saved
+                if abs(out.xsave[-1]-self.x2)<100.0*abs(self.x2)*self.EPS:
+                    out.save(self.x2, self.y)       # Make sure last step gets saved 
                 return out                 # Normal exit
 
             if abs(s.hnext) <= self.hmin:
@@ -244,6 +244,9 @@ class ExternalOutput(Output):
         self.x2 = x2
         self.xout = x1
         self.extout = extout
+
+    def save(self, x, y):
+        self.extout.out(x, y)
 
     def out(self, nstp, x, y, stepper, h):
         if not self.dense:

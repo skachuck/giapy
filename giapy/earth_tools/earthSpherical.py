@@ -1,5 +1,5 @@
 """
-earthSphecidal.y
+earthSphericial.py
 
 Author: Samuel B. Kachuck
 Date: 
@@ -15,6 +15,7 @@ from giapy.earth_tools.earthIntegrator import SphericalEarthOutput,\
         SphericalEarthShooter,\
         SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
         integrateRelaxationScipy
+from giapy.giasim import AbstractEarthGiaSimObserver
 
 def depthArray(self, npts=30, trunc=True, frac=2/3, n=None, safe=0.9):
     if trunc:
@@ -180,3 +181,44 @@ class SphericalEarth(object):
                                     zarray, yE0, yV0, n)
                 integrateRelaxationScipy(self.relaxer, out)
         return out
+
+    class TotalUpliftObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray):
+            # 1/100 makes the response in m uplift / dyne ice
+            return (respArray[self.ns,0] + respArray[self.ns,1])
+    
+    class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray):
+            # 1/100 makes the response in m displacement / dyne ice
+            return (respArray[self.ns,2] + respArray[self.ns,3])*6371000
+    
+        def transform(self, trans):      
+            u, v = trans.getgrad(np.zeros_like(self.array), self.array)
+            return u, v
+    
+    class GeoidObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray):
+            # Divide the negative potential by PREM surface gravity,
+            # 982.22 cm/s^2, to get the geoid shift. (negative because when the
+            # potential at the surface decreases, the equipotential surface
+            # representing the ocean must have risen.)
+            #TODO make this a not hard-coded number (do in earth model?)
+            # 1e-2 makes the response in m displacement / dyne ice
+            return -respArray[self.ns,4]/9.8222*1e-2
+    
+    class GravObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray):
+            # 1e3 makes the response in miligals / dyne ice
+            return respArray[self.ns,5]*1e3
+    
+    class VelObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray):
+            # 3.1536e8 makes the response in mm/yr / dyne ice
+            return respArray[self.ns,6]*3.1536e8
+    
+    class MOIObserver(AbstractEarthGiaSimObserver):
+        pass
+    
+    class AngularMomentumObserver(AbstractEarthGiaSimObserver):
+        pass
+    
