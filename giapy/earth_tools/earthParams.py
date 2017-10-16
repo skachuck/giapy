@@ -26,7 +26,7 @@ class EarthParams(object):
     visArray : np.ndarray
         The array of depths and viscosities (in poise, 1e-1 Pa s). If visArray
         is None, assumes a uniform 1e21 Pa s mantle. visArray should be a 2xN 
-        array or depths and viscosities. Can be changed later using 
+        array of depths and viscosities. Can be changed later using 
         EarthParams.addViscosity.
     D : float
         The flexural rigidity of the lithosphere (in N). Can be changed later
@@ -44,7 +44,7 @@ class EarthParams(object):
     """
     def __init__(self, model='prem', visArray=None, D=0, bulk=True,
                     normmode='larry'):        
-        self.G = 4*np.pi*6.674e-8               # cm^3/g.s^2
+        self.G = 4*np.pi*6.674e-11               # m^3/kg.s^2
         
         self.normmode = 'larry'
         self.norms = {'r'  :     6.371e+8 ,     # cm
@@ -56,6 +56,11 @@ class EarthParams(object):
             locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
         except:
             raise
+
+        self.norms = {'r'  : locprem[-1,0]*1e3, # m
+                      'eta': 1e21             , # Pa s
+                      'mu' : locprem[1,3]*1e9 , # N/m^2
+                     'g'  :locprem[-1,4]   } #   m/s^2
 
         self.rCore = locprem[0,0]/locprem[-1,0]       # earth radii
         self.denCore = locprem[0,1]                # g/cc
@@ -84,24 +89,37 @@ class EarthParams(object):
         # 6     Viscosity
         self._paramNames = ['den', 'bulk', 'shear', 'grav', 'dend',
                             'nonad', 'visc']
-        self._paramArray = np.concatenate((locprem[1:,1:], dend[:,np.newaxis], 
+        self._paramArray = np.concatenate((locprem[1:,1:5], dend[:,np.newaxis], 
                                             filler, filler), axis=1).T
 
         self._interpParams = interp1d(z, self._paramArray)
-
-        zDisc = locateDiscontinuities(z)        # Save discontinuities.
-        #self.z = np.union1d(self.z, zDisc)
-        #self._paramArray = self._interpParams(self.z)
-        #self._interpParams = interp1d(self.z, self._paramArray)
+ 
 
         # Set up viscosity profile with uniform viscosity
         if visArray is None:
-            visArray = np.array([[z[0]      , z[-1]      ],
-                                 [1e22      , 1e22       ]])
-        self.addViscosity(visArray)
+            try:
+                visArray = locprem[1:,5]
+                if visArray[-1] == visArray[-2] >= 1e11:
+                    visArray[-2:] = visArray[-3]
+                    H = (z[-1]-z[-2])*6371
+
+                self._paramArray[6] = visArray
+                self._interpParams = interp1d(z, self._paramArray)
+
+            except:
+                self._paramArray[6] = np.ones_like(z)
+                self._interpParams = interp1d(z, self._paramArray)
+        else:
+            self.addViscosity(visArray)
+        
+
+        try:
+            self.addLithosphere(H=H)       
+        except:
+            self.addLithosphere(D=D)
 
         # Flexural rigidity is assumed 0 (no lithosphere)
-        self.D = D
+        #self.D = D
 
         self.normalize(normmode)
 
@@ -233,14 +251,19 @@ class EarthParams(object):
         if D is not None:
             self.D = D
         elif H is not None:
-            # The lithosphere's elastic parameters are taken from the last row
-            # in the PREM model above (commented out).
-            lam = 34.3 * 1e+10 # dyne / cm^2
-            mu =  26.6 * 1e+10 # dyne / cm^2
+
+            re = self.norms['r']
+            g0 = self.norms['g']
+            rhobar = g0/self.G/re
+
+            paramSurf = self(1.)
+            lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
+            mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
             pois = lam/(2*(lam+mu))
-            young = mu*(3*lam + 2*mu)/(mu + lam)
+            young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
             # 1e8 converts km^3 dyne / cm^2 to N m
-            self.D = young * H**3 / (12*(1-pois**2))*1e8
+            # 1e9 converts km^3 to m^3 for D to have units N m
+            self.D = young * H**3 / (12*(1-pois**2))*1e9
         else:
             raise ValueError('Muse specify either D (in N m) or H (in km)')
 
@@ -250,25 +273,36 @@ class EarthParams(object):
         if k is not None:
             pass
         elif n is not None:
-            k =  (n + 0.5)/self.norms['r']*1e2  # m
+            k =  (n + 0.5)/self.norms['r']  # m
         else:
             raise ValueError('Must specify k (m^-1)  or n.')
 
+        re = self.norms['r']
+        g0 = self.norms['g']
+        rhobar = g0/self.G/re
+
         paramSurf = self(1.)
-        rho = paramSurf['den']
-        g = paramSurf['grav']
+        rho = paramSurf['den']*rhobar   # kg / m^3
+        g = paramSurf['grav']*g0        # m/s^2
         # 1e1 converts rho*g in dyne/cm^3 to N/m^3
-        return 1 + k**4 * self.D / (rho * g * 1e1)
+        return 1 + k**4 * self.D / (rho * g)
 
     def effectiveElasticThickness(self):
-        # The lithosphere's elastic parameters are taken from the last row
-        # in the PREM model above (commented out).
-        lam = 34.3 * 1e+10 # dyne / cm^2
-        mu =  26.6 * 1e+10 # dyne / cm^2
+
+
+        re = self.norms['r']
+        g0 = self.norms['g']
+        rhobar = g0/self.G/re
+
+        paramSurf = self(1.)
+        lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
+        mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
         pois = lam/(2*(lam+mu))
-        young = mu*(3*lam + 2*mu)/(mu + lam)
+        young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
+         
         # 1e-8 converts (N m) / (dyne / cm^2) to km^3
-        return (12 * (1-pois**2) * self.D / young *1e-8)**(0.333)
+        # 1e9 converts km^3 to m^3 for D to have units N m
+        return (12 * (1-pois**2) * self.D / young *1e-9)**(0.333)
 
     def _alterColumnPresDisc(self, col, zy):
         """
@@ -311,7 +345,7 @@ class EarthParams(object):
                 newcolumn[i] = y[itmp[0]]
             if zi in zdold:
                 itmp, = np.where(zi == self.z)
-                newparamArray[:,i] = self._paramArray[:,itmp[0]]
+                newparamArray[:,i-1] = self._paramArray[:,itmp[0]]
 
         # Put the new column into the array
         newparamArray[col] = newcolumn
@@ -322,14 +356,14 @@ class EarthParams(object):
         self._interpParams = interp1d(self.z, self._paramArray)
 
     def _alterColumn(self, col, zy):
-        #self._alterColumnPresDisc(col, zy)
-        z = zy[0]
-        y = zy[1]
-        interpY = interp1d(z, y) 
-        self.z = np.union1d(z, self.z)
-        self._paramArray = self._interpParams(self.z)
-        self._paramArray[col] = interpY(self.z)
-        self._interpParams = interp1d(self.z, self._paramArray)
+        self._alterColumnPresDisc(col, zy)
+        #z = zy[0]
+        #y = zy[1]
+        #interpY = interp1d(z, y) 
+        #self.z = np.union1d(z, self.z)
+        #self._paramArray = self._interpParams(self.z)
+        #self._paramArray[col] = interpY(self.z)
+        #self._interpParams = interp1d(self.z, self._paramArray)
 
 def locateDiscontinuities(z):
     """Locate where in an array a value is repeated.

@@ -17,13 +17,52 @@ import numpy as np
 
 from scipy.integrate import ode, odeint
 
-from giapy.earth_tools.viscouslove import propMatVisc_norm, gen_viscb_norm, SphericalViscSMat_norm
-from giapy.earth_tools.elasticlove import propMatElas_norm, gen_elasb_norm, SphericalElasSMat_norm
+from giapy.earth_tools.viscouslove import propMatVisc, gen_viscb, SphericalViscSMat
+from giapy.earth_tools.elasticlove import propMatElas, gen_elasb, SphericalElasSMat
 from giapy.numTools.solvdeJit import solvde
+from giapy.numTools.odeintJit import Odeint, StepperDopr5
+import giapy.numTools.odeintJit
+
+def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
+                            h=1, hmin=0.001, Q=1, it_counts=False,
+                             zgen=False, comp=True, args=[], kwargs={}):
+    """
+    """
+    
+    ns = np.atleast_1d(ns)
+
+    if zgen:
+        zs = zarrayorgen(ns[0])
+    else:
+        zs = zarrayorgen
+
+    vels = SphericalLoveVelocities(params, zs, ns[0], comp=comp)
+    hvLv0 = np.zeros(2*len(zs))
+
+    hLkt = np.zeros((len(ns), 4, len(ts)))
+    
+    for i, n in enumerate(ns):
+        if zgen:
+            zs = zarrayorgen(n)
+        vels.updateProps(n=n, z=zs, reset_b=True)
+        extout = SphericalEarthOutput(vels, ts, zs=zs, inds=-1)
+
+        ode = Odeint(vels, hvLv0.copy(), ts[0], ts[-1], 
+                        giapy.numTools.odeintJit.StepperDopr5, atol, rtol,
+                        h, hmin, xsave=ts, extout=extout)
+
+        out = ode.integrate()
+
+        hLkt[i,0,:] = out.extout.outArray[:,0,0]+out.extout.outArray[:,0,1]
+        hLkt[i,1,:] = out.extout.outArray[:,0,2]+out.extout.outArray[:,0,3]
+        hLkt[i,2,:] = out.extout.outArray[:,0,4]
+        hLkt[i,3,:] = out.extout.outArray[:,0,1]
+
+    return np.squeeze(hLkt)
 
 class SphericalLoveVelocities(object):
 
-    def __init__(self, params, zs, n, yEVt0=None, Q=1):
+    def __init__(self, params, zs, n, yEVt0=None, Q=1, comp=True):
         
         # t==0 Initial guesses
         if yEVt0 is None:
@@ -42,13 +81,13 @@ class SphericalLoveVelocities(object):
         self.n = n
         self.Q = Q
 
-        self.difeqElas = SphericalElasSMat_norm(n, zs, params, Q)
-        self.difeqVisc = SphericalViscSMat_norm(n, zs, params, Q)
+        self.difeqElas = SphericalElasSMat(n, zs, params, Q, comp=comp)
+        self.difeqVisc = SphericalViscSMat(n, zs, params, Q)
 
         self.indexvE = np.array([3,4,0,1,5,2])
         self.indexvV = np.array([2,3,0,1])
 
-    def __call__(self, t, hvLv, dydt, Q=1, itmax=500, tol=1e-14, slowc=1):
+    def __call__(self, t, hvLv, dydt, itmax=500, tol=1e-14, slowc=1):
     
         # Extract initial guesses, if provided, otherwise generate ones.
         #if ys is not None:
@@ -60,16 +99,16 @@ class SphericalLoveVelocities(object):
         hv = hvLv[:self.nz]
         
         # Compute the elastic profiles 
-        be = gen_elasb_norm(self.n, hv, self.params, self.zmid, self.Q)
-        #difeqElas = SphericalElasSMat_norm(n, zs, params, Q=Q, b=be)
+        be = gen_elasb(self.n, hv, self.params, self.zmid, self.Q)
+
         self.difeqElas.updateProps(b=be)
         self.yE, = solvde(itmax, tol, slowc, np.ones(6), self.indexvE, 
                                 3, self.yE, self.difeqElas)
     
         # Compute the viscous profiles
-        bv = gen_viscb_norm(self.n, self.yE, hv, self.params, self.zmid, self.Q)
+        bv = gen_viscb(self.n, self.yE, hv, self.params, self.zmid, self.Q)
         
-        #difeqVisc = SphericalViscSMat_norm(n, za, params, Q=Q, b=bv)
+
         self.difeqVisc.updateProps(b=bv)
         self.yV, = solvde(itmax, tol, slowc, np.ones(4), self.indexvV, 
                                 2, self.yV, self.difeqVisc)
@@ -80,6 +119,17 @@ class SphericalLoveVelocities(object):
         #return self.yV[[0,1],:].flatten()
     
         #return hLdv
+
+    def updateProps(self, n=None, z=None, reset_b=False):
+        self.n = n or self.n
+        self.z = self.z if z is None else z
+        
+        if reset_b:
+            self.difeqElas.updateProps(n=n, z=z, b=0*z)
+            self.difeqVisc.updateProps(n=n, z=z, b=0*z) 
+        else:
+            self.difeqElas.updateProps(n=n, z=z)
+            self.difeqVisc.updateProps(n=n, z=z) 
 
     def solout(self):
         """Returns 
@@ -139,10 +189,11 @@ class SphericalEarthOutput(object):
         else:
             self.inds = inds
             self.zsave = None
+        self.inds = np.atleast_1d(self.inds)
         self.f = f
         self.nz = len(self.f.yE[0])
        
-        #   he  Le  hv  Lv  psi  q  hdv
+        #   he  hv  Le  Lv  k q  hdv f_Le    f_Lv
         self.outArray = np.zeros((len(self.times), len(self.inds), 9))
 
     #def out(self, t, hv, Lv, f):
@@ -155,13 +206,13 @@ class SphericalEarthOutput(object):
             raise IndexError("SphericalEarthOutput received a time t={0:.3f}".format(t)+
                             " that was not in its output times.")
         self.f(t, hvLv.copy(), 0*hvLv)
-        he, Le, psi, q, hdv = self.f.solout()
+        he, Le, k, q, hdv = self.f.solout()
         hv, Lv = hvLv[:self.nz], hvLv[self.nz:]
         self.outArray[ind, :, 0] = he[self.inds]
         self.outArray[ind, :, 1] = hv[self.inds]
         self.outArray[ind, :, 2] = Le[self.inds]
         self.outArray[ind, :, 3] = Lv[self.inds]
-        self.outArray[ind, :, 4] = psi[self.inds]
+        self.outArray[ind, :, 4] = k[self.inds]
         self.outArray[ind, :, 5] = q[self.inds]
         self.outArray[ind, :, 6] = hdv[self.inds]
         self.outArray[ind, :, 7] = self.f.yE[2, self.inds]
