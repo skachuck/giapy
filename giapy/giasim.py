@@ -17,6 +17,8 @@ GiaSimGlobal
 GiaSimOutput
 
 """
+from __future__ import division
+
 import numpy as np
 import spharm
 import subprocess
@@ -70,7 +72,7 @@ class GiaSimGlobal(object):
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
     def performConvolution(self, out_times=None, ntrunc=None, topo=None,
-                            verbose=False, eliter=5, nrem=1):  
+                            verbose=False, eliter=5, nrem=1, massconerr=1e-2):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -103,20 +105,20 @@ class GiaSimGlobal(object):
             computed on the input grid at out_times.
         """
  
-        DENICE      = 0.934          # g/cc
-        DENWAT      = 0.999          # g/cc
-        DENSEA      = 1.029          # g/cc
-        GSURF       = 982.2          # cm/s^2
-        DYNEperM    = DENSEA*GSURF*1e2
+        DENICE      = 931.   #934.           # kg/m^3
+        DENWAT      = 1000.  #999.           # kg/m^3
+        DENSEA      = 1000.  #1029.          # kg/m^3
+        GSURF       = 9.815          # m/s^2
+        #PAperM      = DENSEA*GSURF
         NREM        = nrem           # number of intermediate steps
 
 
         earth = self.earth
         ice = self.ice
         grid = self.grid
-        if topo is None:
+        if topo is None and self.topo is not None:
             topo = self.topo
-        assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
+            assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
         ntrunc = ntrunc or ice.nlat-1
@@ -150,6 +152,10 @@ class GiaSimGlobal(object):
             o.loadStageUpdate(ice.times[0], sstopo=topo)
 
         esl = 0                 # Equivalent sea level assumed to start at 0.
+
+        elRespArray = earth.getResp(0.)
+        elResp = observerDict['eslUpl'].isolateRespArray(elRespArray)
+        geoResp = observerDict['eslGeo'].isolateRespArray(elRespArray)
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -194,17 +200,11 @@ class GiaSimGlobal(object):
                 # Note: WE DO NOT CURRENTLY RECHECK FOR FLOATING ICE LOADS.
                 if eliter:
                     # Get elastic and geoid response to the water load.
-                    elResp, geoResp = earth.getResp(0.0)[np.meshgrid(ns,[0,4])]
-                    elResp *= 1e-2
-                    #TODO make this a not hard-coded number (do in earth model?)
-                    geoResp /= -982.22*100
-
-
                     # Find the elastic uplift in response to stage's load
                     # redistribution.
-                    dUel = self.harmTrans.spectogrd(DYNEperM*elResp*\
+                    dUel = self.harmTrans.spectogrd(elResp*\
                                 self.harmTrans.grdtospec(dLoad))
-                    dGel = self.harmTrans.spectogrd(DYNEperM*geoResp*\
+                    dGel = self.harmTrans.spectogrd(geoResp*\
                                 self.harmTrans.grdtospec(dLoad))
 
                     dhwBarUel = sealevelChangeByUplift(dUel-dGel, 
@@ -212,18 +212,18 @@ class GiaSimGlobal(object):
                     dhwUel = oceanUpliftLoad(dhwBarUel, 
                                                 Tb+DENICE/DENSEA*iceb, dUel-dGel)
 
-                    Tb = Tb + dUel - dhwBarUel
+                    Tb = Tb + dUel - dGel - dhwBarUel
                     esl += dhwBarUel
                     dLoad = dLoad + dhwUel
                     dwLoad += dhwUel
 
                     # Iterate elastic responses until they are sufficiently small.
                     for i in range(eliter):
-                        # Need to save elasticuplift and geoid at each iteration
+                        # Need to save elastic uplift and geoid at each iteration
                         # to compare to previous steps for convergence.
-                        dUelp = self.harmTrans.spectogrd(DYNEperM*elResp*\
+                        dUelp = self.harmTrans.spectogrd(elResp*\
                                     self.harmTrans.grdtospec(dhwUel))
-                        dGelp = self.harmTrans.spectogrd(DYNEperM*geoResp*\
+                        dGelp = self.harmTrans.spectogrd(geoResp*\
                                     self.harmTrans.grdtospec(dhwUel))
 
                         dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, 
@@ -239,12 +239,15 @@ class GiaSimGlobal(object):
 
                         # Truncation error from further iteration
                         err = np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel))
-                        if err <= 1e-2:
+                        if err <= massconerr:
                             break
                         else:
                             dUel = dUel + dUelp
                             dGel = dGel + dGelp
                             continue
+
+                observerDict['eslUpl'].array[nta+1] += self.harmTrans.grdtospec(dUel)
+                observerDict['eslGeo'].array[nta+1] += self.harmTrans.grdtospec(dGel)
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
@@ -265,7 +268,7 @@ class GiaSimGlobal(object):
             
             # Check for mass conservation.
             massConCheck = np.abs(loadChangeSpec[0]/loadChangeSpec.max())
-            if  verbose and massConCheck>= 0.01:
+            if  verbose and massConCheck >= massconerr:
                 print("Load at {0} doesn't conserve mass: {1}.".format(ta,
                                                                 massConCheck))
             # N.B. the n=0 load should be zero in cases of glacial isostasy, as 
@@ -275,14 +278,14 @@ class GiaSimGlobal(object):
             # Secondary loop: over output times.
             for inter_time in np.linspace(tb, ta, NREM, endpoint=False)[::-1]:
                 # Perform the time convolution for each output time
-                for t_out in calcTimes[calcTimes <= inter_time]:
+                for t_out in calcTimes[calcTimes < inter_time]:
                     respArray = earth.getResp(inter_time-t_out)
                     for o in observerDict:
                         o.respStageUpdate(t_out, respArray, 
-                                            DYNEperM*loadChangeSpec) 
+                                            DENSEA*loadChangeSpec) 
 
         # Don't keep the intermediate uplift stages for water redistribution
-        observerDict.removeObserver('eslUpl', 'eslGeo') 
+        #observerDict.removeObserver('eslUpl', 'eslGeo') 
 
         return observerDict
 
@@ -347,24 +350,25 @@ def configure_giasim(configdict=None):
     return sim
 
 def initialize_output(sim, out_times, calcTimes, ntrunc, ns, shape):
+    earth = sim.earth
     # Initialize the return object to include...
     # ... values desired at output times
     #   [1] Uplift
-    uplObserver = TotalUpliftObserver(out_times, ntrunc, ns)
+    uplObserver = earth.TotalUpliftObserver(out_times, ntrunc, ns)
     #   [2] Horizontal deformation
-    horObserver = TotalHorizontalObserver(out_times, ntrunc, ns)
+    horObserver = earth.TotalHorizontalObserver(out_times, ntrunc, ns)
     #   [3] Uplift velocities
-    velObserver = VelObserver(out_times, ntrunc, ns)
+    velObserver = earth.VelObserver(out_times, ntrunc, ns)
     #   [4] Geoid perturbations
-    geoObserver = GeoidObserver(out_times, ntrunc, ns)
+    geoObserver = earth.GeoidObserver(out_times, ntrunc, ns)
     #   [5] Gravitational acceleration perturbations
-    gravObserver = GravObserver(out_times, ntrunc, ns) 
+    gravObserver = earth.GravObserver(out_times, ntrunc, ns) 
 
     # ... and values needed to perform the convolution
     #   [1] Uplift for ocean redistribution
-    eslUplObserver = TotalUpliftObserver(calcTimes, ntrunc, ns)
+    eslUplObserver = earth.TotalUpliftObserver(calcTimes, ntrunc, ns)
     #   [2] Geoid for ocean redistribution
-    eslGeoObserver = GeoidObserver(calcTimes, ntrunc, ns)
+    eslGeoObserver = earth.GeoidObserver(calcTimes, ntrunc, ns)
     #   [3] Topography (to top of ice) to find floating ice
     topoObserver = HeightObserver(calcTimes, shape, 'topo')
     #   [4] Load (total water + ice load in water equivalent)
@@ -536,45 +540,6 @@ class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
     def isolateRespArray(self, respArray):
         raise NotImplemented()
 
-class TotalUpliftObserver(AbstractEarthGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        # 1/100 makes the response in m uplift / dyne ice
-        return (respArray[self.ns,0] + respArray[self.ns,1])/100
-
-class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        # 1/100 makes the response in m displacement / dyne ice
-        return (respArray[self.ns,2] + respArray[self.ns,3])/100
-
-    def transform(self, trans):      
-        u, v = trans.getuv(np.zeros_like(self.array), self.array)
-        return u, v
-
-class GeoidObserver(AbstractEarthGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        # Divide the negative potential by PREM surface gravity,
-        # 982.22 cm/s^2, to get the geoid shift. (negative because when the
-        # potential at the surface decreases, the equipotential surface
-        # representing the ocean must have risen.)
-        #TODO make this a not hard-coded number (do in earth model?)
-        # 1e-2 makes the response in m displacement / dyne ice
-        return -respArray[self.ns,4]/982.22*1e-2
-
-class GravObserver(AbstractEarthGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        # 1e3 makes the response in miligals / dyne ice
-        return respArray[self.ns,5]*1e3
-
-class VelObserver(AbstractEarthGiaSimObserver):
-    def isolateRespArray(self, respArray):
-        # 3.1536e8 makes the response in mm/yr / dyne ice
-        return respArray[self.ns,6]*3.1536e8
-
-class MOIObserver(AbstractEarthGiaSimObserver):
-    pass
-
-class AngularMomentumObserver(AbstractEarthGiaSimObserver):
-    pass
 
 class HeightObserver(AbstractGiaSimObserver):
     """General observer for heights computed on the real-space grid and updated
