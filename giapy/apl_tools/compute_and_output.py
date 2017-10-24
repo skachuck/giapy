@@ -5,34 +5,71 @@ import giapy.data_tools.gpsdata
 import giapy.data_tools.tiltdata
 
 
-
-def load_ice_modifications(fname, ice, grid):
-
-    larry_output_order = ['cor', 'laur', 'naf', 'inu', 'grn', 'ice', 'fen',
-    'want', 'eant', 'bar', 'sval', 'fjl', 'nz', 'eng']
-
+def read_ice_assignments(fname):
     with open(fname, 'r') as f:
+        nglaciers = int(f.readline().split(',')[0])
+        alterdict = {}
+        alternum = {}
+
+        for i in range(14):
+            l = f.readline().split(',')
+            num = int(l[0])
+            name = l[4]
+            toplonlat = []
+            for item in f.readline().split(','):
+                try:
+                    toplonlat.append(float(item))
+                except:
+                    break
+            botlonlat = []
+            for item in f.readline().split(','):
+                try:
+                    botlonlat.append(float(item))
+                except:
+                    break
+
+            lonlat = np.hstack([np.vstack([toplonlat[::2], toplonlat[1::2]]),
+                                np.vstack([botlonlat[::2], botlonlat[1::2]])[:,::-1]])
+
+            alterdict[num] = lonlat.T 
+            alternum[name] = num
+    return alterdict, alternum
+
+def load_ice_modifications(propfname, glacfname, ice, grid):
+
+    #larry_output_order = ['cor', 'laur', 'naf', 'inu', 'grn', 'ice', 'fen',
+    #'want', 'eant', 'bar', 'sval', 'fjl', 'nz', 'eng']
+
+    alterdict, alternum = read_ice_assignments(glacfname)
+
+    with open(propfname, 'r') as f:
         text = f.readlines()
 
-    times = [float(w.strip())/1000 for w in text[1].split(',')[1:]]
+    #times = [float(w.strip())/1000 for w in text[1].split(',')[1:]]
 
-    newtimes = [10.5, 9.5, 8.5, 7.2, 6., 5.25, 5., 4.75]
+    #newtimes = [10.5, 9.5, 8.5, 7.2, 6., 5.25, 5., 4.75]
 
-    sortinds = np.argsort(np.r_[times, newtimes])
+    #sortinds = np.argsort(np.r_[times, newtimes])
 
-    props = []
+    props = {}
     for line in text[5:]:
-        data = [entry.strip() for entry in line.split(',')]
+        if ',' in line:
+            data = [entry.strip() for entry in line.split(',')]
+        elif '\t' in line:
+            data = [entry.strip() for entry in line.split('\t')]
+            
         prop = [1+float(num) for num in data[1:]]
-        newprop = np.interp(newtimes, times, prop)
-        prop = (np.r_[prop, newprop])[sortinds][::-1]
+        name = data[0]
+        num = alternum[name]
+        #newprop = np.interp(newtimes, times, prop)
+        #prop = (np.r_[prop, newprop])[sortinds][::-1]
         # append 0
-        prop = np.r_[prop, [1]]
+        prop = np.r_[prop[::-1], [1]]
 
 
-        props.append(prop)
+        props[num] = prop
 
-    ice.createAlterationAreas(grid, props, larry_output_order)
+    ice.createAlterationAreas(grid, props.values(), alterdict.keys(), alterdict)
 
     return ice.applyAlteration()
 
@@ -41,10 +78,10 @@ def load_ice_modifications(fname, ice, grid):
 
 if __name__ == '__main__':
     import sys
-    casename, alterfile = sys.argv[1:3]
+    casename, alterfile, glacfile, tnochange = sys.argv[1:5]
 
 
-    configdict = {'ice': 'AA2_Tail_nochange5_hightres_Pers_288_square',
+    configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
                   'topo': 'sstopo288'}
 
@@ -52,7 +89,10 @@ if __name__ == '__main__':
     
     print('Inputs loaded\r')
 
-    sim.ice = load_ice_modifications(alterfile, sim.ice, sim.grid) 
+    sim.ice.stageOrder = np.array(sim.ice.stageOrder)
+    sim.ice.stageOrder[sim.ice.times <= tnochange] = sim.ice.stageOrder[-1]
+
+    sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid) 
 
 
     print('Ice load modified\r')
