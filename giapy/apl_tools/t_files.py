@@ -36,7 +36,7 @@ def read_t_files(directory, filenames, data_col=2):
         
     return Lat, Lon, height
 
-def write_case_files(casename, result): 
+def write_case_files(casename, result, tfileflag=False): 
     try: 
         os.mkdir(casename)
     except:
@@ -54,23 +54,25 @@ def write_case_files(casename, result):
 
     u0 = result.sstopo.nearest_to(0)
     for i, t in enumerate(outTimes):
-        ai = np.vstack([result.inputs.grid.Lon.flatten(), 
-                   result.inputs.grid.Lat.flatten(), 
-                   result.upl[i].flatten(),
-                   result.upl[i].flatten(),
-                   result.vel[i].flatten(),
-                   result.geo[i].flatten(),
-                   (result.sstopo[i] - u0).flatten(),
-                   result.wload[i].flatten(),
-                   result.load[i].flatten(),
-                   result.load[i].flatten(),
-                   (result.load[i]- result.wload[i]).flatten(),
-                   (result.sstopo[i]<0).flatten(),
-                   result.inputs.topo.flatten()]).T
-
         fname = '{}/py_file_{}.txt'.format(casename, i+1)
-        header = 'case: {} at {}\n'.format(casename, t) + coltit
-        np.savetxt(fname, ai, header=header)
+        if tfileflag:
+            ai = np.vstack([result.inputs.grid.Lon.flatten(), 
+                       result.inputs.grid.Lat.flatten(), 
+                       result.upl[i].flatten(),
+                       result.upl[i].flatten(),
+                       result.vel[i].flatten(),
+                       result.geo[i].flatten(),
+                       (result.sstopo[i] - u0).flatten(),
+                       result.wload[i].flatten(),
+                       result.load[i].flatten(),
+                       result.load[i].flatten(),
+                       (result.load[i]- result.wload[i]).flatten(),
+                       (result.sstopo[i]<0).flatten(),
+                       result.inputs.topo.flatten()]).T
+
+        
+            header = 'case: {} at {}\n'.format(casename, t) + coltit
+            np.savetxt(fname, ai, header=header)
 
         fnames.append(fname)
 
