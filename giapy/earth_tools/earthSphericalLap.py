@@ -116,6 +116,29 @@ class SphericalEarth(object):
         self.nmax = nmax
         self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
 
+    def loadTabooNumbers(self, drctry='./'):
+        hs = np.loadtxt(drctry+'h.dat', skiprows=2)
+        ks = np.loadtxt(drctry+'k.dat', skiprows=2)
+        ls = np.loadtxt(drctry+'l.dat', skiprows=2)
+        ss = np.loadtxt(drctry+'spectrum.dat', skiprows=7, comments='>')
+        
+        nmax = hs.shape[0]
+        ns = hs.shape[1] - 3
+
+        hlke = np.zeros((nmax+1, 3))
+        hlkf = np.zeros((nmax+1, 3))
+        hlke[1:] = np.vstack([hs[:,1], ls[:,1], ks[:,1]]).T
+        hlkf[1:] = np.vstack([hs[:,2], ls[:,2], ks[:,2]]).T
+
+        hlks = np.zeros((nmax+1, ns, 4))
+        hlks[1:,:,0] = ss[:,2].reshape(nmax,ns)
+        hlks[1:,:,1] = hs[:,3:]
+        hlks[1:,:,2] = ls[:,3:]
+        hlks[1:,:,3] = ks[:,3:]
+
+        self.nmax = nmax
+        self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
+
     
     class TotalUpliftObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
@@ -168,4 +191,3 @@ class SphericalEarth(object):
     
     class AngularMomentumObserver(AbstractEarthGiaSimObserver):
         pass
-    
