@@ -118,14 +118,15 @@ class GiaSimGlobal(object):
         grid = self.grid
         if topo is None and self.topo is not None:
             topo = self.topo
+        if topo is not None:
             assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
-        ntrunc = ntrunc or ice.nlat-1
-        assert ntrunc < self.nlat, 'ntrunc must be < grid.nlat'
-        ms, ns = spharm.getspecindx(ntrunc)     # the list of degrees, m, and
-                                                # order numbers, n. Sizes of
-                                                # (ntrunc+1)*(ntrunc+2)/2.
+        ntrunc = ntrunc or earth.nmax
+        ms, ns = spharm.getspecindx(ice.nlat-1)
+        # npad is the indices in the larger (padded) array of spherical
+        # harmonics that correspond to the smaller (response) array.
+        npad = (ns <= ntrunc)
         
         # Store out_times
         if out_times is None:
@@ -145,8 +146,8 @@ class GiaSimGlobal(object):
         calcTimes = np.union1d(remTimes, out_times)[::-1]
 
         # Initialize output observer         
-        observerDict = initialize_output(self, out_times, calcTimes, ntrunc, 
-                                            ns, ice.shape) 
+        observerDict = initialize_output(self, out_times, calcTimes, ice.nlat-1, 
+                                            ntrunc, ns, ice.shape) 
 
         for o in observerDict:
             o.loadStageUpdate(ice.times[0], sstopo=topo)
@@ -154,8 +155,10 @@ class GiaSimGlobal(object):
         esl = 0                 # Equivalent sea level assumed to start at 0.
 
         elRespArray = earth.getResp(0.)
-        elResp = observerDict['eslUpl'].isolateRespArray(elRespArray)
-        geoResp = observerDict['eslGeo'].isolateRespArray(elRespArray)
+        elResp = np.zeros_like(ns)
+        geoResp = np.zeros_like(ns)
+        elResp[npad] = observerDict['eslUpl'].isolateRespArray(elRespArray)
+        geoResp[npad] = observerDict['eslGeo'].isolateRespArray(elRespArray)
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -349,26 +352,26 @@ def configure_giasim(configdict=None):
 
     return sim
 
-def initialize_output(sim, out_times, calcTimes, ntrunc, ns, shape):
+def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     earth = sim.earth
     # Initialize the return object to include...
     # ... values desired at output times
     #   [1] Uplift
-    uplObserver = earth.TotalUpliftObserver(out_times, ntrunc, ns)
+    uplObserver = earth.TotalUpliftObserver(out_times, nmax, ntrunc, ns)
     #   [2] Horizontal deformation
-    horObserver = earth.TotalHorizontalObserver(out_times, ntrunc, ns)
+    horObserver = earth.TotalHorizontalObserver(out_times, nmax, ntrunc, ns)
     #   [3] Uplift velocities
-    velObserver = earth.VelObserver(out_times, ntrunc, ns)
+    velObserver = earth.VelObserver(out_times, nmax, ntrunc, ns)
     #   [4] Geoid perturbations
-    geoObserver = earth.GeoidObserver(out_times, ntrunc, ns)
+    geoObserver = earth.GeoidObserver(out_times, nmax, ntrunc, ns)
     #   [5] Gravitational acceleration perturbations
-    gravObserver = earth.GravObserver(out_times, ntrunc, ns) 
+    gravObserver = earth.GravObserver(out_times, nmax, ntrunc, ns) 
 
     # ... and values needed to perform the convolution
     #   [1] Uplift for ocean redistribution
-    eslUplObserver = earth.TotalUpliftObserver(calcTimes, ntrunc, ns)
+    eslUplObserver = earth.TotalUpliftObserver(calcTimes, nmax, ntrunc, ns)
     #   [2] Geoid for ocean redistribution
-    eslGeoObserver = earth.GeoidObserver(calcTimes, ntrunc, ns)
+    eslGeoObserver = earth.GeoidObserver(calcTimes, nmax, ntrunc, ns)
     #   [3] Topography (to top of ice) to find floating ice
     topoObserver = HeightObserver(calcTimes, shape, 'topo')
     #   [4] Load (total water + ice load in water equivalent)
@@ -509,13 +512,15 @@ class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
     Must implement isolateRespArray to pull proper response curve from the
     computed earth model.
     """
-    def __init__(self, outTimes, ntrunc, ns):
-        self.initialize(outTimes, ntrunc, ns)
+    def __init__(self, outTimes, nmax, ntrunc, ns):
+        self.initialize(outTimes, nmax, ns)
+        self.npad = (ns <= ntrunc)
+        self.ns = ns[self.npad]
         self.spectral = True
 
     def initialize(self, outTimes, ntrunc, ns):
         self.array = np.zeros((len(outTimes), 
-                                (ntrunc+1)*(ntrunc+2)/2), dtype=complex)
+                               int((ntrunc+1)*(ntrunc+2)/2)), dtype=complex)
         self.outTimes = outTimes
         self.ns = ns
 
@@ -527,7 +532,7 @@ class AbstractEarthGiaSimObserver(AbstractGiaSimObserver):
             return
         n = self.locateByTime(tout)
         resp = self.isolateRespArray(respArray)
-        self.array[n] += resp * dLoad
+        self.array[n][self.npad] += resp * dLoad[self.npad]
 
     def transform(self, trans, inverse=True):
         if not inverse and self.spectral:
