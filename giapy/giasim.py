@@ -122,7 +122,8 @@ class GiaSimGlobal(object):
             assert topo.shape == ice.shape, 'Topo and Ice must have the same shape'
 
         # Resolution
-        ntrunc = ntrunc or earth.nmax
+        ntrunc = ntrunc or min(earth.nmax, ice.nlat-1)
+        assert ntrunc <= ice.nlat-1, 'ntrunc > ice.nlat-1'
         ms, ns = spharm.getspecindx(ice.nlat-1)
         # npad is the indices in the larger (padded) array of spherical
         # harmonics that correspond to the smaller (response) array.
