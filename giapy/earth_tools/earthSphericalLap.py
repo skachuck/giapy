@@ -117,24 +117,27 @@ class SphericalEarth(object):
         self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
 
     def loadTabooNumbers(self, drctry='./'):
-        hs = np.loadtxt(drctry+'h.dat', skiprows=2)
-        ks = np.loadtxt(drctry+'k.dat', skiprows=2)
-        ls = np.loadtxt(drctry+'l.dat', skiprows=2)
+        hef = np.loadtxt(drctry+'h.dat', skiprows=2)
+        kef = np.loadtxt(drctry+'k.dat', skiprows=2)
+        lef = np.loadtxt(drctry+'l.dat', skiprows=2)
         ss = np.loadtxt(drctry+'spectrum.dat', skiprows=7, comments='>')
+        hs = np.loadtxt(drctry+'ih.dat', skiprows=2, comments='>')
+        ks = np.loadtxt(drctry+'ik.dat', skiprows=2, comments='>')
+        ls = np.loadtxt(drctry+'il.dat', skiprows=2, comments='>')
         
-        nmax = hs.shape[0]
-        ns = hs.shape[1] - 3
+        nmax = hef.shape[0]
+        ns = hef.shape[1] - 3
 
         hlke = np.zeros((nmax+1, 3))
         hlkf = np.zeros((nmax+1, 3))
-        hlke[1:] = np.vstack([hs[:,1], ls[:,1], ks[:,1]]).T
-        hlkf[1:] = np.vstack([hs[:,2], ls[:,2], ks[:,2]]).T
+        hlke[1:] = np.vstack([hef[:,1], lef[:,1], kef[:,1]]).T
+        hlkf[1:] = np.vstack([hef[:,2], lef[:,2], kef[:,2]]).T
 
         hlks = np.zeros((nmax+1, ns, 4))
         hlks[1:,:,0] = ss[:,2].reshape(nmax,ns)
-        hlks[1:,:,1] = hs[:,3:]
-        hlks[1:,:,2] = ls[:,3:]
-        hlks[1:,:,3] = ks[:,3:]
+        hlks[1:,:,1] = hs.reshape(nmax,ns,2)[:,:,1]
+        hlks[1:,:,2] = ls.reshape(nmax,ns,2)[:,:,1]
+        hlks[1:,:,3] = ks.reshape(nmax,ns,2)[:,:,1]
 
         self.nmax = nmax
         self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
