@@ -292,7 +292,7 @@ class IceHistory(object):
         for area, prop in zip(areaNames, props):
             self.areaProps[area] = prop
             inds = grid.selectArea(self.areaVerts[area])
-            self._alterationMask += hash(area)*inds
+            self._alterationMask[inds] = hash(area)
 
     def updateAlterationAreas(self, updateDict):
         """Change the multiplicative factor for each area set by
