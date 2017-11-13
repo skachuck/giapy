@@ -181,6 +181,16 @@ class SphericalEarth(object):
             psi_l = 4*np.pi*RE**3/(2*self.ns+1.)/ME
             return (1+respArray[self.ns,2])*psi_l
     
+    class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray): 
+            RE = 6371000.
+            ME = 5.972e24
+            GSURF = 9.815
+            psi_l = 4*np.pi*6.674e-11*RE/(2*self.ns+1.)
+            psi_l = 4*np.pi*RE**3/(2*self.ns+1.)/ME
+            resp = respArray[self.ns,0] - (1+respArray[self.ns,2])
+            return resp*psi_l
+
     class GravObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
             return 0

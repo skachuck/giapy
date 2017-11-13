@@ -156,10 +156,8 @@ class GiaSimGlobal(object):
         esl = 0                 # Equivalent sea level assumed to start at 0.
 
         elRespArray = earth.getResp(0.)
-        elResp = np.zeros_like(ns)
-        geoResp = np.zeros_like(ns)
-        elResp[npad] = observerDict['eslUpl'].isolateRespArray(elRespArray)
-        geoResp[npad] = observerDict['eslGeo'].isolateRespArray(elRespArray)
+        ssResp = np.zeros_like(ns) 
+        ssResp[npad] = observerDict['SS'].isolateRespArray(elRespArray)
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -169,21 +167,19 @@ class GiaSimGlobal(object):
             # geoid changes between ta and tb,
             if topo is not None:
                 # Get index for starting time.
-                nta = observerDict['eslUpl'].locateByTime(ta)
+                nta = observerDict['SS'].locateByTime(ta)
                 # Collect the solid-surface topography at beginning of step.
                 Ta = observerDict['sstopo'].array[nta]
 
                 # Redistribute the ocean by change in ocean floor / surface.
-                upla, uplb = observerDict['eslUpl'].array[[nta, nta+1]]
-                geoa, geob = observerDict['eslGeo'].array[[nta, nta+1]]
-                dU = self.harmTrans.spectogrd(uplb-upla)
-                dG = self.harmTrans.spectogrd(geob-geoa)
-                dhwBarU = sealevelChangeByUplift(dU-dG, Ta+DENICE/DENSEA*icea, 
+                ssa, ssb = observerDict['SS'].array[[nta, nta+1]] 
+                dSS = self.harmTrans.spectogrd(ssb-ssa)
+                dhwBarU = sealevelChangeByUplift(dSS, Ta+DENICE/DENSEA*icea, 
                                                         grid)
-                dhwU = oceanUpliftLoad(dhwBarU, Ta+DENICE/DENSEA*icea, dU-dG)
+                dhwU = oceanUpliftLoad(dhwBarU, Ta+DENICE/DENSEA*icea, dSS)
 
                 # Update the solid-surface topography with uplift / geoid.
-                Tb = Ta + dU - dG - dhwBarU
+                Tb = Ta + dSS - dhwBarU
                 esl += dhwBarU
                 dLoad = dhwU.copy()
                 dwLoad = dhwU.copy()                # Save the water load
@@ -206,17 +202,15 @@ class GiaSimGlobal(object):
                     # Get elastic and geoid response to the water load.
                     # Find the elastic uplift in response to stage's load
                     # redistribution.
-                    dUel = self.harmTrans.spectogrd(elResp*\
-                                self.harmTrans.grdtospec(dLoad))
-                    dGel = self.harmTrans.spectogrd(geoResp*\
-                                self.harmTrans.grdtospec(dLoad))
+                    dSSel = self.harmTrans.spectogrd((ssResp)*\
+                                self.harmTrans.grdtospec(dLoad)) 
 
-                    dhwBarUel = sealevelChangeByUplift(dUel-dGel, 
+                    dhwBarUel = sealevelChangeByUplift(dSSel, 
                                                         Tb+DENICE/DENSEA*iceb, grid)
                     dhwUel = oceanUpliftLoad(dhwBarUel, 
-                                                Tb+DENICE/DENSEA*iceb, dUel-dGel)
+                                                Tb+DENICE/DENSEA*iceb, dSSel)
 
-                    Tb = Tb + dUel - dGel - dhwBarUel
+                    Tb = Tb + dSSel - dhwBarUel
                     esl += dhwBarUel
                     dLoad = dLoad + dhwUel
                     dwLoad += dhwUel
@@ -225,33 +219,32 @@ class GiaSimGlobal(object):
                     for i in range(eliter):
                         # Need to save elastic uplift and geoid at each iteration
                         # to compare to previous steps for convergence.
-                        dUelp = self.harmTrans.spectogrd(elResp*\
+                        dSSelp = self.harmTrans.spectogrd((ssResp)*\
                                     self.harmTrans.grdtospec(dhwUel))
-                        dGelp = self.harmTrans.spectogrd(geoResp*\
-                                    self.harmTrans.grdtospec(dhwUel))
+                      
+                     
 
-                        dhwBarUel = sealevelChangeByUplift(dUelp-dGelp, 
+                        dhwBarUel = sealevelChangeByUplift(dSSelp, 
                                                             Tb+DENICE/DENSEA*iceb, grid)
                         dhwUel = oceanUpliftLoad(dhwBarUel, 
-                                                    Tb+DENICE/DENSEA*iceb, dUelp-dGelp)
+                                                    Tb+DENICE/DENSEA*iceb, dSSelp)
 
                         # Correct topography
-                        Tb = Tb + dUelp - dGelp - dhwBarUel
+                        Tb = Tb + dSSelp - dhwBarUel
                         esl += dhwBarUel
                         dLoad = dLoad + dhwUel
                         dwLoad += dhwUel
 
                         # Truncation error from further iteration
-                        err = np.mean(np.abs(dUelp-dGelp))/np.mean(np.abs(dUel-dGel))
+                        err = np.mean(np.abs(dSSelp))/np.mean(np.abs(dSSel))
                         if err <= massconerr:
                             break
                         else:
-                            dUel = dUel + dUelp
-                            dGel = dGel + dGelp
+                            dSSel = dSSel + dSSelp
+                       
                             continue
 
-                observerDict['eslUpl'].array[nta+1] += self.harmTrans.grdtospec(dUel)
-                observerDict['eslGeo'].array[nta+1] += self.harmTrans.grdtospec(dGel)
+                observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
@@ -370,7 +363,7 @@ def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
 
     # ... and values needed to perform the convolution
     #   [1] Uplift for ocean redistribution
-    eslUplObserver = earth.TotalUpliftObserver(calcTimes, nmax, ntrunc, ns)
+    SeaSurfaceObserver = earth.SeaSurfaceObserver(calcTimes, nmax, ntrunc, ns)
     #   [2] Geoid for ocean redistribution
     eslGeoObserver = earth.GeoidObserver(calcTimes, nmax, ntrunc, ns)
     #   [3] Topography (to top of ice) to find floating ice
@@ -393,8 +386,7 @@ def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     observerDict.addObserver('vel'   , velObserver)
     observerDict.addObserver('geo'   , geoObserver)
 
-    observerDict.addObserver('eslUpl', eslUplObserver)
-    observerDict.addObserver('eslGeo', eslGeoObserver)
+    observerDict.addObserver('SS', SeaSurfaceObserver) 
     observerDict.addObserver('topo'  , topoObserver)
     observerDict.addObserver('esl'   , eslObserver)
     observerDict.addObserver('sstopo', rslObserver)
