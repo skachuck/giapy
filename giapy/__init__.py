@@ -42,3 +42,4 @@ def load(filename):
     return pickle.load(open(filename, 'r'))
 
 import giapy.earth_tools
+import giapy.sle
