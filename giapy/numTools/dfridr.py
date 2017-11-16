@@ -176,17 +176,35 @@ def multivalued_dfridr(f, x, h, fargs=(), fkwargs={}, full_output=False):
     else:
         return ans
 
-def jacfridr(f, x, h, ndim, fargs=(), fkwargs={}):
+def jacfridr(f, x, h, ndim, fargs=(), fkwargs={}, full_output=False):
     x = np.atleast_1d(x)
     h = np.atleast_1d(h)
             
     jac = np.zeros((len(x), ndim))
+    if full_output:
+        errs = np.zeros_like(x)
+        hhs = np.zeros_like(x)
+        aas = np.zeros_like(x)
+
                     
     for i, hh in enumerate(h):
             f1arg = make_f_1arg(f, x, i)
-            jac[i] = multivalued_dfridr(f1arg, x[i], hh, fargs, fkwargs)
-                                                
-    return jac
+            der = multivalued_dfridr(f1arg, x[i], hh, fargs, fkwargs,
+                                        full_output)
+            if full_output:
+                 jac[i] = der[0]
+                 errs[i] = der[1]
+                 hhs[i] = der[2]
+                 aas[i] = der[3]
+            else:
+                jac[i] = der
+    
+    if full_output:
+        output = dict(zip(['jac', 'err', 'hh', 'a'],
+                          [ jac,   errs,  hhs,  aas]))
+        return output
+    else:
+        return jac
 
 def make_f_1arg(f, x, axis=0):
     """Make a function of multiple variables into a function of one variable
