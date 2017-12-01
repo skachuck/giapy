@@ -18,7 +18,7 @@ def read_params(fname):
     params = EarthParams()
     params.addLithosphere(D=fr23*1e23)
     params.addViscosity(np.vstack([zs/params.norms['r']*1000, vs*1e21]))
-    params.addNonadiabatic(np.vstack([zs/params.norms['r']*1000, nas]))
+    params.addNonadiabatic(np.vstack([zs/params.norms['r']*1000, nas*1000*6371]))
 
     return params
 
