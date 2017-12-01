@@ -78,14 +78,31 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
 
 if __name__ == '__main__':
     import sys
-    casename, alterfile, glacfile, tnochange = sys.argv[1:5]
+    import argparse
+    parser = argparse.ArgumentParser(description='Compute and output GIA for '
+                                                  'APL GlacialRebound program')
+    parser.add_argument('casename', type=str)
+    parser.add_argument('alterfile', type=str)
+    parser.add_argument('glacfile', type=str)
+    parser.add_argument('tnochange', type=float)
+    parser.add_argument('--earth', type=str, default=None)
 
+    comargs = parser.parse_args()
+
+    casename, alterfile = comargs.casename, comargs.alterfile
+    glacfile, tnochane = comargs.glacfile, comargs.tnochane 
+
+    earth = comargs.earth
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
                   'topo': 'sstopo288'}
 
     sim = giapy.giasim.configure_giasim(configdict)
+
+    if earth is not None:
+        earth = np.load(open(earth, 'r'))
+        assert earth.nmax >= 288, 'earth must be at least 288 resolution'
     
     print('Inputs loaded\r')
 
