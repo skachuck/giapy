@@ -77,6 +77,9 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
 
 
 if __name__ == '__main__':
+    import sys, subprocess,os
+    casename, alterfile, glacfile, tnochange, tfileflag = sys.argv[1:6]
+    tfileflag = False if tfileflag == 'False' else True
     import sys
     import argparse
     parser = argparse.ArgumentParser(description='Compute and output GIA for '
@@ -124,10 +127,16 @@ if __name__ == '__main__':
     gpsdata = np.load(giapy.MODPATH+'/data/obs/gps_obs.p')
     tiltdata = giapy.data_tools.tiltdata.TiltData()
 
-    giapy.apl_tools.t_files.write_case_files(casename, result)
+    giapy.apl_tools.t_files.write_case_files(casename, result,
+                                                tfileflag=tfileflag)
     print('Result computed, writing out data files\r')
     giapy.apl_tools.t_files.write_data_files(casename, result,
                         emergedata=emergedata, rsldata=rsldata,
                         gpsdata=gpsdata, tiltdata=tiltdata)
 
-    
+    print os.path.abspath(os.path.curdir)
+    command = 'cp {0} ./{1} && cp {2} ./{1}'.format(alterfile,
+                                                        casename,
+                                                        glacfile)
+    print command
+    subprocess.call(command, shell=True)

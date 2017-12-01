@@ -116,6 +116,32 @@ class SphericalEarth(object):
         self.nmax = nmax
         self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
 
+    def loadTabooNumbers(self, drctry='./'):
+        hef = np.loadtxt(drctry+'h.dat', skiprows=2)
+        kef = np.loadtxt(drctry+'k.dat', skiprows=2)
+        lef = np.loadtxt(drctry+'l.dat', skiprows=2)
+        ss = np.loadtxt(drctry+'spectrum.dat', skiprows=7, comments='>')
+        hs = np.loadtxt(drctry+'ih.dat', skiprows=2, comments='>')
+        ks = np.loadtxt(drctry+'ik.dat', skiprows=2, comments='>')
+        ls = np.loadtxt(drctry+'il.dat', skiprows=2, comments='>')
+        
+        nmax = hef.shape[0]
+        ns = hef.shape[1] - 3
+
+        hlke = np.zeros((nmax+1, 3))
+        hlkf = np.zeros((nmax+1, 3))
+        hlke[1:] = np.vstack([hef[:,1], lef[:,1], kef[:,1]]).T
+        hlkf[1:] = np.vstack([hef[:,2], lef[:,2], kef[:,2]]).T
+
+        hlks = np.zeros((nmax+1, ns, 4))
+        hlks[1:,:,0] = ss[:,2].reshape(nmax,ns)
+        hlks[1:,:,1] = hs.reshape(nmax,ns,2)[:,:,1]
+        hlks[1:,:,2] = ls.reshape(nmax,ns,2)[:,:,1]
+        hlks[1:,:,3] = ks.reshape(nmax,ns,2)[:,:,1]
+
+        self.nmax = nmax
+        self.hlke, self.hlkf, self.hlks = hlke, hlkf, hlks
+
     
     class TotalUpliftObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
@@ -155,6 +181,16 @@ class SphericalEarth(object):
             psi_l = 4*np.pi*RE**3/(2*self.ns+1.)/ME
             return (1+respArray[self.ns,2])*psi_l
     
+    class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray): 
+            RE = 6371000.
+            ME = 5.972e24
+            GSURF = 9.815
+            psi_l = 4*np.pi*6.674e-11*RE/(2*self.ns+1.)
+            psi_l = 4*np.pi*RE**3/(2*self.ns+1.)/ME
+            resp = respArray[self.ns,0] - (1+respArray[self.ns,2])
+            return resp*psi_l
+
     class GravObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
             return 0
@@ -168,4 +204,3 @@ class SphericalEarth(object):
     
     class AngularMomentumObserver(AbstractEarthGiaSimObserver):
         pass
-    

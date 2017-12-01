@@ -205,6 +205,12 @@ class SphericalEarth(object):
             #TODO make this a not hard-coded number (do in earth model?)
             # 1e-2 makes the response in m displacement / dyne ice
             return -respArray[self.ns,4]/9.8222*1e-2
+
+    class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
+        def isolateRespArray(self, respArray): 
+            resp = (respArray[self.ns,0] + respArray[self.ns,1] -
+                        respArray[self.ns,4]/9.8222*1e-2)
+            return resp
     
     class GravObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):

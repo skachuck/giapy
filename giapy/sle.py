@@ -264,7 +264,7 @@ class GiaSimGlobal(object):
             loadChangeSpec = self.harmTrans.grdtospec(dLoad)/NREM
             
             # Check for mass conservation.
-            massConCheck = np.abs(loadChangeSpec[0]/loadChangeSpec.max())
+            massConCheck = np.abs(loadChangeSpec[0])/np.abs(loadChangeSpec.max())
             if  verbose and massConCheck >= massconerr:
                 print("Load at {0} doesn't conserve mass: {1}.".format(ta,
                                                                 massConCheck))

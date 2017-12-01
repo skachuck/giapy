@@ -47,6 +47,11 @@ import giapy.data_tools
 #import giapy.data_tools as data
 import giapy.icehistory as ice
 import giapy.map_tools as maps
-import giapy.giasim as sim
+
+import giapy.sle
+# For internal backwards compatibility for now
+import giapy.sle as sim
+import giapy.sle as giasim
+
 import giapy.plot_tools as plot
 
