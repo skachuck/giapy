@@ -78,10 +78,8 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
 
 if __name__ == '__main__':
     import sys, subprocess,os
-    casename, alterfile, glacfile, tnochange, tfileflag = sys.argv[1:6]
-    tfileflag = False if tfileflag == 'False' else True
-    import sys
     import argparse
+
     parser = argparse.ArgumentParser(description='Compute and output GIA for '
                                                   'APL GlacialRebound program')
     parser.add_argument('casename', type=str)
@@ -89,6 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('glacfile', type=str)
     parser.add_argument('tnochange', type=float)
     parser.add_argument('--earth', type=str, default=None)
+    parser.add_argument('--tfiles', type=bool, default=False)
 
     comargs = parser.parse_args()
 
@@ -96,6 +95,7 @@ if __name__ == '__main__':
     glacfile, tnochane = comargs.glacfile, comargs.tnochane 
 
     earth = comargs.earth
+    tfileflag = comargs.tfiles
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
