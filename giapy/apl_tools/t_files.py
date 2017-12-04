@@ -126,11 +126,12 @@ def write_data_files(casename, result, emergedata=None, rsldata=None,
 
         sAtLocs = []
         uAtLocs = []
-        for st, ut in zip(result['sstopo'], result['upl']):
+        for st in result.sstopo:
             st = s0 - st
             interpfunc = result.inputs.grid.create_interper(st.T)
             sAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))
 
+        for ut in result.upl:
             ut = u0 - ut
             interpfunc = result.inputs.grid.create_interper(ut)
             uAtLocs.append(interpfunc.ev(rsldata.lons, rsldata.lats))

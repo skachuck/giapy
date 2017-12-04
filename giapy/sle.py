@@ -145,6 +145,7 @@ class GiaSimGlobal(object):
         addRemovalTimes = np.array(addRemovalTimes).flatten()
         remTimes = np.union1d(ice.times, addRemovalTimes)[::-1]
         calcTimes = np.union1d(remTimes, out_times)[::-1]
+        calcTimes = out_times.copy()
 
         # Initialize output observer         
         observerDict = initialize_output(self, out_times, calcTimes, ice.nlat-1, 

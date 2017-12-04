@@ -15,7 +15,7 @@ from giapy.earth_tools.earthIntegrator import SphericalEarthOutput,\
         SphericalEarthShooter,\
         SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
         integrateRelaxationScipy
-from giapy.giasim import AbstractEarthGiaSimObserver
+from giapy.sle import AbstractEarthGiaSimObserver
 
 def depthArray(self, npts=30, trunc=True, frac=2/3, n=None, safe=0.9):
     if trunc:
