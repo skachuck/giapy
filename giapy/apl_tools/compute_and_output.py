@@ -87,14 +87,14 @@ if __name__ == '__main__':
     parser.add_argument('glacfile', type=str)
     parser.add_argument('tnochange', type=float)
     parser.add_argument('--earth', type=str, default=None)
-    parser.add_argument('--tfiles', type=bool, default=False,
+    parser.add_argument('--tfiles', default=False,
                             action='store_const', const=True,
-                            destination='tfiles')
+                            dest='tfiles')
 
     comargs = parser.parse_args()
 
     casename, alterfile = comargs.casename, comargs.alterfile
-    glacfile, tnochane = comargs.glacfile, comargs.tnochane 
+    glacfile, tnochange = comargs.glacfile, comargs.tnochange 
 
     earth = comargs.earth
     tfileflag = comargs.tfiles

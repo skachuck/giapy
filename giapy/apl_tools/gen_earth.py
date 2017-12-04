@@ -7,7 +7,7 @@ def read_params(fname):
     with open(fname, 'r') as f:
         lines = f.readlines()
 
-    lines = [line.split(',') for line in lines[0].split('\r')]
+    lines = [line.split(',') for line in lines]
 
     fr23 = float(lines[0][1])
 
