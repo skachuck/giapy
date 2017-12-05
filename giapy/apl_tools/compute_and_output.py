@@ -106,7 +106,9 @@ if __name__ == '__main__':
     sim = giapy.giasim.configure_giasim(configdict)
 
     if earth is not None:
+        print('Loading earth model: {}'.format(earth))
         earth = np.load(open(earth, 'r'))
+        sim.earth = earth
         assert earth.nmax >= 288, 'earth must be at least 288 resolution'
     
     print('Inputs loaded\r')
