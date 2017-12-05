@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     print('Result computed, writing out case files\r')
 
-    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2014.txt'
+    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2017.txt'
     emergedata = giapy.data_tools.emergedata.importEmergeDataFromFile(emergedatafile)
     rsldata = giapy.load(giapy.MODPATH+'/data/obs/psmsl_download_02082017.p')
     gpsdata = np.load(giapy.MODPATH+'/data/obs/gps_obs.p')
