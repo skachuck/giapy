@@ -15,7 +15,7 @@ def read_params(fname):
     vs = np.array([float(line[3]) for line in lines[2:]][::-1])
     nas = np.array([float(line[4]) for line in lines[2:]][::-1])
 
-    params = EarthParams()
+    params = EarthParams(model='prem_nocrust')
     params.addLithosphere(D=fr23*1e23)
     params.addViscosity(np.vstack([zs/params.norms['r']*1000, vs*1e21]))
     params.addNonadiabatic(np.vstack([zs/params.norms['r']*1000, nas*1000*6371]))
