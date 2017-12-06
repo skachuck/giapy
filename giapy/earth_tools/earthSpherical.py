@@ -185,7 +185,7 @@ class SphericalEarth(object):
     class TotalUpliftObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
             # 1/100 makes the response in m uplift / dyne ice
-            return (respArray[self.ns,0] + respArray[self.ns,1])
+            return (respArray[self.ns,0] + respArray[self.ns,1])*9.8222
     
     class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
@@ -209,7 +209,7 @@ class SphericalEarth(object):
     class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray): 
             resp = (respArray[self.ns,0] + respArray[self.ns,1] -
-                        respArray[self.ns,4]/9.8222*1e-2)
+                        respArray[self.ns,4]/9.8222*1e-2)*9.8222
             return resp
     
     class GravObserver(AbstractEarthGiaSimObserver):
