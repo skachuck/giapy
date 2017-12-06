@@ -167,7 +167,8 @@ def multivalued_dfridr(f, x, h, fargs=(), fkwargs={}, full_output=False):
                 err=errt
                 ans = a[j,i]
 
-        if np.all(abs(a[i,i] - a[i-1,i-1]) >= SAFE*err):
+        conv = abs(a[i,i] - a[i-1,i-1]) >= SAFE*err
+        if np.sum(conv) > np.sum(np.logical_not(conv)):
             # If higher order is worse by a significant SAFE factor, then quit
             # early.
             break
@@ -182,9 +183,9 @@ def jacfridr(f, x, h, ndim, fargs=(), fkwargs={}, full_output=False):
             
     jac = np.zeros((len(x), ndim))
     if full_output:
-        errs = np.zeros_like(x)
-        hhs = np.zeros_like(x)
-        aas = np.zeros_like(x)
+        errs = []
+        hhs = []
+        aas = []
 
                     
     for i, hh in enumerate(h):
@@ -193,9 +194,9 @@ def jacfridr(f, x, h, ndim, fargs=(), fkwargs={}, full_output=False):
                                         full_output)
             if full_output:
                  jac[i] = der[0]
-                 errs[i] = der[1]
-                 hhs[i] = der[2]
-                 aas[i] = der[3]
+                 errs.append(der[1])
+                 hhs.append(der[2])
+                 aas.append(der[3])
             else:
                 jac[i] = der
     
