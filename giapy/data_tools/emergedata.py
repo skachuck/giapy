@@ -169,7 +169,7 @@ class EmergeData(AbsGeoTimeSeriesContainer):
         self.long_time = self.long_time[1:]
         self.locs = self.locs[1:]
 
-def importEmergeDataFromFile(filename=None):
+def importEmergeDataFromFile(filename=None, ignorebadpts=False):
     """Reads emergence data from a file where it is stored in the form...
     
     Stores the emergence data in a list self.data of dictionaries with keys:
@@ -200,11 +200,14 @@ def importEmergeDataFromFile(filename=None):
     data = {}                         # Initialize the array,
     
     # A list of bad points
-    badpts = [137, 41, 203, 232, 234, 230, 231, 228, 229, 235, 236, 310,
+    if ignorebadpts:
+        badpts = [137, 41, 203, 232, 234, 230, 231, 228, 229, 235, 236, 310,
                     200, 183, 318, 319, 320, 295, 296,
                     203, # Sabine high islands - uncertain age, high scatter
                     300 # Malaysia - uncertain calibration
                     ]
+    else:
+        badpts = []
 
 
 
