@@ -15,7 +15,7 @@ from giapy.earth_tools.earthIntegrator import SphericalEarthOutput,\
         SphericalEarthShooter,\
         SphericalEarthRelaxer, get_t0_guess, integrateRelaxationDirect,\
         integrateRelaxationScipy
-from giapy.giasim import AbstractEarthGiaSimObserver
+from giapy.sle import AbstractEarthGiaSimObserver
 
 def depthArray(self, npts=30, trunc=True, frac=2/3, n=None, safe=0.9):
     if trunc:
@@ -185,7 +185,7 @@ class SphericalEarth(object):
     class TotalUpliftObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
             # 1/100 makes the response in m uplift / dyne ice
-            return (respArray[self.ns,0] + respArray[self.ns,1])
+            return (respArray[self.ns,0] + respArray[self.ns,1])*9.8222
     
     class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
@@ -204,12 +204,12 @@ class SphericalEarth(object):
             # representing the ocean must have risen.)
             #TODO make this a not hard-coded number (do in earth model?)
             # 1e-2 makes the response in m displacement / dyne ice
-            return -respArray[self.ns,4]/9.8222*1e-2
+            return -respArray[self.ns,4]/9.8222
 
     class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray): 
             resp = (respArray[self.ns,0] + respArray[self.ns,1] -
-                        respArray[self.ns,4]/9.8222*1e-2)
+                        respArray[self.ns,4]/9.8222)*9.8222
             return resp
     
     class GravObserver(AbstractEarthGiaSimObserver):

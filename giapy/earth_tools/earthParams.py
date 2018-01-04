@@ -336,6 +336,8 @@ class EarthParams(object):
 
         # We interpolate the new column and old array to new z array
         newcolumn = interpY(znew)
+        newcolumn = np.interp(znew, z, y)
+
         newparamArray = self._interpParams(znew) 
 
         # ans replace discontinuities one at a time

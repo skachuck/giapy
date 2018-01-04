@@ -78,15 +78,38 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
 
 if __name__ == '__main__':
     import sys, subprocess,os
-    casename, alterfile, glacfile, tnochange, tfileflag = sys.argv[1:6]
-    tfileflag = False if tfileflag == 'False' else True
+    import argparse
 
+    parser = argparse.ArgumentParser(description='Compute and output GIA for '
+                                                  'APL GlacialRebound program')
+    parser.add_argument('casename', type=str)
+    parser.add_argument('alterfile', type=str)
+    parser.add_argument('glacfile', type=str)
+    parser.add_argument('tnochange', type=float)
+    parser.add_argument('--earth', type=str, default=None)
+    parser.add_argument('--tfiles', default=False,
+                            action='store_const', const=True,
+                            dest='tfiles')
+
+    comargs = parser.parse_args()
+
+    casename, alterfile = comargs.casename, comargs.alterfile
+    glacfile, tnochange = comargs.glacfile, comargs.tnochange 
+
+    earth = comargs.earth
+    tfileflag = comargs.tfiles
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
                   'topo': 'sstopo288'}
 
     sim = giapy.giasim.configure_giasim(configdict)
+
+    if earth is not None:
+        print('Loading earth model: {}'.format(earth))
+        earth = np.load(open(earth, 'r'))
+        sim.earth = earth
+        assert earth.nmax >= 288, 'earth must be at least 288 resolution'
     
     print('Inputs loaded\r')
 
@@ -102,7 +125,7 @@ if __name__ == '__main__':
 
     print('Result computed, writing out case files\r')
 
-    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2014.txt'
+    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2017.txt'
     emergedata = giapy.data_tools.emergedata.importEmergeDataFromFile(emergedatafile)
     rsldata = giapy.load(giapy.MODPATH+'/data/obs/psmsl_download_02082017.p')
     gpsdata = np.load(giapy.MODPATH+'/data/obs/gps_obs.p')
