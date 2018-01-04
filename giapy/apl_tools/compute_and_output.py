@@ -90,6 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--tfiles', default=False,
                             action='store_const', const=True,
                             dest='tfiles')
+    parser.add_argument('--ncyc', default=0, type=int)
 
     comargs = parser.parse_args()
 
@@ -98,6 +99,7 @@ if __name__ == '__main__':
 
     earth = comargs.earth
     tfileflag = comargs.tfiles
+    ncyc = comargs.ncyc
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
@@ -123,9 +125,18 @@ if __name__ == '__main__':
 
     result = sim.performConvolution(out_times=sim.ice.times)
 
+    if ncyc != 0:
+        print('Load cycle 1 computed\r')
+        for i in range(ncyc-1):
+            result = sim.performConvolution(out_times=sim.ice.times,
+                                            topo=result.sstopo.nearest_to(0.))
+            print('Load cycle {} computed\r'.format(i+2))
+
+
+
     print('Result computed, writing out case files\r')
 
-    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2017.txt'
+    emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2018.txt'
     emergedata = giapy.data_tools.emergedata.importEmergeDataFromFile(emergedatafile)
     rsldata = giapy.load(giapy.MODPATH+'/data/obs/psmsl_download_02082017.p')
     gpsdata = np.load(giapy.MODPATH+'/data/obs/gps_obs.p')
