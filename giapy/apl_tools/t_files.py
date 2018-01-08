@@ -154,14 +154,18 @@ ve_obs (mm/yr)\tvn_obs (mm/yr)\tvu_obs (mm/yr)\tsige (mm/yr)\tsign (mm/yr)\tsigu
         #result.upl.transform(result.inputs.harmTrans, inverse=False)
         vu = (result.upl.nearest_to(-0.1) - result.upl.nearest_to(0.1))/.2
 
-        up, vp = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-3]).T,
-                                                result.hor.array[-3].T)
+        #up, vp = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-3]).T,
+        #                                        result.hor.array[-3].T)
 
-        um, vm = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-1]).T,
-                                                result.hor.array[-1].T)
+        #um, vm = result.inputs.harmTrans.getuv(np.zeros_like(result.hor.array[-1]).T,
+        #                                        result.hor.array[-1].T)
 
-        ve = (um - up)/0.2/1e7
-        vn = (vm - vp)/0.2/1e7
+        
+        up, vp = result.inputs.harmTrans.getgrad(result.hor.nearest_to(0.1))
+        um, vm = result.inputs.harmTrans.getgrad(result.hor.nearest_to(-0.1))
+
+        ve = (um - up)/0.2
+        vn = (vm - vp)/0.2
 
         interpfunc = result.inputs.grid.create_interper(vu)
         vuAtLocs = interpfunc.ev(gpsdata.lons, gpsdata.lats)

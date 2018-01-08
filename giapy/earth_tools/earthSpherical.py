@@ -190,7 +190,7 @@ class SphericalEarth(object):
     class TotalHorizontalObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray):
             # 1/100 makes the response in m displacement / dyne ice
-            return (respArray[self.ns,2] + respArray[self.ns,3])*6371000
+            return (respArray[self.ns,2] + respArray[self.ns,3])*9.8222*6371000
     
         def transform(self, trans):      
             u, v = trans.getgrad(np.zeros_like(self.array), self.array)
