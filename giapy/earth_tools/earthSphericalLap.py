@@ -10,7 +10,7 @@ Laplace domain.
 """
 
 import numpy as np
-from giapy.giasim import AbstractEarthGiaSimObserver
+from giapy.sle import AbstractEarthGiaSimObserver
 
 class SphericalEarth(object):
     """A class for calculating, storing, and recalling 
