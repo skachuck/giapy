@@ -74,7 +74,30 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
     return ice.applyAlteration()
 
 
+def create_load_cycles(ice, n):
+    """Append load cycles to the ice model.
 
+    Accomplished by repeating the stage order and poisitive times.
+    """
+
+    # Taking only positive times avoids collision between cycles.
+    addtimes = ice.times[ice.times>0]
+    addstages = ice.stageOrder[ice.times>0]
+
+    # Copy the arrays before changing them
+    newtimes = ice.times.copy()
+    newstages = ice.stageOrder.copy()
+
+    for i in range(n-1):
+        # Append the times (shifted by the max time) and stage numbers.
+        newtimes = np.r_[addtimes+newtimes.max(), newtimes]
+        newstages = np.r_[addstages, newstages]
+
+    # Replace times and stage numbers and return.
+    ice.times = newtimes
+    ice.stageOrder = newstages
+
+    return ice
 
 if __name__ == '__main__':
     import sys, subprocess,os
@@ -90,7 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('--tfiles', default=False,
                             action='store_const', const=True,
                             dest='tfiles')
-    parser.add_argument('--ncyc', default=0, type=int)
+    parser.add_argument('--ncyc', default=1, type=int)
 
     comargs = parser.parse_args()
 
@@ -118,22 +141,14 @@ if __name__ == '__main__':
     sim.ice.stageOrder = np.array(sim.ice.stageOrder)
     sim.ice.stageOrder[sim.ice.times <= tnochange] = sim.ice.stageOrder[-1]
 
-    sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid) 
+    sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid)
 
+    sim.ice = create_load_cycles(sim.ice, ncyc)
 
     print('Ice load modified\r')
 
     result = sim.performConvolution(out_times=sim.ice.times)
-
-    if ncyc != 0:
-        print('Load cycle 1 computed\r')
-        for i in range(ncyc-1):
-            result = sim.performConvolution(out_times=sim.ice.times,
-                                            topo=result.sstopo.nearest_to(0.))
-            print('Load cycle {} computed\r'.format(i+2))
-
-
-
+ 
     print('Result computed, writing out case files\r')
 
     emergedatafile = giapy.MODPATH+'/data/obs/Emergence_Data_seqnr_2018.txt'

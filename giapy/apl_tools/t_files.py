@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import spharm
 
 from giapy.data_tools.tiltdata import calcTilts
 
@@ -43,7 +44,7 @@ def write_case_files(casename, result, tfileflag=False):
         pass 
 
     coltit = 'longitude\tlatitude\tTotUpl\tTotUpl\tRateUpl\tGeoid\t'
-    coltit += 'emergence\twload\tload\tload\ticeload\tocean\ttopomap0'
+    coltit += 'emergence\twload\tload\tfiltload\ticemask\toceanmask\ttopomap0'
 
     result.upl.transform(result.inputs.harmTrans, inverse=False)
     result.vel.transform(result.inputs.harmTrans, inverse=False)
@@ -52,21 +53,31 @@ def write_case_files(casename, result, tfileflag=False):
     outTimes = result.upl.outTimes 
     fnames = []
 
+    load = np.cumsum(result.load.array, axis=0)
+    wload = np.cumsum(result.wload.array, axis=0)
+    
+    harmTrans = result.inputs.harmTrans
+    ns = spharm.getspecindx(harmTrans.nlat-1)[1]
+    filts = 1./result.inputs.earth.params.getLithFilter(n=ns)
+
+    def filt_load(l):
+       return harmTrans.spectogrd(harmTrans.grdtospec(l)*filts)
+
     u0 = result.sstopo.nearest_to(0)
     for i, t in enumerate(outTimes):
         fname = '{}/py_file_{}.txt'.format(casename, i+1)
         if tfileflag:
             ai = np.vstack([result.inputs.grid.Lon.flatten(), 
                        result.inputs.grid.Lat.flatten(), 
-                       result.upl[i].flatten(),
-                       result.upl[i].flatten(),
-                       result.vel[i].flatten(),
-                       result.geo[i].flatten(),
-                       (result.sstopo[i] - u0).flatten(),
-                       result.wload[i].flatten(),
-                       result.load[i].flatten(),
-                       result.load[i].flatten(),
-                       (result.load[i]- result.wload[i]).flatten(),
+                       result.upl[i].T.flatten(),
+                       result.upl[i].T.flatten(),
+                       result.vel[i].T.flatten(),
+                       result.geo[i].T.flatten(),
+                       (u0 - result.sstopo[i]).flatten(),
+                       wload[i].flatten(),
+                       load[i].flatten(),
+                       filt_load(load[i]).flatten(),
+                       (load[i] - wload[i]).flatten(),
                        (result.sstopo[i]<0).flatten(),
                        result.inputs.topo.flatten()]).T
 
