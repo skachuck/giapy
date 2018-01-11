@@ -188,7 +188,7 @@ class SphericalEarthOutput(object):
         else:
             self.times = np.array([0., 0.2, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 
                       10., 12., 13., 14., 15., 16., 18., 21., 25., 30., 
-                      40., 50., 70., 90., 110., 130., 150.])            
+                      40., 50., 70., 90., 110., 130., 150., 200., 300., 400])            
 
         self.times = self.times*secs_per_year*1e+3
         #   Ue  Uv  Ve  Vv  phi1    g1  vels
