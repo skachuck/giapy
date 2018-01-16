@@ -20,16 +20,11 @@ GiaSimOutput
 from __future__ import division
 
 import numpy as np
+from scipy.optimize import root
 import spharm
 import subprocess
-try:
-    from progressbar import ProgressBar, Percentage, Bar, ETA
-except:
-    pass
 
-from giapy.map_tools import GridObject, sealevelChangeByMelt,\
-                    volumeChangeLoad, sealevelChangeByUplift, oceanUpliftLoad,\
-                    floatingIceRedistribute
+from giapy.map_tools import GridObject
 
 from giapy import GITVERSION, timestamp, MODPATH, call, os
 
@@ -72,7 +67,8 @@ class GiaSimGlobal(object):
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
     def performConvolution(self, out_times=None, ntrunc=None, topo=None,
-                            verbose=False, eliter=5, nrem=1, massconerr=1e-2):  
+                            verbose=False, eliter=5, nrem=1, massconerr=1e-2,
+                            bathtub=False):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -166,7 +162,7 @@ class GiaSimGlobal(object):
             ################### LOAD STAGE CALCULATION ###################
             # Determine the water load redistribution for ice, uplift, and
             # geoid changes between ta and tb,
-            if topo is not None:
+            if topo is not None and not bathtub:
                 # Get index for starting time.
                 nta = observerDict['SS'].locateByTime(ta)
                 # Collect the solid-surface topography at beginning of step.
@@ -252,6 +248,101 @@ class GiaSimGlobal(object):
                     o.loadStageUpdate(tb, dLoad=dLoad, 
                                       topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
                                       esl=esl, dwLoad=dwLoad, sstopo=Tb)
+
+            elif topo is not None and bathtub:
+              
+                # Get index for starting time.
+                nta = observerDict['SS'].locateByTime(ta)
+                # Collect the solid-surface topography at beginning of step.
+                Ta = observerDict['sstopo'].array[nta]
+
+                # Redistribute the ocean by change in ocean floor / surface.
+                ssa, ssb = observerDict['SS'].array[[nta, nta+1]] 
+                dSS = self.harmTrans.spectogrd(ssb-ssa)
+                dhwBarU = sealevelChangeByUplift(dSS, topo, 
+                                                        grid, bathtub)
+                dhwU = oceanUpliftLoad(dhwBarU, topo, dSS,
+                                            bathtub)
+
+                # Update the solid-surface topography with uplift / geoid.
+                Tb = Ta + dSS - dhwBarU
+                esl += dhwBarU
+                dLoad = dhwU.copy()
+                dwLoad = dhwU.copy()                # Save the water load
+
+             
+                dILoad = (iceb - icea) * (topo > 0) * DENICE/DENSEA 
+                dhwBarI = -grid.integrate(dILoad) / grid.integrate(topo<0)
+                dILoad += volumeChangeLoad(dhwBarI, topo, bathtub)
+
+                # Combine loads from ocean changes and ice volume changes.
+                dLoad += dILoad
+                esl += dhwBarI
+                dwLoad += volumeChangeLoad(dhwBarI, topo,
+                                            bathtub)
+                Tb -= dhwBarI
+                
+
+                # Calculate instantaneous (elastic and gravity) responses to
+                # the load shift and redistribute ocean accordingly.
+                # Note: WE DO NOT CURRENTLY RECHECK FOR FLOATING ICE LOADS.
+                if eliter:
+                    # Get elastic and geoid response to the water load.
+                    # Find the elastic uplift in response to stage's load
+                    # redistribution.
+                    dSSel = self.harmTrans.spectogrd((ssResp)*\
+                                self.harmTrans.grdtospec(dLoad)) 
+
+                    dhwBarUel = sealevelChangeByUplift(dSSel, 
+                                                        topo,
+                                                        grid, bathtub)
+                    dhwUel = oceanUpliftLoad(dhwBarUel, 
+                                                topo, dSSel,
+                                                bathtub)
+
+                    Tb = Tb + dSSel - dhwBarUel
+                    esl += dhwBarUel
+                    dLoad = dLoad + dhwUel
+                    dwLoad += dhwUel
+
+                    # Iterate elastic responses until they are sufficiently small.
+                    for i in range(eliter):
+                        # Need to save elastic uplift and geoid at each iteration
+                        # to compare to previous steps for convergence.
+                        dSSelp = self.harmTrans.spectogrd((ssResp)*\
+                                    self.harmTrans.grdtospec(dhwUel))
+                      
+                     
+
+                        dhwBarUel = sealevelChangeByUplift(dSSelp, 
+                                                            topo, grid, bathtub)
+                        dhwUel = oceanUpliftLoad(dhwBarUel, 
+                                                    topo, dSSelp, bathtub)
+
+                        # Correct topography
+                        Tb = Tb + dSSelp - dhwBarUel
+                        esl += dhwBarUel
+                        dLoad = dLoad + dhwUel
+                        dwLoad += dhwUel
+
+                        # Truncation error from further iteration
+                        err = np.mean(np.abs(dSSelp))/np.mean(np.abs(dSSel))
+                        if err <= massconerr:
+                            break
+                        else:
+                            dSSel = dSSel + dSSelp
+                       
+                            continue
+
+                observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
+
+                for o in observerDict:
+                    # Topography and load for time tb are updated and saved.
+                    o.loadStageUpdate(tb, dLoad=dLoad, 
+                                      topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
+                                      esl=esl, dwLoad=dwLoad, sstopo=Tb)
+
+
 
             else:
                 dLoad = (iceb-icea)*DENICE/DENSEA
@@ -346,6 +437,193 @@ def configure_giasim(configdict=None):
     sim = GiaSimGlobal(earth=earth, ice=ice, topo=topo)
 
     return sim
+
+def volumeChangeLoad(h, topo, bathtub=False):
+    """Compute ocean depth changes for a topographic shift h, consistent with
+    sloping topographies.
+    
+    Parameters
+    ----------
+    h : float
+        The topographic shift.
+    topo : np.ndarray
+        The topography to shift. (Altered topography is T - h)
+
+    Returns
+    -------
+    hw : np.ndarray
+        An array with shape topo.shape whose maximum magnitude is h, with
+        decreasing magnitudes along slopes newly submerged or uncovered.
+    """
+
+    if bathtub:
+        hw = h*(topo < 0)
+    else:
+        if h > 0:
+            hw = (h - np.maximum(0, topo)) * (h > topo)
+        elif h < 0:
+            hw = (np.maximum(topo, h)) * (topo < 0)
+        else:
+            hw = 0*topo
+
+    return hw
+
+def sealevelChangeByMelt(V, topo, grid, bathtub=False):
+    """Find the topographic lowering that alters the ocean's volume by V.
+
+    Because of changing coastlines, a eustatic increase (decrease) of h will
+    generally change the volume of the ocean by more (less) than with a
+    'bathtub' ocean model. This function uses a Newton method with an initial
+    guess based on the 'bathtub' model.
+
+    Parameters
+    ----------
+    V : float
+        The volume by which to alter the ocean.
+    topo : np.ndarray
+        The topography to alter.
+    grid : <GridObject>
+        The grid object assists with integration.
+    
+    Returns
+    -------
+    h : float
+        The topographic shift consistent with changing / sloping coastlines.
+        Note that the new topography after this shift is T - h.
+    """
+    if V == 0:
+        return 0
+    # Get first guess of eustatic h.
+    h0 = V / grid.integrate(topo < 0, km=False)
+
+    if bathtub:
+        return h0
+    
+    # Use scipy.optimize.root to minimize volume difference.
+    Vexcess = lambda h: V - grid.integrate(volumeChangeLoad(h, topo), km=False)
+    h = root(Vexcess, h0)
+
+    return h['x'][0]
+
+def oceanUpliftLoad(h, Ta, upl, bathtub=False):
+    """Compute ocean depth changes for a topographic shift h, consistent with
+    sloping topographies.
+
+    Note that the resultant topography is Tb = Ta + upl - h.
+
+    
+    Parameters
+    ----------
+    h : float
+        The topographic shift.
+    Ta : np.ndarray
+        The topography to shift.     
+    upl : np.ndarray
+        The uplift additionally shifting the topography. Note that uplift and
+        geoid affect sea level oppositely (opposite sign).
+
+    Returns
+    -------
+    hw : np.ndarray
+        An array with shape topo.shape whose maximum magnitude is h, with
+        decreasing magnitudes along slopes newly submerged or uncovered.
+
+    """
+    if bathtub: 
+        return (h - upl)*(Ta<0)
+
+    # The new topography
+    Tb = Ta + upl - h
+    #               Newly submerged.            Newly emerged.
+    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Tb*(Tb>0)*(Ta<0)
+    return hw
+
+def sealevelChangeByUplift(upl, topo, grid, bathtub=False):
+    """Find the topographic lowering that alters the ocean's volume by V.
+
+    Because of changing coastlines, a eustatic increase (decrease) of h will
+    generally change the volume of the ocean by more (less) than with a
+    'bathtub' ocean model. This function uses a Newton method with an initial
+    guess based on the 'bathtub' model.
+
+    Parameters
+    ----------
+    upl : np.ndarray
+        The uplift additionally shifting the topography.Note that uplift and
+        geoid affect sea level oppositely (opposite sign).
+    topo : np.ndarray
+        The topography to alter.
+    grid : <GridObject>
+        The grid object assists with integration.
+    
+    Returns
+    -------
+    h : float
+        The topographic shift consistent with changing / sloping coastlines.
+        Note that the new topography after this shift is T + upl - h.
+        Techincally, upl = uplift - geoid.
+    """
+    if np.all(upl==0):
+        return 0
+
+    # Average ocean floor uplift, for initial guess.
+    h0 = grid.integrate(upl*(topo<0), km=False)/grid.integrate(topo<0, km=False)
+
+    if bathtub:
+        return h0
+
+    # Use scipy.optimize.root to minimize volume difference..
+    Vexcess = lambda h: grid.integrate(oceanUpliftLoad(h, topo, upl), km=False)
+    h = root(Vexcess, h0)
+
+    return h['x'][0]
+
+
+def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
+    """Calculate load and topographic shift due to ice height changes.
+
+    Calculate the water-equivalent load changes due to changing from ice
+    heights I0 to I1 on a solid-surface topography (height of solid earth, NOT
+    ice, relative to sea level at t0) S0. The load accounts for the fact that
+    when ice is not grounded, it represents a neutral water load, and 
+    appropriately updates the 'groundedness' where necessary. 
+
+    The updated solid surface,            S1 = S0 - dhwBar.
+    Floating ice can be identified where  (S1 + denp*I1) < 0.
+    Topography (to top of ice) is         T1 = S1 + I1*(S1 + denp*I1 >= 0).
+
+    Parameters
+    ----------
+    I0, I1 : np.ndarrays
+        Ice heights (from solid surface to top of ice) at times t0 and t1
+    S0 : np.ndarray
+        Solid surface topography (height of solid earth relative to sea level)
+        at t0.
+    grid : <GridObject>
+        The grid object assists with integration.
+    denp : float
+        The ratio of densities of ice and water (default = 0.9077). Used in
+        transforming ice heights to equivalent water heights.
+
+    Returns
+    -------
+    dLoad : np.ndarray
+        The total water load induced by ice height chagnes from I0 to I1,
+        taking into account floating ice and mass redistribution.
+    dhwBar : float
+        The topographic shift associated with the mass transfer.
+    """
+    
+    # Find the water-equivalent load change relative to sea level at t0.
+    dIwh = np.maximum(0, S0+denp*I1) - np.maximum(0, S0+denp*I0)
+                    
+    # The change in water volume of the ocean.
+    dVo = -grid.integrate(dIwh, km=False)
+                                                   
+    dhwBar = sealevelChangeByMelt(dVo, S0+denp*I1, grid)
+    dLoad = dIwh + volumeChangeLoad(dhwBar, S0+denp*I1)
+                                                                                  
+    return dLoad, dhwBar
 
 def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     earth = sim.earth
