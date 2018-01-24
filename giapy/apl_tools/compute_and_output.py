@@ -114,6 +114,7 @@ if __name__ == '__main__':
                             action='store_const', const=True,
                             dest='tfiles')
     parser.add_argument('--ncyc', default=1, type=int)
+    parser.add_argument('--topoit', default=1, type=int)
 
     comargs = parser.parse_args()
 
@@ -123,12 +124,15 @@ if __name__ == '__main__':
     earth = comargs.earth
     tfileflag = comargs.tfiles
     ncyc = comargs.ncyc
+    topoit = comargs.topoit
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
                   'topo': 'sstopo288'}
 
     sim = giapy.giasim.configure_giasim(configdict)
+    topo0 = sim.topo.copy()
+    dtopo = np.zeros_like(topo0)
 
     if earth is not None:
         print('Loading earth model: {}'.format(earth))
@@ -147,7 +151,11 @@ if __name__ == '__main__':
 
     print('Ice load modified\r')
 
-    result = sim.performConvolution(out_times=sim.ice.times)
+    for i in range(topoit):
+        result = sim.performConvolution(out_times=sim.ice.times)
+        dtopo = result.sstopo.nearest_to(0) - topo0
+        sim.topo -= dtopo
+    
  
     print('Result computed, writing out case files\r')
 

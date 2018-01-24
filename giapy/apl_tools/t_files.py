@@ -43,8 +43,8 @@ def write_case_files(casename, result, tfileflag=False):
     except:
         pass 
 
-    coltit = 'longitude\tlatitude\tTotUpl\tTotUpl\tRateUpl\tGeoid\t'
-    coltit += 'emergence\twload\tload\tfiltload\ticemask\toceanmask\ttopomap0'
+    coltit = 'longitude\tlatitude\tTotUpl\tSSTopo\tRateUpl\tGeoid\t'
+    coltit += 'emergence\twload\tload\tinput ice\ticemask\toceanmask\ttopo'
 
     result.upl.transform(result.inputs.harmTrans, inverse=False)
     result.vel.transform(result.inputs.harmTrans, inverse=False)
@@ -58,10 +58,10 @@ def write_case_files(casename, result, tfileflag=False):
     
     harmTrans = result.inputs.harmTrans
     ns = spharm.getspecindx(harmTrans.nlat-1)[1]
-    filts = 1./result.inputs.earth.params.getLithFilter(n=ns)
+    #filts = 1./result.inputs.earth.params.getLithFilter(n=ns)
 
-    def filt_load(l):
-       return harmTrans.spectogrd(harmTrans.grdtospec(l)*filts)
+    #def filt_load(l):
+    #   return harmTrans.spectogrd(harmTrans.grdtospec(l)*filts)
 
     u0 = result.sstopo.nearest_to(0)
     for i, t in enumerate(outTimes):
@@ -70,16 +70,16 @@ def write_case_files(casename, result, tfileflag=False):
             ai = np.vstack([result.inputs.grid.Lon.flatten(), 
                        result.inputs.grid.Lat.flatten(), 
                        result.upl[i].T.flatten(),
-                       result.upl[i].T.flatten(),
+                       result.sstopo[i].T.flatten(),
                        result.vel[i].T.flatten(),
                        result.geo[i].T.flatten(),
                        (u0 - result.sstopo[i]).flatten(),
                        wload[i].flatten(),
                        load[i].flatten(),
-                       filt_load(load[i]).flatten(),
-                       (load[i] - wload[i]).flatten(),
+                       result.inputs.ice[i].flatten(),
+                       (result.inputs.ice[i]>0).flatten(),
                        (result.sstopo[i]<0).flatten(),
-                       result.inputs.topo.flatten()]).T
+                       result.inputs.topo[i].flatten()]).T
 
         
             header = 'case: {} at {}\n'.format(casename, t) + coltit
