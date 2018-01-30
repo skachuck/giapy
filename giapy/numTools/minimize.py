@@ -15,6 +15,8 @@ References:
     http://arxiv.org/abs/1201.5885.
 """
 
+import numpy as np
+
 def lm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
                 jkwargs={}, keep_steps=False, j=None, r=None):
     SAFE = 0.5
@@ -161,7 +163,7 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
             
             if np.mean(r.dot(r)) < 1e-5:
                 if keep_steps:
-                    return x, xs, j, r
+                    return x, xs, j, r, fevals, jevals
                 else:
                     return x
             else: 
