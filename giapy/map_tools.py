@@ -185,6 +185,21 @@ class GridObject(object):
         # return array indices
         return areaind
 
+    def closest_grid_ind(self, lon, lat):
+        """Find the index of grid point closest to (lon, lat)
+        
+        Parameters
+        ----------
+        lon, lat : floats; longitude and latitude desired
+
+        Returns
+        -------
+        indlat, indlon : tuple; indices of closest grid point
+        """
+        indlat = np.argmin(np.abs(self.Lat[:,0] - lat))
+        indlon = np.argmin(np.abs(self.Lon[0] - lon))
+        return indlat, indlon
+
     def pcolormesh(self, Z, **kwargs):
         p = self.basemap.pcolormesh(self.Lon, self.Lat, Z, **kwargs)
         return p 
