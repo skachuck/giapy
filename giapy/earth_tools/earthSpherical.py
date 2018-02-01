@@ -208,7 +208,7 @@ class SphericalEarth(object):
 
     class SeaSurfaceObserver(AbstractEarthGiaSimObserver):
         def isolateRespArray(self, respArray): 
-            resp = (respArray[self.ns,0] + respArray[self.ns,1] -
+            resp = (respArray[self.ns,0] + respArray[self.ns,1] +
                         respArray[self.ns,4]/9.8222)*9.8222
             return resp
     
