@@ -102,9 +102,12 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
     h=0.1
 
     x = np.atleast_1d(x0)
+    r = r0 or f(x, *fargs, **fkwargs)
+
     if keep_steps:
         xs = [x]
-    r = r0 or f(x, *fargs, **fkwargs)
+        rs = [r]
+
     l = 100
     I = np.eye(len(x))
     if jac is None:
@@ -160,10 +163,11 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
             if keep_steps:
                 xs.append(x)
+                rs.append(r)
             
             if np.mean(r.dot(r)) < 1e-5:
                 if keep_steps:
-                    return x, xs, j, r, fevals, jevals
+                    return x, i, xs, rs, j, r, fevals, jevals
                 else:
                     return x
             else: 
@@ -173,7 +177,7 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         else:
             l = l*lup
     if keep_steps:
-        return x, xs, j, r
+        return x, i, xs, rs, j, r, fevals, jevals
     else:
         return x
 
