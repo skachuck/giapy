@@ -151,10 +151,14 @@ class GiaSimGlobal(object):
             o.loadStageUpdate(ice.times[0], sstopo=topo)
 
         esl = 0                 # Equivalent sea level assumed to start at 0.
+        eslI = 0                 # Equivalent sea level assumed to start at 0.
+        eslU = 0                 # Equivalent sea level assumed to start at 0.
 
         elRespArray = earth.getResp(0.)
         ssResp = np.zeros_like(ns) 
         ssResp[npad] = observerDict['SS'].isolateRespArray(elRespArray)
+
+        Ts = topo.copy()
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -168,6 +172,9 @@ class GiaSimGlobal(object):
                 # Collect the solid-surface topography at beginning of step.
                 Ta = observerDict['sstopo'].array[nta]
 
+                #icea = np.cumsum(observerDict['iload'].array, axis=0)[nta] *\
+                #            DENSEA/DENICE
+
                 # Redistribute the ocean by change in ocean floor / surface.
                 ssa, ssb = observerDict['SS'].array[[nta, nta+1]] 
                 dSS = self.harmTrans.spectogrd(ssb-ssa)
@@ -177,18 +184,21 @@ class GiaSimGlobal(object):
 
                 # Update the solid-surface topography with uplift / geoid.
                 Tb = Ta + dSS - dhwBarU
+                eslU += dhwBarU
                 esl += dhwBarU
                 dLoad = dhwU.copy()
                 dwLoad = dhwU.copy()                # Save the water load
 
                 # Redistribute ice, consistent with current floating ice. 
-                dILoad, dhwBarI = floatingIceRedistribute(icea, iceb, Tb, grid,
+                dILoad, dIwLoad, dCalved, dhwBarI = floatingIceRedistribute(icea, iceb, Ts, Tb, grid,
                                                             DENICE/DENSEA)
+                Ts = Tb.copy()
 
                 # Combine loads from ocean changes and ice volume changes.
-                dLoad += dILoad
+                dLoad += dILoad + dIwLoad
+                eslI += dhwBarI
                 esl += dhwBarI
-                dwLoad += volumeChangeLoad(dhwBarI, Tb+DENICE/DENSEA*iceb)
+                dwLoad += dIwLoad#volumeChangeLoad(dhwBarI, Tb+DENICE/DENSEA*iceb)
                 Tb -= dhwBarI
                 
 
@@ -240,14 +250,15 @@ class GiaSimGlobal(object):
                             dSSel = dSSel + dSSelp
                        
                             continue
-
-                observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
+                if eliter:
+                    observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
                     o.loadStageUpdate(tb, dLoad=dLoad, 
                                       topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
-                                      esl=esl, dwLoad=dwLoad, sstopo=Tb)
+                                      eslU=eslU, eslI=eslI, esl=esl, dwLoad=dwLoad, sstopo=Tb,
+                                      diLoad=dILoad, dcLoad=dCalved)
 
             elif topo is not None and bathtub:
               
@@ -267,17 +278,19 @@ class GiaSimGlobal(object):
                 # Update the solid-surface topography with uplift / geoid.
                 Tb = Ta + dSS - dhwBarU
                 esl += dhwBarU
+                eslU += dhwBarU
                 dLoad = dhwU.copy()
                 dwLoad = dhwU.copy()                # Save the water load
 
              
                 dILoad = (iceb - icea) * (topo > 0) * DENICE/DENSEA 
                 dhwBarI = -grid.integrate(dILoad) / grid.integrate(topo<0)
-                dILoad += volumeChangeLoad(dhwBarI, topo, bathtub)
+                dIwLoad = volumeChangeLoad(dhwBarI, topo, bathtub)
 
                 # Combine loads from ocean changes and ice volume changes.
-                dLoad += dILoad
+                dLoad += dILoad + dIwLoad
                 esl += dhwBarI
+                eslI += dhwBarI
                 dwLoad += volumeChangeLoad(dhwBarI, topo,
                                             bathtub)
                 Tb -= dhwBarI
@@ -333,14 +346,15 @@ class GiaSimGlobal(object):
                             dSSel = dSSel + dSSelp
                        
                             continue
-
-                observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
+                if eliter:
+                    observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
                     o.loadStageUpdate(tb, dLoad=dLoad, 
                                       topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
-                                      esl=esl, dwLoad=dwLoad, sstopo=Tb)
+                                      esl=esl, eslI=eslI, eslU=eslU, dwLoad=dwLoad, sstopo=Tb,
+                                      diLoad=dILoad)
 
 
 
@@ -535,7 +549,7 @@ def oceanUpliftLoad(h, Ta, upl, bathtub=False):
     # The new topography
     Tb = Ta + upl - h
     #               Newly submerged.            Newly emerged.
-    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Tb*(Tb>0)*(Ta<0)
+    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Ta*(Tb>0)*(Ta<0)
     return hw
 
 def sealevelChangeByUplift(upl, topo, grid, bathtub=False):
@@ -579,7 +593,7 @@ def sealevelChangeByUplift(upl, topo, grid, bathtub=False):
     return h['x'][0]
 
 
-def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
+def floatingIceRedistribute(I0, I1, S0, S1, grid, denp=0.9077):
     """Calculate load and topographic shift due to ice height changes.
 
     Calculate the water-equivalent load changes due to changing from ice
@@ -615,15 +629,23 @@ def floatingIceRedistribute(I0, I1, S0, grid, denp=0.9077):
     """
     
     # Find the water-equivalent load change relative to sea level at t0.
-    dIwh = np.maximum(0, S0+denp*I1) - np.maximum(0, S0+denp*I0)
+    #       
+    dIwh = np.maximum(0, S1+denp*I1) - np.maximum(0, S0+denp*I0)
+    # Water-equivalent change in grounded ice from t0 to t1
+    dIwh = denp*(I1*(S1+denp*I1>=0) - I0*(S0+denp*I0>=0))
+    #dIwh = np.maximum(0, S0+denp*I1)*(I1>0) - denp*I0
+    #               Change in height of floating ice
+    dCalved = denp*(I1*(S1+denp*I1<=0)*(I1>=0) - I0*(S0+denp*I0<=0)*(I0>=0))
                     
-    # The change in water volume of the ocean.
+    # The change in water volume of the ocean is opposite the change in
+    # grounded ice.
     dVo = -grid.integrate(dIwh, km=False)
-                                                   
-    dhwBar = sealevelChangeByMelt(dVo, S0+denp*I1, grid)
-    dLoad = dIwh + volumeChangeLoad(dhwBar, S0+denp*I1)
+                                            
+    # The water load associated with the volume change.
+    dhwBar = sealevelChangeByMelt(dVo, S1+denp*I1, grid)
+    dwLoad =  volumeChangeLoad(dhwBar, S1+denp*I1)
                                                                                   
-    return dLoad, dhwBar
+    return dIwh, dwLoad, dCalved, dhwBar
 
 def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     earth = sim.earth
@@ -651,10 +673,14 @@ def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     loadObserver = HeightObserver(calcTimes, shape, 'dLoad')
     #   [5] Water load
     wloadObserver = HeightObserver(calcTimes, shape, 'dwLoad') 
+    iloadObserver = HeightObserver(calcTimes, shape, 'diLoad') 
+    cloadObserver = HeightObserver(calcTimes, shape, 'dcLoad') 
     #   [6] Solid surface topography for ocean redistribution
     rslObserver = HeightObserver(calcTimes, shape, 'sstopo')
     #   [7] Eustatic sea level, with average uplift and geoid over oceans.
     eslObserver = EslObserver(calcTimes) 
+    eslIObserver = EslObserver(calcTimes, 'eslI') 
+    eslUObserver = EslObserver(calcTimes, 'eslU') 
 
     observerDict = GiaSimOutput(sim)
     observerDict.addObserver('upl'   , uplObserver)
@@ -662,12 +688,16 @@ def initialize_output(sim, out_times, calcTimes, nmax, ntrunc, ns, shape):
     observerDict.addObserver('grav'  , gravObserver)
     observerDict.addObserver('load'  , loadObserver)
     observerDict.addObserver('wload' , wloadObserver)
+    observerDict.addObserver('iload' , iloadObserver)
+    observerDict.addObserver('cload' , cloadObserver)
     observerDict.addObserver('vel'   , velObserver)
     observerDict.addObserver('geo'   , geoObserver)
 
     observerDict.addObserver('SS', SeaSurfaceObserver) 
     observerDict.addObserver('topo'  , topoObserver)
     observerDict.addObserver('esl'   , eslObserver)
+    observerDict.addObserver('eslI'   , eslIObserver)
+    observerDict.addObserver('eslU'   , eslUObserver)
     observerDict.addObserver('sstopo', rslObserver)
     return observerDict
 
@@ -842,13 +872,14 @@ class HeightObserver(AbstractGiaSimObserver):
         self.array[n] = load
 
 class EslObserver(AbstractGiaSimObserver):
-    def __init__(self, outTimes):
+    def __init__(self, outTimes, name='esl'):
         self.array = np.zeros(len(outTimes))
         self.outTimes = outTimes
+        self.name=name
 
     def loadStageUpdate(self, tout, **kwargs):
-        if 'esl' in kwargs.keys():
-            self.update(tout, kwargs['esl'])
+        if self.name in kwargs.keys():
+            self.update(tout, kwargs[self.name])
 
     def update(self, tout, esl):
         if tout not in self.outTimes:
