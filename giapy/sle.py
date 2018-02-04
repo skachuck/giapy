@@ -549,7 +549,7 @@ def oceanUpliftLoad(h, Ta, upl, bathtub=False):
     # The new topography
     Tb = Ta + upl - h
     #               Newly submerged.            Newly emerged.
-    hw = (h - upl - np.maximum(Ta, 0))*(Tb<0) + Ta*(Tb>0)*(Ta<0)
+    hw = (h - upl - np.maximum(Ta, 0)*(Ta>0))*(Tb<0) + Ta*(Tb>0)*(Ta<0)
     return hw
 
 def sealevelChangeByUplift(upl, topo, grid, bathtub=False):
@@ -577,7 +577,7 @@ def sealevelChangeByUplift(upl, topo, grid, bathtub=False):
         Note that the new topography after this shift is T + upl - h.
         Techincally, upl = uplift - geoid.
     """
-    if np.all(upl==0):
+    if np.allclose(upl, 0):
         return 0
 
     # Average ocean floor uplift, for initial guess.
