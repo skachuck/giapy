@@ -74,7 +74,8 @@ def lm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
         return x
 
 def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
-                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False):
+                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False,
+                maxstep=100, maxfeval=200, maxjeval=50):
     """
     Geodesic-accelerated Levenberg-Marquardt for nonlinear least-squares.
 
@@ -117,15 +118,12 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
     C = 0.5*r.dot(r)
 
-    MAXSTEP = 100
-    MAXJEVAL = 15
-    MAXFEVAL = 200
     jevals = 0
     fevals = 0
 
     i = 0
 
-    while i<=MAXSTEP and jevals <= MAXJEVAL and fevals <= MAXFEVAL: 
+    while i<=maxstep and jevals <= maxjeval and fevals <= maxfeval: 
         i += 1
 
         g = j.T.dot(j) + l*I
