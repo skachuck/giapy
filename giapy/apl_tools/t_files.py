@@ -44,7 +44,7 @@ def write_case_files(casename, result, tfileflag=False):
         pass 
 
     coltit = 'longitude\tlatitude\tTotUpl\tSSTopo\tRateUpl\tGeoid\t'
-    coltit += 'emergence\twload\tload\tinput ice\ticemask\toceanmask\ttopo'
+    coltit += 'emergence\twload\tload\tinputice\ticemask\toceanmask\ttopo'
 
     #result.upl.transform(result.inputs.harmTrans, inverse=False)
     #result.vel.transform(result.inputs.harmTrans, inverse=False)
