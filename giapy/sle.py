@@ -105,6 +105,7 @@ class GiaSimGlobal(object):
         DENWAT      = 1000.  #999.           # kg/m^3
         DENSEA      = 1000.  #1029.          # kg/m^3
         GSURF       = 9.815          # m/s^2
+        DENP        = DENICE/DENSEA
         #PAperM      = DENSEA*GSURF
         NREM        = nrem           # number of intermediate steps
 
@@ -172,91 +173,104 @@ class GiaSimGlobal(object):
                 # Collect the solid-surface topography at beginning of step.
                 Ta = observerDict['sstopo'].array[nta]
 
-                #icea = np.cumsum(observerDict['iload'].array, axis=0)[nta] *\
-                #            DENSEA/DENICE
+                # Increment the grounded ice load on the old topography
+                dIwh = (np.maximum(0, Ta+DENP*iceb) -
+                                    np.maximum(0, Ta+DENP*icea)) 
 
-                # Redistribute the ocean by change in ocean floor / surface.
+                # Volume change of grounded ice.
+                dVi = -grid.integrate(dIwh, km=False)
+                # Spread this volume change over the ocean
+                dhwBarI = sealevelChangeByMelt(dVi, Ta+DENP*iceb, grid)
+                dwLoadI = volumeChangeLoad(dhwBarI, Ta+DENP*iceb)
+
+                # Update the solid surface with the sea surface increment dSS
                 ssa, ssb = observerDict['SS'].array[[nta, nta+1]] 
                 dSS = self.harmTrans.spectogrd(ssb-ssa)
-                dhwBarU = sealevelChangeByUplift(dSS, Ta+DENICE/DENSEA*icea, 
+                dhwBarU = sealevelChangeByUplift(dSS, Ta+DENP*iceb, 
                                                         grid)
-                dhwU = oceanUpliftLoad(dhwBarU, Ta+DENICE/DENSEA*icea, dSS)
+                dwLoadU = oceanUpliftLoad(dhwBarU, Ta+DENP*iceb, dSS)
 
-                # Update the solid-surface topography with uplift / geoid.
-                Tb = Ta + dSS - dhwBarU
+                # Collect the solid-surface at tb so far
+                Tb = Ta + dSS - dhwBarU - dhwBarI
+
+                # Transfer water load of marine ice to water load
+                dwLoadM = (iceb>0)*dSS*(Tb<0)
+
+                # Locate (newly) floating ice minus (newly) grounded ice
+                dCalved = DENP*iceb*(
+                            (Tb+DENP*iceb<0)*(Ta+DENP*iceb>0)-
+                            (Tb+DENP*iceb>0)*(Ta+DENP*iceb<0))
+
+                # Spread floating ice over the ocean
+                dVc = grid.integrate(dCalved, km=False)
+                dhwBarC = sealevelChangeByMelt(dVc, Tb+DENP*iceb, grid)
+                dwLoadC = volumeChangeLoad(dhwBarC, Tb+DENP*iceb)
+
+                Tb -= dhwBarC
+
+                dwLoad = dwLoadI + dwLoadU + dwLoadC - dwLoadM
+                dILoad = dIwh - dCalved + dwLoadM
+                dLoad = dwLoad + dILoad
+
                 eslU += dhwBarU
-                esl += dhwBarU
-                dLoad = dhwU.copy()
-                dwLoad = dhwU.copy()                # Save the water load
+                eslI += dhwBarI + dhwBarC
+                esl += dhwBarU + dhwBarI + dhwBarC
 
-                # Redistribute ice, consistent with current floating ice. 
-                dILoad, dIwLoad, dCalved, dhwBarI = floatingIceRedistribute(icea, iceb, Ts, Tb, grid,
-                                                            DENICE/DENSEA)
-                Ts = Tb.copy()
-
-                # Combine loads from ocean changes and ice volume changes.
-                dLoad += dILoad + dIwLoad
-                eslI += dhwBarI
-                esl += dhwBarI
-                dwLoad += dIwLoad#volumeChangeLoad(dhwBarI, Tb+DENICE/DENSEA*iceb)
-                Tb -= dhwBarI
-                
+                SMALL = 1e-17
+               
+                dSSel = np.zeros(grid.shape)
+                dSSelp = self.harmTrans.spectogrd((ssResp)*\
+                            self.harmTrans.grdtospec(dLoad))
 
                 # Calculate instantaneous (elastic and gravity) responses to
-                # the load shift and redistribute ocean accordingly.
-                # Note: WE DO NOT CURRENTLY RECHECK FOR FLOATING ICE LOADS.
-                if eliter:
-                    # Get elastic and geoid response to the water load.
-                    # Find the elastic uplift in response to stage's load
-                    # redistribution.
-                    dSSel = self.harmTrans.spectogrd((ssResp)*\
-                                self.harmTrans.grdtospec(dLoad)) 
-
-                    dhwBarUel = sealevelChangeByUplift(dSSel, 
-                                                        Tb+DENICE/DENSEA*iceb, grid)
+                # the load shift and redistribute ocean accordingly. 
+                for i in range(eliter):
+                    dhwBarUel = sealevelChangeByUplift(dSSelp, 
+                                                        Tb+DENP*iceb, grid)
                     dhwUel = oceanUpliftLoad(dhwBarUel, 
-                                                Tb+DENICE/DENSEA*iceb, dSSel)
+                                                Tb+DENP*iceb, dSSel)
 
-                    Tb = Tb + dSSel - dhwBarUel
-                    esl += dhwBarUel
-                    dLoad = dLoad + dhwUel
-                    dwLoad += dhwUel
+                    # Locate (newly) floating ice minus (newly) grounded ice
+                    dCalvedp = DENP*iceb*(
+                                (Tb+dSSelp-dhwBarUel+DENP*iceb<0)*(Tb+DENP*iceb>0) -
+                                (Tb+dSSelp-dhwBarUel+DENP*iceb>0)*(Tb+DENP*iceb<0))
 
-                    # Iterate elastic responses until they are sufficiently small.
-                    for i in range(eliter):
-                        # Need to save elastic uplift and geoid at each iteration
-                        # to compare to previous steps for convergence.
+                    # Spread floating ice over the ocean
+                    dVc = grid.integrate(dCalvedp, km=False)
+                    dhwBarC = sealevelChangeByMelt(dVc, Tb+dSSelp-dhwBarUel+DENP*iceb, grid)
+                    dwLoadC = volumeChangeLoad(dhwBarC, Tb+dSSelp-dhwBarUel+DENP*iceb)
+
+                    dwLoad += dhwUel + dwLoadC
+                    dILoad -= dCalvedp
+                    dLoad += dhwUel + dwLoadC - dCalvedp
+                    dCalved += dCalvedp
+
+                    Tb += dSSelp - dhwBarUel - dhwBarC
+
+                    eslU += dhwBarUel
+                    eslI += dhwBarC
+                    esl += dhwBarUel + dhwBarC
+
+                    err = np.mean(np.abs(dSSelp))/SMALL
+                    if err <= massconerr:
+                        break
+                    else:
+                        dSSel += dSSelp
+                        SMALL = np.mean(np.abs(dSSel))
+                        # Get elastic and geoid response to the water load.
+                        # Find the elastic uplift in response to stage's load
+                        # redistribution.
                         dSSelp = self.harmTrans.spectogrd((ssResp)*\
-                                    self.harmTrans.grdtospec(dhwUel))
-                      
-                     
+                                self.harmTrans.grdtospec(dhwUel))
+                        
 
-                        dhwBarUel = sealevelChangeByUplift(dSSelp, 
-                                                            Tb+DENICE/DENSEA*iceb, grid)
-                        dhwUel = oceanUpliftLoad(dhwBarUel, 
-                                                    Tb+DENICE/DENSEA*iceb, dSSelp)
-
-                        # Correct topography
-                        Tb = Tb + dSSelp - dhwBarUel
-                        esl += dhwBarUel
-                        dLoad = dLoad + dhwUel
-                        dwLoad += dhwUel
-
-                        # Truncation error from further iteration
-                        err = np.mean(np.abs(dSSelp))/np.mean(np.abs(dSSel))
-                        if err <= massconerr:
-                            break
-                        else:
-                            dSSel = dSSel + dSSelp
-                       
-                            continue
                 if eliter:
                     observerDict['SS'].array[nta+1] += self.harmTrans.grdtospec(dSSel) 
 
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
                     o.loadStageUpdate(tb, dLoad=dLoad, 
-                                      topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
+                                      topo=Tb+iceb*(Tb + DENP*iceb>=0), 
                                       eslU=eslU, eslI=eslI, esl=esl, dwLoad=dwLoad, sstopo=Tb,
                                       diLoad=dILoad, dcLoad=dCalved)
 
@@ -283,7 +297,7 @@ class GiaSimGlobal(object):
                 dwLoad = dhwU.copy()                # Save the water load
 
              
-                dILoad = (iceb - icea) * (topo > 0) * DENICE/DENSEA 
+                dILoad = (iceb - icea) * (topo > 0) * DENP 
                 dhwBarI = -grid.integrate(dILoad) / grid.integrate(topo<0)
                 dIwLoad = volumeChangeLoad(dhwBarI, topo, bathtub)
 
@@ -352,14 +366,14 @@ class GiaSimGlobal(object):
                 for o in observerDict:
                     # Topography and load for time tb are updated and saved.
                     o.loadStageUpdate(tb, dLoad=dLoad, 
-                                      topo=Tb+iceb*(Tb + DENICE/DENSEA*iceb>=0), 
+                                      topo=Tb+iceb*(Tb + DENP*iceb>=0), 
                                       esl=esl, eslI=eslI, eslU=eslU, dwLoad=dwLoad, sstopo=Tb,
                                       diLoad=dILoad)
 
 
 
             else:
-                dLoad = (iceb-icea)*DENICE/DENSEA
+                dLoad = (iceb-icea)*DENP
                 Tb = None
 
                 for o in observerDict:
@@ -636,6 +650,8 @@ def floatingIceRedistribute(I0, I1, S0, S1, grid, denp=0.9077):
     #dIwh = np.maximum(0, S0+denp*I1)*(I1>0) - denp*I0
     #               Change in height of floating ice
     dCalved = denp*(I1*(S1+denp*I1<=0)*(I1>=0) - I0*(S0+denp*I0<=0)*(I0>=0))
+
+   
                     
     # The change in water volume of the ocean is opposite the change in
     # grounded ice.
@@ -643,7 +659,9 @@ def floatingIceRedistribute(I0, I1, S0, S1, grid, denp=0.9077):
                                             
     # The water load associated with the volume change.
     dhwBar = sealevelChangeByMelt(dVo, S1+denp*I1, grid)
-    dwLoad =  volumeChangeLoad(dhwBar, S1+denp*I1)
+    dwLoad =  volumeChangeLoad(dhwBar, S1+denp*I1) -\
+                    (dIwh<0)*(S1+denp*I1<0)*(S1+denp*I1)
+
                                                                                   
     return dIwh, dwLoad, dCalved, dhwBar
 
