@@ -114,7 +114,7 @@ class SphericalLoveVelocities(object):
                                 2, self.yV, self.difeqVisc)
 
         # Extract the velocities
-        dydt[:] = self.yV[[0,1],:].flatten()
+        dydt[:] = self.yV[[0,1],:].flatten()*self.params.getLithFilter(n=self.n)
 
         #return self.yV[[0,1],:].flatten()
     
