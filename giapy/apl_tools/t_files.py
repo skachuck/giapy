@@ -44,11 +44,11 @@ def write_case_files(casename, result, tfileflag=False):
         pass 
 
     coltit = 'longitude\tlatitude\tTotUpl\tSSTopo\tRateUpl\tGeoid\t'
-    coltit += 'emergence\twload\tload\tinput ice\ticemask\toceanmask\ttopo'
+    coltit += 'emergence\twload\tload\tinputice\ticemask\toceanmask\ttopo'
 
-    result.upl.transform(result.inputs.harmTrans, inverse=False)
-    result.vel.transform(result.inputs.harmTrans, inverse=False)
-    result.geo.transform(result.inputs.harmTrans, inverse=False)
+    #result.upl.transform(result.inputs.harmTrans, inverse=False)
+    #result.vel.transform(result.inputs.harmTrans, inverse=False)
+    #result.geo.transform(result.inputs.harmTrans, inverse=False)
 
     outTimes = result.upl.outTimes 
     fnames = []
@@ -69,17 +69,17 @@ def write_case_files(casename, result, tfileflag=False):
         if tfileflag:
             ai = np.vstack([result.inputs.grid.Lon.flatten(), 
                        result.inputs.grid.Lat.flatten(), 
-                       result.upl[i].T.flatten(),
-                       result.sstopo[i].T.flatten(),
-                       result.vel[i].T.flatten(),
-                       result.geo[i].T.flatten(),
+                       harmTrans.spectogrd(result.upl[i]).flatten(),
+                       result.sstopo[i].flatten(),
+                       harmTrans.spectogrd(result.vel[i]).flatten(),
+                       harmTrans.spectogrd(result.geo[i]).flatten(),
                        (u0 - result.sstopo[i]).flatten(),
                        wload[i].flatten(),
                        load[i].flatten(),
                        result.inputs.ice[i].flatten(),
                        (result.inputs.ice[i]>0).flatten(),
                        (result.sstopo[i]<0).flatten(),
-                       result.inputs.topo[i].flatten()]).T
+                       result.inputs.topo.flatten()]).T
 
         
             header = 'case: {} at {}\n'.format(casename, t) + coltit
