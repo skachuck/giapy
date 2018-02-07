@@ -74,7 +74,8 @@ def lm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
         return x
 
 def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
-                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False):
+                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False,
+                maxstep=100, maxfeval=200, maxjeval=50):
     """
     Geodesic-accelerated Levenberg-Marquardt for nonlinear least-squares.
 
@@ -102,9 +103,12 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
     h=0.1
 
     x = np.atleast_1d(x0)
+    r = r0 or f(x, *fargs, **fkwargs)
+
     if keep_steps:
         xs = [x]
-    r = r0 or f(x, *fargs, **fkwargs)
+        rs = [r]
+
     l = 100
     I = np.eye(len(x))
     if jac is None:
@@ -114,15 +118,12 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
     C = 0.5*r.dot(r)
 
-    MAXSTEP = 100
-    MAXJEVAL = 15
-    MAXFEVAL = 200
     jevals = 0
     fevals = 0
 
     i = 0
 
-    while i<=MAXSTEP and jevals <= MAXJEVAL and fevals <= MAXFEVAL: 
+    while i<=maxstep and jevals <= maxjeval and fevals <= maxfeval: 
         i += 1
 
         g = j.T.dot(j) + l*I
@@ -160,10 +161,11 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
             if keep_steps:
                 xs.append(x)
+                rs.append(r)
             
             if np.mean(r.dot(r)) < 1e-5:
                 if keep_steps:
-                    return x, xs, j, r, fevals, jevals
+                    return x, i, xs, rs, j, r, fevals, jevals
                 else:
                     return x
             else: 
@@ -173,7 +175,7 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         else:
             l = l*lup
     if keep_steps:
-        return x, xs, j, r
+        return x, i, xs, rs, j, r, fevals, jevals
     else:
         return x
 
