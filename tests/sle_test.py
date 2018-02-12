@@ -32,6 +32,7 @@ topo_spatial_cases = {'B0': (0, 0, 0, 0),
 
 LATFAC = 2
 NLON, NLAT = 720, 360*LATFAC+1
+#NLON, NLAT = 512, 1025
 
 def sphericalload(Lons, Lats, lonc, latc, h0, alpha=10):
     """
@@ -160,7 +161,7 @@ def gen_icehistory(spatial='L1', evolution='T1', tstep=0.02, **kwargs):
 
     return PersistentIceHistory(load, metadata)
 
-def gen_sstopo(spatial='B0', sigb=26):
+def gen_sstopo(nlon, nlat, spatial='B0', sigb=26):
     """
     Generate a circular exponential basin.
 
@@ -174,8 +175,8 @@ def gen_sstopo(spatial='B0', sigb=26):
     -------
     sstopo - np.array(NLAT, NLON)
     """
-    Lons, Lats = np.meshgrid(np.linspace(-np.pi, np.pi, NLON),
-                             np.linspace(-np.pi/2, np.pi/2, NLAT))
+    Lons, Lats = np.meshgrid(np.linspace(-np.pi, np.pi, nlon),
+                             np.linspace(-np.pi/2, np.pi/2, nlat))
     thetab, phib, bmax, b0 = topo_spatial_cases[spatial]
     # convert colat to lat
     thetab = 90 - thetab
@@ -266,6 +267,55 @@ def write_result(sim, benchmark, figname, lon=None, lat=None, drctry='./'):
                    sstopo.ev(lonev,latev)]).T,
            header=header)
 
+def fig07(sim, result, case):
+    dLon = np.abs(sim.ice.Lon[0,1]-sim.ice.Lon[0,0])
+    dLat = np.abs(sim.ice.Lat[0,0]-sim.ice.Lat[1,0])
+    CoLat = sim.ice.Lat+np.pi/2
+    dA = np.sin(CoLat[1:-1, 1:-1])*dLat*dLon
+
+    OO = np.array([np.sum(((s[1:-1,1:-1] + 0.931*i[1:-1,1:-1])<=0)*dA) / (4*np.pi) 
+          for i, s in zip(sim.ice, result.sstopo)])
+    
+    dA *= 6371000**2
+    NU = np.array([np.sum(sim.harmTrans.spectogrd(g-u)[1:-1,1:-1]*((s[1:-1,1:-1] + 0.931*i[1:-1,1:-1])<=0)*dA)
+          for i, s, g, u in zip(sim.ice, result.sstopo, result.geo, result.upl)])
+    XSI = np.array([np.sum((((s[1:-1,1:-1] + 0.931*i[1:-1,1:-1])<=0) -
+                            (result.sstopo[0][1:-1,1:-1]<=0) )*dA * result.sstopo[0][1:-1,1:-1])
+          for i, s in zip(sim.ice, result.sstopo)])
+    GM = np.array([np.sum(((s[1:-1,1:-1] + 0.931*i[1:-1,1:-1])<=0)*dA*i[1:-1,1:-1]*1e-18*931) 
+          for i, s in zip(sim.ice, result.sstopo)])
+    IM = np.array([np.sum(dA*i[1:-1,1:-1]*1e-18*931) 
+          for i, s in zip(sim.ice, result.sstopo)])
+    
+    header = '''
+ # col1:  time index
+ # col2:  time after surface load onset (kyr)
+ # col3:  mass of ice load (10**18 kg)
+ # col4:  ocean area (per cent of 4\pi)
+ # col5:  huf1=-rhoice*hice00/ofj00/rhowat
+ # col6:  huf2=-fuj00/ofj00
+ # col7:  huf3=fuj100/ofj00
+ # col8:  huf4=mass of water displayed by ice/ofj00
+ # col9:  col5+col6+col7+col8
+ # col10: grounded ice (10**18 kg)
+ # col11: col3-col10'''
+    
+    Nt = len(benchmarkE2.sstopo.outTimes)
+    
+    ar = np.vstack([np.arange(Nt)+1, 
+               15-benchmarkE2.sstopo.outTimes,
+               IM,
+               OO,
+               -1/1000.*IM*1e18/OO/6371000**2/4/np.pi,
+               -NU/OO/6371000**2/4/np.pi,
+               -XSI/OO/6371000**2/4/np.pi,
+               1/1000.*GM*1e18/OO/6371000**2/4/np.pi,
+               benchmarkE2.esl.array,
+               GM,
+               IM - GM]).T
+    
+    np.savetxt('{}_fig07_SBK.dat'.format(case), ar, header=header)
+
 def plot_profiles(sim, benchmark, lat=None, lon=None, data=None, diff=False):
     """
     Plot the profiles of a circle of longitude or latitude
@@ -320,6 +370,8 @@ if __name__ == '__main__':
                                   'default 128, maximum 256.'))
     parser.add_argument('--dir', type=str, default='./',
                     help='directory into which to write results, default ./')
+    parser.add_argument('--keep', default=False, action='store_true')
+
 
     args = parser.parse_args()
 
@@ -333,10 +385,6 @@ if __name__ == '__main__':
 
     earth = giapy.earth_tools.earthSphericalLap.SphericalEarth()
     earth.loadLoveNumbers('mod_M3-L70-V01', drctry=giapy.MODPATH+'/data/earth/')
-
-    topoB1 = gen_sstopo('B1') 
-    topoB2 = gen_sstopo('B2')
-    topoB3 = gen_sstopo('B3')
 
     if 'all' in benchlist:
         benchlist = ['A', 'C2', 'D1', 'D2', 'E1', 'E2', 'D3', 'F1']
@@ -366,11 +414,13 @@ if __name__ == '__main__':
                            simA.harmTrans.spectogrd(geoA)[:,0]]).T,
                            header='Colat(deg)\tUplift(m)\tHorizontal(m)\tGeoid(m)')
 
-        del iceL1T1, simA, benchmarkA
+        if not args.keep:
+            del iceL1T1, simA, benchmarkA
 
     if 'C2' in benchlist: 
         iceL2T1 = gen_icehistory('L2', 'T1', tstep=0.02)
-        simC2 = giapy.giasim.GiaSimGlobal(earth, iceL2T1, topo=topoB1)
+        simC2 = giapy.giasim.GiaSimGlobal(earth, iceL2T1, 
+                                            topo=gen_sstopo(NLON, NLAT, 'B1'))
         benchmarkC2 = simC2.performConvolution(out_times=iceL2T1.times,
                         eliter=5, ntrunc=ntrunc, bathtub=True)
 
@@ -379,11 +429,13 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simC2, benchmarkC2, 'C2_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL2T1, simC2, benchmarkC2
+        if not args.keep:
+            del iceL2T1, simC2, benchmarkC2
 
     if 'D1' in benchlist:
         iceL2T1 = gen_icehistory('L2', 'T1', tstep=0.02)
-        simD1 = giapy.giasim.GiaSimGlobal(earth, iceL2T1, topo=topoB1)
+        simD1 = giapy.giasim.GiaSimGlobal(earth, iceL2T1, 
+                                                topo=gen_sstopo(NLON, NLAT, 'B1'))
         benchmarkD1 = simD1.performConvolution(out_times=iceL2T1.times,
                                 eliter=5, ntrunc=ntrunc)
 
@@ -392,11 +444,13 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simD1, benchmarkD1, 'D1_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL2T1, simD1, benchmarkD1
+        if not args.keep:
+            del iceL2T1, simD1, benchmarkD1
 
     if 'D2' in benchlist:
         iceL2T2 = gen_icehistory('L2', 'T2', tstep=0.02)
-        simD2 = giapy.giasim.GiaSimGlobal(earth, iceL2T2, topo=topoB1)
+        simD2 = giapy.giasim.GiaSimGlobal(earth, iceL2T2,
+                                                topo=gen_sstopo(NLON, NLAT, 'B1'))
         benchmarkD2 = simD2.performConvolution(out_times=iceL2T2.times,
                                 eliter=5, ntrunc=ntrunc)
 
@@ -405,11 +459,13 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simD2, benchmarkD2, 'D2_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL2T2, simD2, benchmarkD2
+        if not args.keep:
+            del iceL2T2, simD2, benchmarkD2
 
     if 'E1' in benchlist:
         iceL2T2 = gen_icehistory('L2', 'T2', tstep=0.02)
-        simE1 = giapy.giasim.GiaSimGlobal(earth, iceL2T2, topo=topoB2)
+        simE1 = giapy.giasim.GiaSimGlobal(earth, iceL2T2,
+                                                topo=gen_sstopo(NLON, NLAT, 'B2'))
         benchmarkE1 = simE1.performConvolution(out_times=iceL2T2.times,
                                 eliter=20, ntrunc=ntrunc)
 
@@ -418,11 +474,13 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simE1, benchmarkE1, 'E1_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL2T2, simE1, benchmarkE1
+        if not args.keep:
+            del iceL2T2, simE1, benchmarkE1
 
     if 'E2' in benchlist:
-        iceL3T2 = gen_icehistory('L3', 'T2', tstep=0.02)
-        simE2 = giapy.giasim.GiaSimGlobal(earth, iceL3T2, topo=topoB3)
+        iceL3T2 = gen_icehistory('L3', 'T2', tstep=0.05)
+        simE2 = giapy.giasim.GiaSimGlobal(earth, iceL3T2,
+                                                topo=gen_sstopo(NLON, NLAT, 'B3'))
         benchmarkE2 = simE2.performConvolution(out_times=iceL3T2.times,
                                 eliter=20, ntrunc=ntrunc)
 
@@ -431,11 +489,13 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simE2, benchmarkE2, 'E2_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL3T2, simE2, benchmarkE2
+        if not args.keep:
+            del iceL3T2, simE2, benchmarkE2
 
     if 'D3' in benchlist:
         iceL3T2 = gen_icehistory('L3', 'T2', tstep=0.02)
-        simD3 = giapy.giasim.GiaSimGlobal(earth, iceL3T2, topo=topoB3)
+        simD3 = giapy.giasim.GiaSimGlobal(earth, iceL3T2,
+                                                topo=gen_sstopo(NLON, NLAT, 'B3'))
         benchmarkD3 = simD3.performConvolution(out_times=iceL3T2.times,
                                 eliter=20, ntrunc=ntrunc, bathtub=True)
 
@@ -444,13 +504,14 @@ if __name__ == '__main__':
         for prop, num in zip(figprops, fignums):
             write_result(simD3, benchmarkD3, 'D3_fig{}'.format(num), drctry=drctry, **prop)
 
-        del iceL3T2, simD3, benchmarkD3
+        if not args.keep:
+            del iceL3T2, simD3, benchmarkD3
 
     if 'F1' in benchlist:
         Aearth = (4*np.pi*6371**2)
-        iceL3T2 = gen_icehistory('L3', 'T2', tstep=0.02)
-        topo = topoB3.copy()
-        del topoB1, topoB2
+        iceL3T2 = gen_icehistory('L3', 'T2', tstep=0.05)
+        topoB3 = gen_sstopo(NLON, NLAT, 'B3')
+        topo = topoB3.copy() 
         i = 0
         while True:
             simF1 = giapy.giasim.GiaSimGlobal(earth, iceL3T2, topo=topo)

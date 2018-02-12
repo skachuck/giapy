@@ -98,25 +98,29 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         a tuple of the location of the minimum (x), the steps (xs), the final
         jacobian (j) and the final residuals (r).
     """
-    SAFE = 0.5
-    ALPHA = 0.75
+    SAFE = 0.75
+    ALPHA = 2.
     h=0.1
 
     x = np.atleast_1d(x0)
     r = r0 or f(x, *fargs, **fkwargs)
+    n = len(r)
+    converged = LMConverged(n)
 
     if keep_steps:
         xs = [x]
         rs = [r]
+        fs = [0]
+        js = [0]
 
     l = 100
     I = np.eye(len(x))
     if jac is None:
-        jac = lambda xp: jacfridr(f, xp, np.ones_like(x), ndim=len(r),
+        jac = lambda xp: jacfridr(f, xp, np.ones_like(x), ndim=n,
                                     fargs=fargs, fkwargs=fkwargs)
     j = j0 or jac(x, *jargs, **jkwargs)
 
-    C = 0.5*r.dot(r)
+    C = 0.5*r.dot(r)/n
 
     jevals = 0
     fevals = 0
@@ -129,7 +133,11 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         g = j.T.dot(j) + l*I
         gradC = j.T.dot(r)
 
-        gi = np.linalg.inv(g)
+        try:
+            gi = np.linalg.inv(g)
+        except:
+            print('PROBLEM IN INV')
+            break
 
         dx1 = - gi.dot(gradC)
 
@@ -143,29 +151,31 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
             truncerr = 2*np.sqrt(dx2.dot(dx2))/np.sqrt(dx1.dot(dx1))
             print(truncerr)
 
-        xnew = x + SAFE*(dx1 + 0.5*dx2)
-        rnew = f(xnew, *fargs, **fkwargs)
-        fevals += 1
-        Cnew = 0.5*rnew.dot(rnew)
 
-        if not geo:
-            accept = (Cnew < C)
-        else:
-            accept = (Cnew < C and truncerr < ALPHA)
+        if geo and truncerr > ALPHA:
+            accept = False
+        else: 
+            xnew = x + SAFE*(dx1 + 0.5*dx2)
+            rnew = f(xnew, *fargs, **fkwargs)
+            fevals += 1
+            Cnew = 0.5*rnew.dot(rnew)/n
+            accept = Cnew < C
 
         if accept:
             x = xnew
             r = rnew
-            Cnew = C
+            C = Cnew
             l = l/ldo
 
             if keep_steps:
                 xs.append(x)
                 rs.append(r)
+                fs.append(fevals)
+                js.append(jevals)
             
-            if np.mean(r.dot(r)) < 1e-5:
+            if converged(r):
                 if keep_steps:
-                    return x, i, xs, rs, j, r, fevals, jevals
+                    return x, xs, rs, r, j, i, fevals, jevals, fs, js
                 else:
                     return x
             else: 
@@ -174,9 +184,23 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
         else:
             l = l*lup
-    if keep_steps:
-        return x, i, xs, rs, j, r, fevals, jevals
+    if keep_steps: 
+        return x, xs, rs, r, j, i, fevals, jevals, fs, js
     else:
         return x
 
-
+class LMConverged(object):
+    def __init__(self, n, atol=1e-2, nsteps=6, stepsizetol=1e-4):
+        self.n = n
+        self.atol=atol
+        self.nsteps=nsteps
+        self.stepsizetol = stepsizetol
+        self.Cs = []
+    def __call__(self, r):
+        C = np.mean(r.dot(r))/self.n
+        tests = [C<self.atol]
+        if len(self.Cs)>self.nsteps:
+            self.Cs.pop(0)
+            self.Cs.append(C)
+            tests.append(np.all(np.abs(np.diff(self.Cs))<self.stepsizetol))
+        return np.any(tests)
