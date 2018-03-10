@@ -37,8 +37,11 @@ except ImportError:
     from giapy.numTools.solvde import interior_smatrix_fast, solvde
     numba_load = False
 
+#from giapy.numTools.solvde import interior_smatrix_fast, solvde
+#numba_load = False
 def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=False,
-                             zgen=False, comp=True, args=[], kwargs={}):
+                             zgen=False, comp=True, args=[], kwargs={},
+                             scaled=False):
     """Compute surface elastic load love numbers for harmonic order numbers ns.
 
     Parameters
@@ -93,7 +96,7 @@ def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=Fals
             # ... otherwise create it.
             except:
                 difeqElas = SphericalElasSMat(ns[0], zarray, params, Q=Q,
-                                                    comp=comp)
+                                                    comp=comp, scaled=scaled)
         else:
             # If not first order num, update relaxation object...
             try:
@@ -101,7 +104,7 @@ def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=Fals
             # ... otherwise create it.
             except:
                 difeqElas = SphericalElasSMat(ns[0], zarray, params, Q=Q, 
-                                                    comp=comp)
+                                                    comp=comp, scaled=scaled)
 
         # Perform the relaxation for the order number and store results.
         y0, it = solvde(500, err, slowc, scalvElas, indexv, 3,
@@ -430,11 +433,11 @@ def gen_elasb(n, hV, params, zarray, Q=1):
 
         bi[0] = 0.
         bi[1] = 0.
-        bi[2] = -g[i]*nonad[i]*hvi
+        bi[2] = -g[i]*nonad[i]*hvi*li
         bi[3] = 0.
         bi[4] = zarray[i]*nonad[i]*hvi*li
         if Q == 1:
-            bi[5] = -(n+1.)*nonad[i]*hvi
+            bi[5] = -(n+1.)*nonad[i]*li*li*hvi
         else:
             bi[5] = 0.
 
@@ -443,27 +446,52 @@ def gen_elasb(n, hV, params, zarray, Q=1):
 
 class SphericalElasSMat(object):
     """Class that provides smatrix to Solvde for Elastic solutions."""
-    def __init__(self, n, z, params, Q=1, comp=True, b=None):
+    def __init__(self, n, z, params, Q=1, comp=True, b=None, scaled=False):
         self.n = n
-        self.z = z
+        if not scaled:
+            self.scaled = False
+            self.z = z
+        else:
+            self.scaled = True
+            self.zeta = z
+            self.z = 1 - np.exp(z)/(n+0.5) 
         # Make sure parameters are normalized properly.
         params.normalize('love')
         self.params = params
         self.Q = Q
         self.comp = comp
         self.b = b
+        self.load = 1./self.params.getLithFilter(n=n)
 
         self.mpt = len(self.z)
-        self.updateProps(self.n, self.z, self.b)
+        if not self.scaled:
+            self.updateProps(self.n, self.z, self.b)
+        else:
+            self.updateProps(self.n, self.zeta, self.b)
         
     def updateProps(self, n=None, z=None, b=None):
         self.n = n or self.n
-        self.z = self.z if z is None else z
+        if not self.scaled:
+            self.z = self.z if z is None else z
+        else:
+            self.zeta = self.z if z is None else z
+            self.z = 1 - np.exp(self.zeta)/(self.n+0.5)
         # Only recompute A matrix if n or z are changed.
         if n is not None or z is not None:
-            zmids = 0.5*(self.z[1:]+self.z[:-1])
+            if not self.scaled:
+                zmids = 0.5*(self.z[1:]+self.z[:-1])
+            else:
+                zetamids = 0.5*(self.zeta[1:]+self.zeta[:-1])
+                zmids = 1 - np.exp(zetamids)/(self.n+0.5)
+
             self.A = propMatElas(zmids, self.n, self.params, self.Q, self.comp)
+            if self.scaled:
+                self.A = -(1-zmids)[:,None,None]*self.A
+            self.load = 1./self.params.getLithFilter(n=n)
+
         if b is not None:
+            if self.scaled:
+                b *= -(1-zmids)
             self.b = b
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
@@ -471,8 +499,20 @@ class SphericalElasSMat(object):
 
         l = 2.*self.n+1.
         li = 1./l
+
+        k1i, k1j, k1k = 3, 4, 5
+        k2i, k2j, k2k = 0, 1, 2
+        comp1 = np.equal
+        comp2 = np.greater_equal
+
+        # the log(r) scaling reverses the boundaries
+        #if self.scaled:
+        #    k1, k2 = k2, k1
+        #    k1i, k1j, k1k = 0, 1, 2
+        #    k2i, k2j, k2k = 3, 4, 5
+        #    comp1, comp2 = comp2, comp1
         
-        if k == k1:      # Core-Mantle boundary conditions.
+        if comp1(k, k1):      # Core-Mantle boundary conditions.
                 
             rCore = self.params.rCore
             paramsCore = self.params(rCore)
@@ -482,95 +522,98 @@ class SphericalElasSMat(object):
             difden = (self.params.denCore - paramsCore['den'])
             
             # Radial stress on the core.
-            s[3, 6+indexv[0]] = -0.33*rCore*denCore**2*li
-            s[3, 6+indexv[1]] = 0.
-            s[3, 6+indexv[2]] = 1.
-            s[3, 6+indexv[3]] = 0.
-            s[3, 6+indexv[4]] = -denCore*li
-            s[3, 6+indexv[5]] = 0.
-            s[3, jsf] = (y[2,0] - 0.33*rCore*denCore**2*li*y[0,0] - 
+            s[k1i, 6+indexv[0]] = -0.33*rCore*denCore**2*li
+            s[k1i, 6+indexv[1]] = 0.
+            s[k1i, 6+indexv[2]] = 1.
+            s[k1i, 6+indexv[3]] = 0.
+            s[k1i, 6+indexv[4]] = -denCore*li
+            s[k1i, 6+indexv[5]] = 0.
+            s[k1i, jsf] = (y[2,0] - 0.33*rCore*denCore**2*li*y[0,0] - 
                             denCore*li*y[4,0])
                                             
             # Poloidal stress on the core.
-            s[4, 6+indexv[0]] = 0.          
-            s[4, 6+indexv[1]] = 0.          
-            s[4, 6+indexv[2]] = 0.          
-            s[4, 6+indexv[3]] = 1.          
-            s[4, 6+indexv[4]] = 0.          
-            s[4, 6+indexv[5]] = 0.
-            s[4, jsf] = y[3,0]
+            s[k1j, 6+indexv[0]] = 0.          
+            s[k1j, 6+indexv[1]] = 0.          
+            s[k1j, 6+indexv[2]] = 0.          
+            s[k1j, 6+indexv[3]] = 1.          
+            s[k1j, 6+indexv[4]] = 0.          
+            s[k1j, 6+indexv[5]] = 0.
+            s[k1j, jsf] = y[3,0]
 
             # gravitational potential perturbation on core.
             if Q == 1:
-                s[5, 6+indexv[0]] = -difden*li
-                s[5, 6+indexv[1]] = 0.
-                s[5, 6+indexv[2]] = 0.
-                s[5, 6+indexv[3]] = 0
-                s[5, 6+indexv[4]] = -self.n*li/rCore
-                s[5, 6+indexv[5]] = 1.
-                s[5, jsf] = (y[5,0] - difden*li*y[0,0]
+                s[k1k, 6+indexv[0]] = -difden*li
+                s[k1k, 6+indexv[1]] = 0.
+                s[k1k, 6+indexv[2]] = 0.
+                s[k1k, 6+indexv[3]] = 0
+                s[k1k, 6+indexv[4]] = -self.n*li/rCore
+                s[k1k, 6+indexv[5]] = 1.
+                s[k1k, jsf] = (y[5,0] - difden*li*y[0,0]
                                     - self.n*li/rCore*y[4,0])
             else:
-                s[5, 6+indexv[0]] = -denCore*li
-                s[5, 6+indexv[1]] = 0.
-                s[5, 6+indexv[2]] = 0.
-                s[5, 6+indexv[3]] = 0
-                s[5, 6+indexv[4]] = -1/rCore
-                s[5, 6+indexv[5]] = 1.
-                s[5, jsf] = (y[5,0] - denCore*li*y[0,0] - 1/rCore*y[4,0])
+                s[k1k, 6+indexv[0]] = -denCore*li
+                s[k1k, 6+indexv[1]] = 0.
+                s[k1k, 6+indexv[2]] = 0.
+                s[k1k, 6+indexv[3]] = 0
+                s[k1k, 6+indexv[4]] = -1/rCore
+                s[k1k, 6+indexv[5]] = 1.
+                s[k1k, jsf] = (y[5,0] - denCore*li*y[0,0] - 1/rCore*y[4,0])
             if self.b is not None: 
-                s[[3,4,5],jsf] -= self.b[0, [2,3,5]]
+                s[[k1i,k1j,k1k],jsf] -= self.b[0, [2,3,5]]
  
                 
 
-        elif k >= k2:     # Surface boundary conditions.   
+        elif comp2(k,k2):     # Surface boundary conditions.    
             paramsSurf = self.params(1.) 
             rhoSurf = paramsSurf['den']
 
             # Radial stress on surface.
-            s[0, 6+indexv[0]] = 0.
-            s[0, 6+indexv[1]] = 0.
-            s[0, 6+indexv[2]] = 1.
-            s[0, 6+indexv[3]] = 0.
-            s[0, 6+indexv[4]] = 0.
-            s[0, 6+indexv[5]] = 0.
-            s[0, jsf] = (y[2, self.mpt-1] + 1.)
+            s[k2i, 6+indexv[0]] = 0.
+            s[k2i, 6+indexv[1]] = 0.
+            s[k2i, 6+indexv[2]] = 1.
+            s[k2i, 6+indexv[3]] = 0.
+            s[k2i, 6+indexv[4]] = 0.
+            s[k2i, 6+indexv[5]] = 0.
+            s[k2i, jsf] = (y[2, self.mpt-1] + self.load)
 
             # Poloidal stress on surface.
-            s[1, 6+indexv[0]] = 0.
-            s[1, 6+indexv[1]] = 0.
-            s[1, 6+indexv[2]] = 0.    
-            s[1, 6+indexv[3]] = 1.    
-            s[1, 6+indexv[4]] = 0.    
-            s[1, 6+indexv[5]] = 0.    
-            s[1, jsf] = y[3, self.mpt-1]
+            s[k2j, 6+indexv[0]] = 0.
+            s[k2j, 6+indexv[1]] = 0.
+            s[k2j, 6+indexv[2]] = 0.    
+            s[k2j, 6+indexv[3]] = 1.    
+            s[k2j, 6+indexv[4]] = 0.    
+            s[k2j, 6+indexv[5]] = 0.    
+            s[k2j, jsf] = y[3, self.mpt-1]
                                       
             # gravitational acceleration perturbation on surface.
             if Q == 1:
-                s[2, 6+indexv[0]] = rhoSurf*li
+                s[k2k, 6+indexv[0]] = rhoSurf*li
             else:
-                s[2, 6+indexv[0]] = 0.
-            s[2, 6+indexv[1]] = 0.    
-            s[2, 6+indexv[2]] = 0.    
-            s[2, 6+indexv[3]] = 0.
+                s[k2k, 6+indexv[0]] = 0.
+            s[k2k, 6+indexv[1]] = 0.    
+            s[k2k, 6+indexv[2]] = 0.    
+            s[k2k, 6+indexv[3]] = 0.
             if Q == 1:
-                s[2, 6+indexv[4]] = (self.n+1.)*li
+                s[k2k, 6+indexv[4]] = (self.n+1.)*li
             else:
-                s[2, 6+indexv[4]] = 0.
-            s[2, 6+indexv[5]] = 1.
+                s[k2k, 6+indexv[4]] = 0.
+            s[k2k, 6+indexv[5]] = 1.
             if Q == 1:
-                s[2, jsf] = (y[5, self.mpt-1] + 1 
+                s[k2k, jsf] = (y[5, self.mpt-1] + self.load 
                                 + rhoSurf*li*y[0,self.mpt-1]
                                 + (self.n+1.)*li*y[4,self.mpt-1])
             else:
-                s[2, jsf] = y[5, self.mpt-1] + 1
+                s[k2k, jsf] = y[5, self.mpt-1] + self.load
 
             if self.b is not None:
-                s[[0,1,2],jsf] -= self.b[-1, [2,3,5]]
+                s[[k2i,k2j,k2k],jsf] -= self.b[-1, [2,3,5]]
                 
 
         else:           # Finite differences.
-            zsep = (self.z[k] - self.z[k-1])
+            if not self.scaled:
+                zsep = (self.z[k] - self.z[k-1])
+            else: 
+                zsep = (self.zeta[k] - self.zeta[k-1])
             A = 0.5*zsep*self.A[k-1]
             if self.b is None:
                 b = np.zeros_like(self.z)

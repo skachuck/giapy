@@ -12,7 +12,7 @@ Date: August 1, 2017
     $$Q_2=4\pi G U_L+\frac{\ell+1}{r}\Psi+\frac{\partial \Psi}{\partial r}.$$
 
 """
-
+from __future__ import division
 import numpy as np
 
 from scipy.integrate import ode, odeint
@@ -24,9 +24,30 @@ from giapy.numTools.odeintJit import Odeint, StepperDopr5
 import giapy.numTools.odeintJit
 
 def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
-                            h=1, hmin=0.001, Q=1, it_counts=False,
+                            h=1, hmin=0.001, Q=1, scaled_time=False,
                              zgen=False, comp=True, args=[], kwargs={}):
     """
+    Compute the viscoelastic love numbers associate with params at times ts.
+
+    Parameters
+    ----------
+    ns : order numbers to compute
+    ts : times at which to compute
+    zarrayorgen : depth array or function to generate depth arrays
+    params : <giapy.earth_tools.earthParams.EarthParams>
+        Object for storing and interpolating the earth's material parameters.
+    atol, rtol : tolerances for Odeint (default 1e-4, 1e-4)
+    h, hmin : initial and minimum step sizes for Odeint (default 1, 0.001)
+    Q : code for gravity flux (see note above, default 1)
+    scaled_time : scales the time dimension into log(t)
+    zgen
+    comp : indicates compressibility (default True)
+    args, kwargs : arguments for the zgen function
+
+    Returns
+    -------
+    hLkt : array size (len(ns), 4, len(ts)) of love numbers
+            Vertical Displacement, Horizontal Displacement, Geoid, Viscous 
     """
     
     ns = np.atleast_1d(ns)
@@ -36,12 +57,19 @@ def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
     else:
         zs = zarrayorgen
 
-    vels = SphericalLoveVelocities(params, zs, ns[0], comp=comp)
+    vels = SphericalLoveVelocities(params, zs, ns[0], comp=comp,
+                                        scaled_time=scaled_time)
     hvLv0 = np.zeros(2*len(zs))
 
     hLkt = np.zeros((len(ns), 4, len(ts)))
+
+    tets = ts.copy()
     
     for i, n in enumerate(ns):
+        if scaled_time:
+            tau = params.tau*(n+0.5)/params.getLithFilter(n=n)
+            ts = np.log(tets/tau)
+
         if zgen:
             zs = zarrayorgen(n)
         vels.updateProps(n=n, z=zs, reset_b=True)
@@ -52,6 +80,7 @@ def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
                         h, hmin, xsave=ts, extout=extout)
 
         out = ode.integrate()
+        print ode.h, (ode.nbad+ode.nok), ode.nbad/(ode.nbad+ode.nok)
 
         hLkt[i,0,:] = out.extout.outArray[:,0,0]+out.extout.outArray[:,0,1]
         hLkt[i,1,:] = out.extout.outArray[:,0,2]+out.extout.outArray[:,0,3]
@@ -62,7 +91,26 @@ def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
 
 class SphericalLoveVelocities(object):
 
-    def __init__(self, params, zs, n, yEVt0=None, Q=1, comp=True):
+    def __init__(self, params, zs, n, yEVt0=None, Q=1, comp=True, 
+                    scaled_time=False):
+        """
+        Compute viscoelastic velocities at the surface of modeled earth.
+
+        Parameters
+        ----------
+        params
+        zs
+        n
+        yEVt0
+        Q
+        comp
+        scaled_time
+
+        Methods
+        -------
+        updateProps(n, z, reset_b)
+        solout()
+        """
         
         # t==0 Initial guesses
         if yEVt0 is None:
@@ -87,15 +135,14 @@ class SphericalLoveVelocities(object):
         self.indexvE = np.array([3,4,0,1,5,2])
         self.indexvV = np.array([2,3,0,1])
 
+        self.scaled_time = scaled_time
+        if scaled_time:
+            self.tau = params.tau*(n+0.5)
+        else: 
+            self.tau = params.getLithFilter(n=n)
+
     def __call__(self, t, hvLv, dydt, itmax=500, tol=1e-14, slowc=1):
     
-        # Extract initial guesses, if provided, otherwise generate ones.
-        #if ys is not None:
-        #    yE, yV = ys
-        #else:
-        #    yE = np.ones((6, len(zs)))
-        #    yV = np.ones((4, len(zs)))
-
         hv = hvLv[:self.nz]
         
         # Compute the elastic profiles 
@@ -114,15 +161,29 @@ class SphericalLoveVelocities(object):
                                 2, self.yV, self.difeqVisc)
 
         # Extract the velocities
-        dydt[:] = self.yV[[0,1],:].flatten()*self.params.getLithFilter(n=self.n)
-
-        #return self.yV[[0,1],:].flatten()
-    
-        #return hLdv
+        dydt[:] = np.r_[self.yV[0]*self.tau,
+                        self.yV[1]*self.tau/self.params.getLithFilter(n=self.n)]
+        if self.scaled_time:
+            dydt[:] *= np.exp(t) 
 
     def updateProps(self, n=None, z=None, reset_b=False):
+        """Update the stored solution parameters.
+
+        The default is to keep everything the same.
+
+        Parameters
+        ----------
+        n : Update ordern number
+        z : Update radial mesh
+        reset_b : if True, set inhomogeneous vectors to zero vector
+        """
         self.n = n or self.n
         self.z = self.z if z is None else z
+
+        if self.scaled_time:
+            self.tau = self.params.tau*(self.n+0.5)
+        else:
+            self.tau = self.params.getLithFilter(n=self.n) 
         
         if reset_b:
             self.difeqElas.updateProps(n=n, z=z, b=0*z)
@@ -132,7 +193,15 @@ class SphericalLoveVelocities(object):
             self.difeqVisc.updateProps(n=n, z=z) 
 
     def solout(self):
-        """Returns 
+        """Output ancillary solution variables (not direct time-deriv ones).
+
+        Note: Used by SphericalEarthOutput at each computed time step.
+
+        Returns
+        -------
+        he, Le, psi, q, hdv:
+                                 [1]   [2]    [3]  [4]   [5]
+            Currently stored el. vert, horiz, pot, grav, visc vels
         """
         he, Le, psi, q = self.yE[[0, 1, 4, 5]]
         hdv = self.yV[0]

@@ -65,13 +65,13 @@ def propMatVisc(zarray, n, params, Q=1):
         a[i,1,2] = 0.
         a[i,1,3] = 2*zarray[i]*(2*n+1)/eta[i]
         
-        # r dT_L/dr 
+        # r df_L/dr 
         a[i,2,0] = 6*eta[i]*z_i[i]/(2*n+1) 
         a[i,2,1] = -3*eta[i]*z_i[i]*(n+1)/(2*n+1)
         a[i,2,2] = 0.
         a[i,2,3] = n+1
         
-        # r dT_M/dr
+        # r dF_M/dr
         a[i,3,0] = -3*eta[i]*z_i[i]*n/(2*n+1)
         a[i,3,1] = eta[i]*z_i[i]*(2*n*(n+1) - 1)/(2*n+1)
         a[i,3,2] = -n
@@ -102,6 +102,7 @@ def gen_viscb(n, yE, hV, params, zarray, Q=1):
     denC = params.denCore
     rhoS = parvals['den'][-1]
 
+    li = 1./(2.*n+1.)
 
     z_i = 1./zarray
 
@@ -112,13 +113,13 @@ def gen_viscb(n, yE, hV, params, zarray, Q=1):
     b[0,1] = 0.
     b[0,2] = ((denC-rhoC)*gC*hV[0] + denC*yE[4,0] +
                 0.33*params.rCore*denC**2*yE[0,0]
-                -rhoC*(denC-rhoC)*hV[0]/(2.*n+1.))/(2.*n+1.)
+                -rhoC*(denC-rhoC)*hV[0]*li)*li
     b[0,3] = 0.
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
     b[-1,1] = 0.
-    b[-1,2] = -rhoS/(2.*n+1.)*hV[-1]
+    b[-1,2] = -rhoS*li*hV[-1]
     b[-1,3] = 0.
 
     # Interior points
@@ -133,16 +134,16 @@ def gen_viscb(n, yE, hV, params, zarray, Q=1):
         bi[1] = 0.
         if Q == 1:
             bi[2] = (rho[i]*(qi +
-                    (rho[i] - 4*g[i]*z_i[i])/(2*n+1)*hi
-                    + g[i]*z_i[i]*(n+1.)/(2.*n+1.)*Li)
-                    - g[i]*nonad[i]*hvi)
+                    (rho[i] - 4*g[i]*z_i[i])*li*hi
+                    + g[i]*z_i[i]*(n+1.)*li*Li)
+                    - g[i]*nonad[i]*hvi*li)
         else:
             bi[2] = (rho[i]*(qi +
-                    - 4*g[i]*z_i[i]/(2.*n+1.)*hi
-                    + g[i]*z_i[i]*(n+1.)/(2.*n+1.)*Li
-                    + z_i[i]*(n+1.)/(2.*n+1.)*ki)
-                    - g[i]*nonad[i]*hvi)
-        bi[3] = rho[i]*(g[i]*hi + ki)*n/(2.*n+1.)*z_i[i]
+                    - 4*g[i]*z_i[i]*li*hi
+                    + g[i]*z_i[i]*(n+1.)*li*Li
+                    + z_i[i]*(n+1.)*li*ki)
+                    - g[i]*nonad[i]*hvi*li)
+        bi[3] = rho[i]*(g[i]*hi + ki)*n*li*z_i[i]
 
     return b
 
@@ -219,3 +220,11 @@ class SphericalViscSMat(object):
             interior_smatrix_fast(4, k, jsf, A, b, y, indexv, s) 
                       
         return s
+    
+    def checkbc(self, y, indexv):
+        """Check the error at the boundary conditions for a solution array y.
+        """
+        s = np.zeros((4, 9))
+        bot = self.smatrix(0,0,1,8,0,0,indexv, s, y)[[2,3],8]
+        top = self.smatrix(1,0,1,8,0,0,indexv, s, y)[[0,1],8]
+        return bot, top

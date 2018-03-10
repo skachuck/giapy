@@ -73,9 +73,9 @@ def lm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
     else:
         return x
 
-def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
-                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False,
-                maxstep=100, maxfeval=200, maxjeval=50):
+def geolm_minimize(f, x0, jac=None, lup=5., ldo=10., fargs=(), fkwargs={}, jargs=(),
+                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False, l0=100,
+                maxstep=100, maxfeval=200, maxjeval=50, verbose=True):
     """
     Geodesic-accelerated Levenberg-Marquardt for nonlinear least-squares.
 
@@ -107,13 +107,31 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
     n = len(r)
     converged = LMConverged(n)
 
+    verbose_str = '''
+Iter {} nfevals {} njevals {} accept {}
+---------------------------------------------
+    C    = {}
+    l    = {}
+    x    = {}
+    dx   = {}
+    |dx| = {}'''
+
+    if geo: 
+        verbose_str+='''
+    av   = {}'''
+    
+    jevals = 1
+    fevals = 1
+    nbad = 0
+
     if keep_steps:
         xs = [x]
         rs = [r]
-        fs = [0]
-        js = [0]
+        fs = [1]
+        js = [1]
+        nbads = [0]
 
-    l = 100
+    l = l0
     I = np.eye(len(x))
     if jac is None:
         jac = lambda xp: jacfridr(f, xp, np.ones_like(x), ndim=n,
@@ -122,8 +140,6 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
     C = 0.5*r.dot(r)/n
 
-    jevals = 0
-    fevals = 0
 
     i = 0
 
@@ -136,7 +152,7 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         try:
             gi = np.linalg.inv(g)
         except:
-            print('PROBLEM IN INV')
+            print('PROBLEM IN INV, l={}'.format(l))
             break
 
         dx1 = - gi.dot(gradC)
@@ -148,18 +164,29 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
             fevals += 1
             dx2 = - 0.5*gi.dot(j.T.dot(k))
 
-            truncerr = 2*np.sqrt(dx2.dot(dx2))/np.sqrt(dx1.dot(dx1))
-            print(truncerr)
+            truncerr = 2*np.sqrt(dx2.dot(dx2))/np.sqrt(dx1.dot(dx1)) 
 
 
         if geo and truncerr > ALPHA:
             accept = False
-        else: 
-            xnew = x + SAFE*(dx1 + 0.5*dx2)
+        else:
+            dx = SAFE*(dx1 + 0.5*dx2)
+            xnew = x + dx 
             rnew = f(xnew, *fargs, **fkwargs)
             fevals += 1
             Cnew = 0.5*rnew.dot(rnew)/n
             accept = Cnew < C
+
+            if verbose:
+                if not geo:
+                    strarg = (i, fevals, jevals, accept, Cnew, l, xnew, dx,
+                                np.linalg.norm(dx))
+                else:
+                    strarg = (i, fevals, jevals, accept, Cnew, l, xnew, dx, 
+                                np.linalg.norm(dx), truncerr)
+
+                print(verbose_str.format(*strarg))
+
 
         if accept:
             x = xnew
@@ -172,10 +199,11 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
                 rs.append(r)
                 fs.append(fevals)
                 js.append(jevals)
+                nbads.append(nbad)
             
-            if converged(r):
+            if converged(r, dx):
                 if keep_steps:
-                    return x, xs, rs, r, j, i, fevals, jevals, fs, js
+                    return x, xs, rs, r, j, i, fevals, jevals, fs, js, nbads
                 else:
                     return x
             else: 
@@ -184,23 +212,33 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
         else:
             l = l*lup
+            nbad += 1
     if keep_steps: 
-        return x, xs, rs, r, j, i, fevals, jevals, fs, js
+        return x, xs, rs, r, j, i, fevals, jevals, fs, js, nbads
     else:
         return x
 
 class LMConverged(object):
-    def __init__(self, n, atol=1e-2, nsteps=6, stepsizetol=1e-4):
+    def __init__(self, n, atol=1e-2, nsteps=5, dxrtol=1e-4, dxatol=1e-6):
         self.n = n
         self.atol=atol
         self.nsteps=nsteps
-        self.stepsizetol = stepsizetol
+        self.dxatol = dxatol
+        self.dxrtol = dxrtol
         self.Cs = []
-    def __call__(self, r):
-        C = np.mean(r.dot(r))/self.n
+        self.dxs = []
+    def __call__(self, r, dx):
+        C = 0.5*r.dot(r)/self.n
         tests = [C<self.atol]
         if len(self.Cs)>self.nsteps:
             self.Cs.pop(0)
             self.Cs.append(C)
-            tests.append(np.all(np.abs(np.diff(self.Cs))<self.stepsizetol))
+            tests.append(np.all(np.abs(np.diff(self.Cs))<self.dxrtol))
+            self.dxs.pop(0)
+            self.dxs.append(dx)
+            tests.append(np.all(self.dxs<self.dxrtol))
+        else:
+            self.Cs.append(C)
+            self.dxs.append(np.linalg.norm(dx))
+        tests.append(np.all(np.abs(dx)<self.dxatol))
         return np.any(tests)

@@ -63,10 +63,11 @@ class Odeint(object):
         self.derivs = derivs
 	self.h = float(np.sign(x2-x1)*h)
 
-        self.stepper = stepper(self.y, self.dydx, self.x, atol, rtol, self.dense, **kwargs)
+        self.stepper = stepper(self.y, self.dydx, self.x, atol, 
+                                    rtol, self.dense, **kwargs)
 
 
-    def integrate(self):
+    def integrate(self, verbose=False):
 	"""Do the actual integration"""
         out = self.out
         s = self.stepper
@@ -79,7 +80,7 @@ class Odeint(object):
 
         for nstp in range(self.MAXSTP):
             if (self.x+self.h*1.0001-self.x2)*(self.x2-self.x1) > 0.0:
-                self.h = self.x2-self.x         # If stepsize can overshoot, decrease.
+                self.h = self.x2-self.x  # If stepsize can overshoot, decrease.
             self.x, self.y = s.step(self.h, self.derivs)         # Take a step.
             
             if (s.hdid == self.h):
@@ -92,7 +93,7 @@ class Odeint(object):
             else:
                 out.save(self.x,self.y)
 
-            if (self.x-self.x2)*(self.x2-self.x1) >= 0.0:            # Are we done?
+            if (self.x-self.x2)*(self.x2-self.x1) >= 0.0:       # Are we done?
                 for i,yi in enumerate(self.y):     # Update ystart.
                     self.ystart[i]=yi
                 if abs(out.xsave[-1]-self.x2)<100.0*abs(self.x2)*self.EPS:
@@ -101,6 +102,10 @@ class Odeint(object):
 
             if abs(s.hnext) <= self.hmin:
                 raise ValueError("Step size too small in Odeint")
+
+            if verbose: 
+                print('{}:\t{}\t{}\t{}\t{}'.format(nstp, self.x, s.hdid,
+                                                s.hnext, s.errold))
             self.h = s.hnext
 
         raise ValueError("Too many steps in routine Odeint")
@@ -310,7 +315,7 @@ class StepperDopr5(StepperBase):
 
         # Dopr5 Stepsize Controller
 	self.beta = kwargs.get('beta', 0.0) 
-	self.alpha = 0.2 - self.beta*0.75
+	self.alpha = kwargs.get('alpha', 0.2 - self.beta*0.75)
 	self.safe = kwargs.get('safe', 0.9)
 	self.minscale = kwargs.get('minscale', 0.2)
 	self.maxscale = kwargs.get('maxscale', 10.)
