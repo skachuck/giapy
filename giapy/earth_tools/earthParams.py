@@ -43,8 +43,8 @@ class EarthParams(object):
         number computation.
     """
     def __init__(self, model='prem', visArray=None, D=0, bulk=True,
-                    normmode='larry'):        
-        self.G = 4*np.pi*6.674e-11               # m^3/kg.s^2
+                    normmode='larry', G=6.674e-11):        
+        self.G = 4*np.pi*G                      # m^3/kg.s^2
         
         self.normmode = 'larry'
         self.norms = {'r'  :     6.371e+8 ,     # cm
@@ -377,3 +377,12 @@ def locateDiscontinuities(z):
     i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0) 
     return i
 
+def layered_gravity(rs, ds, G=6.674e-11):
+    gs = np.zeros_like(rs)
+    G43p = 4*np.pi*G/3.
+    gs[0] = G43p*rs[0]*ds[0]
+    for i, rd in enumerate(zip(rs[1:], ds[1:]), start=1):
+        r, d = rd
+        gs[i] = (gs[i-1]*rs[i-1]**2 + G43p*d*(r**3-rs[i-1]**3))/r**2
+
+    return gs
