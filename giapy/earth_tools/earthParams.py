@@ -55,7 +55,7 @@ class EarthParams(object):
         try:
             locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
         except:
-            raise
+            locprem = np.loadtxt(model)
 
         self.norms = {'r'  : locprem[-1,0]*1e3, # m
                       'eta': 1e21             , # Pa s
@@ -134,6 +134,17 @@ class EarthParams(object):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._interpParams = interp1d(self.z, self._paramArray)
+
+    @property
+    def tau(self):
+        """Viscous decay constant in ka without wavenumber factor or
+        lithosphere factor"""
+        re = self.norms['r']
+        paramSurf = self.getParams(1.)
+        g0 = self.norms['g']
+        rhobar = g0/self.G/re
+        taunon = 2*self.norms['eta']/(rhobar*g0*re) / np.pi/1e10
+        return taunon
 
     def normalize(self, normmode='love'):
         """Normalize or dimensionalize the parameters.
@@ -244,7 +255,13 @@ class EarthParams(object):
             nonad[0] = nonad[0]*self.norms['r']
         self._alterColumn(5, nonad)
 
-    def addLithosphere(self, D=None, H=None):
+    def fullNonadiabatic(self, fac=1):
+        """Make the entire density gradient non-adiabatic.
+        """
+        self._paramArray[5] = fac*self._paramArray[4] 
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def addLithosphere(self, D=None, H=None, mu=None, lam=None):
         """Append a lithosphere with flexural rigidity D (N m) or of thickness
         H (km)
         """
@@ -256,11 +273,21 @@ class EarthParams(object):
             g0 = self.norms['g']
             rhobar = g0/self.G/re
 
-            paramSurf = self(1.)
-            lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
-            mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
-            pois = lam/(2*(lam+mu))
-            young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
+            if mu is None and lam is None:
+                paramSurf = self(1.)
+                lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
+                mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
+                pois = lam/(2*(lam+mu))
+                young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
+            elif mu is not None and lam is None:
+                pois = 0.5
+                young = 3*mu
+            elif mu is not None and lam is not None:
+                pois = lam/(2*(lam+mu))
+                young = mu*(3*lam + 2*mu)/(mu + lam) #Pa
+            else:
+                raise ValueError('Cannot specify lam without mu')
+
             # 1e8 converts km^3 dyne / cm^2 to N m
             # 1e9 converts km^3 to m^3 for D to have units N m
             self.D = young * H**3 / (12*(1-pois**2))*1e9
