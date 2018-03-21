@@ -161,7 +161,7 @@ def exp_pt_density(nz, delta=1., x0=0., x1=1., normed_delta=True):
         xs = x1* np.log(qs/(nz-1)*(np.exp((x1-x0)/delta) - 1) + 1) + x0
     return xs
 
-def propMatElas(zarray, n, params, Q=2, comp=True):
+def propMatElas(zarray, n, params, Q=2, comp=True, scaled=False):
     """Generate the propagator matrix at all points in zarray.
 
     Parameters
@@ -207,12 +207,20 @@ def propMatElas(zarray, n, params, Q=2, comp=True):
 
     a = np.zeros((len(zarray), 6, 6))
 
-    # Fill the matrix. It's a long for loop that can be accelerated with numba.
+    # Determine which matrix filling function to use
     if comp:
-        _matFill(a, n, zarray, lam, mu, rho, grad_rho, 
-                    g, beta_i, gamma, z_i, l, li, Q)
+        if scaled:
+            fillfunc = _matFillscale
+        else:
+            fillfunc = _matFill
     else:
-        _matFillinc(a, n, zarray, lam, mu, rho, grad_rho, 
+        if scaled:
+            fillfunc = _matFillscaleinc
+        else:
+            fillfunc = _matFillinc
+
+    # Fill the matrix. It's a long for loop that can be accelerated with numba.
+    fillfunc(a, n, zarray, lam, mu, rho, grad_rho, 
                     g, beta_i, gamma, z_i, l, li, Q)
     
     if singz:
@@ -343,6 +351,65 @@ def _matFillinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, 
             a[i,5,4] = 0
             a[i,5,5] = n-1.
 
+def _matFillscaleinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
+    """Fill the incompressible propagator matrix a, used internally by propMatElas.""" 
+    for i in range(len(zarray)):
+        
+        # r dh/dr
+        a[i,0,0] = -4*li
+        a[i,0,1] = 2*(n+1)*li
+        
+        # r dL/dr
+        a[i,1,0] = -2*n*li
+        a[i,1,1] = 2*li
+        a[i,1,2] = 0.
+        a[i,1,3] = 2*zarray[i]/mu[i]
+        
+        # r df_L/dr
+        if Q == 1:
+            a[i,2,0] = 2*(12*mu[i]*z_i[i] - 4*rho[i]*g[i] 
+                                + (rho[i]**2)*zarray[i])*li*li
+        else:
+            a[i,2,0] = 2*(12*mu[i]*z_i[i] - 4*rho[i]*g[i])*li*li
+        a[i,2,1] = -2*(6*mu[i]*z_i[i] - rho[i]*g[i])*(n+1)*li*li
+        a[i,2,2] = 0.
+        a[i,2,3] = 2*(n+1.)*li
+        if Q == 2:
+            a[i,2,4] = -2*rho[i]*(n+1)*li*li
+        a[i,2,5] = 2*zarray[i]*rho[i]*li
+        
+        # r dF_M/dr
+        a[i,3,0] = 2*(rho[i]*g[i]-6*mu[i]*z_i[i])*n*li*li
+        a[i,3,1] = 4*mu[i]*z_i[i]*(2*n*(n+1) - 1)*li*li
+        a[i,3,2] = -2*n*li
+        a[i,3,3] = -6*li
+        a[i,3,4] = 2*rho[i]*n*li*li
+        
+        # r dk_d/dr
+        if Q == 2:
+            a[i,4,0] = -2*rho[i]*zarray[i]*li
+        a[i,4,1] = 0.
+        a[i,4,2] = 0.
+        a[i,4,3] = 0.
+        if Q == 2:
+            a[i,4,4] = -2*(n+1)*li
+        a[i,4,5] = 2*zarray[i]
+        
+        # r dq/dr
+        if Q == 1:
+            a[i,5,0] = -2*(grad_rho[i]*zarray[i])*li*li
+            a[i,5,1] = 0.
+            a[i,5,2] = 0.
+            a[i,5,3] = 0.
+            a[i,5,4] = 2*z_i[i]*n*(n+1.)*li*li
+            a[i,5,5] = -2
+        else:
+            a[i,5,0] = -2*rho[i]*(n+1)*li*li
+            a[i,5,1] = 2*rho[i]*(n+1)*li*li
+            a[i,5,2] = 0
+            a[i,5,3] = 0.
+            a[i,5,4] = 0
+            a[i,5,5] = 2*(n-1.)*li
 
 # numba speeds up the filling of the propagator matrix dramatically.
 if numba_load: 
@@ -352,6 +419,10 @@ if numba_load:
     _matFillinc = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
         float64[:], float64[:], float64[:], float64[:], float64[:], float64,
         float64, int64), nopython=True)(_matFillinc)
+    _matFillscaleinc = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
+        float64[:], float64[:], float64[:], float64[:], float64[:], float64,
+        float64, int64), nopython=True)(_matFillscaleinc)
+
 
 def gen_elasb(n, hV, params, zarray, Q=1):
     """Generate viscous gravitational source terms for elastic eqs.
@@ -448,51 +519,70 @@ class SphericalElasSMat(object):
     """Class that provides smatrix to Solvde for Elastic solutions."""
     def __init__(self, n, z, params, Q=1, comp=True, b=None, scaled=False):
         self.n = n
-        if not scaled:
-            self.scaled = False
-            self.z = z
-        else:
-            self.scaled = True
-            self.zeta = z
-            self.z = 1 - np.exp(z)/(n+0.5) 
+        self.mpt = len(z)
+        self.z = z
+        self.scaled = scaled
+
         # Make sure parameters are normalized properly.
         params.normalize('love')
         self.params = params
         self.Q = Q
         self.comp = comp
         self.b = b
-        self.load = 1./self.params.getLithFilter(n=n)
-
-        self.mpt = len(self.z)
-        if not self.scaled:
-            self.updateProps(self.n, self.z, self.b)
-        else:
-            self.updateProps(self.n, self.zeta, self.b)
+        self.load = 1./self.params.getLithFilter(n=n) 
+      
+        self.updateProps(self.n, self.z, self.b)
         
     def updateProps(self, n=None, z=None, b=None):
         self.n = n or self.n
         if not self.scaled:
             self.z = self.z if z is None else z
-        else:
-            self.zeta = self.z if z is None else z
-            self.z = 1 - np.exp(self.zeta)/(self.n+0.5)
+
         # Only recompute A matrix if n or z are changed.
         if n is not None or z is not None:
-            if not self.scaled:
-                zmids = 0.5*(self.z[1:]+self.z[:-1])
-            else:
-                zetamids = 0.5*(self.zeta[1:]+self.zeta[:-1])
-                zmids = 1 - np.exp(zetamids)/(self.n+0.5)
-
-            self.A = propMatElas(zmids, self.n, self.params, self.Q, self.comp)
+            self.A = propMatElas(self.zmids, self.n, self.params, self.Q, self.comp,
+                                    self.scaled)
             if self.scaled:
-                self.A = -(1-zmids)[:,None,None]*self.A
+                self.A = 1./self.zetamids[:,None,None]*self.A
             self.load = 1./self.params.getLithFilter(n=n)
 
         if b is not None:
             if self.scaled:
-                b *= -(1-zmids)
+                b *= 1./self.zetamids/(self.n+0.5)
             self.b = b
+
+    @property
+    def zeta(self):
+        return np.arange(self.mpt)/(self.mpt-1)*(1-self.zeta_c)+self.zeta_c
+
+    @property
+    def zetamids(self):
+        """Evenly spaced zetas between zeta_c and 1"""
+        return (np.arange(1,self.mpt)-0.5)/(self.mpt-1)*(1-self.zeta_c)+self.zeta_c
+    
+    @property
+    def zeta_c(self):
+        return np.exp((self.n + 0.5)*(self.params.rCore - 1))
+
+    @property
+    def zetasep(self):
+        return (1-self.zeta_c)/(self.mpt-1)
+
+    @property
+    def zmids(self):
+        if self.scaled:
+            return self.zeta2z(self.zetamids)
+        else:
+            return 0.5*(self.z[1:]+self.z[:-1])
+
+    def sep(self, k):
+        if self.scaled:
+            return self.zetasep
+        else:
+            return (self.z[k] - self.z[k-1])
+
+    def zeta2z(self, zeta):
+        return 1 + np.log(zeta)/(self.n+0.5)
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
         Q = self.Q
@@ -504,13 +594,6 @@ class SphericalElasSMat(object):
         k2i, k2j, k2k = 0, 1, 2
         comp1 = np.equal
         comp2 = np.greater_equal
-
-        # the log(r) scaling reverses the boundaries
-        #if self.scaled:
-        #    k1, k2 = k2, k1
-        #    k1i, k1j, k1k = 0, 1, 2
-        #    k2i, k2j, k2k = 3, 4, 5
-        #    comp1, comp2 = comp2, comp1
         
         if comp1(k, k1):      # Core-Mantle boundary conditions.
                 
@@ -610,15 +693,11 @@ class SphericalElasSMat(object):
                 
 
         else:           # Finite differences.
-            if not self.scaled:
-                zsep = (self.z[k] - self.z[k-1])
-            else: 
-                zsep = (self.zeta[k] - self.zeta[k-1])
-            A = 0.5*zsep*self.A[k-1]
+            A = 0.5*self.sep(k)*self.A[k-1]
             if self.b is None:
                 b = np.zeros_like(self.z)
             else:
-                b = zsep*self.b[k+1]
+                b = self.sep(k)*self.b[k+1]
             interior_smatrix_fast(6, k, jsf, A, b, y, indexv, s) 
                       
         return s
