@@ -333,6 +333,7 @@ class StepperDopr5(StepperBase):
 	while True:
 	    self.dy(self.h, derivs)
 	    err = self.error()
+            print(err)
 	    if self.success(err):
 		break
 	    if abs(self.h) <= abs(self.x)*self.EPS:
@@ -449,13 +450,11 @@ class StepperDopr5(StepperBase):
 	return ynew
 
     def error(self):
-	"""Use yerr to compute norself.m of scaled error estimate. A value less than
+	"""Use yerr to compute norm of scaled error estimate. A value less than
 	one means the step was successful."""
-	err = 0
-	for yi, youti, yerri in zip(self.y, self.yout, self.yerr):
-	    sk = self.atol + self.rtol*max(abs(yi), abs(youti))
-	    err += (yerri/sk)**2
-	return np.sqrt(err/len(self.y))
+        scale = (self.atol + 
+                 self.rtol*np.maximum(np.abs(self.y), np.abs(self.yout)))
+	return np.sqrt(np.mean((self.yerr/scale)**2))
 
     def success(self, err):
 	"""Returns True if err<=1, False otherwise. If step was successful,
