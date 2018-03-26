@@ -485,7 +485,7 @@ def gen_elasb(n, hV, params, zarray, Q=1):
     if Q == 1:
         b[0,5] = (denC-rhoC)*hV[0]*li - n/params.rCore*(denC-rhoC)*hV[0]*li**2
     else:
-        b[0,5] = denC*hv[0]*li - 1./params.rCore*(denC-rhoC)*hv[0]*li**2
+        b[0,5] = denC*hV[0]*li - 1./params.rCore*(denC-rhoC)*hV[0]*li**2
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
