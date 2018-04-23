@@ -115,6 +115,9 @@ if __name__ == '__main__':
                             dest='tfiles')
     parser.add_argument('--ncyc', default=1, type=int)
     parser.add_argument('--topoit', default=1, type=int)
+    parser.add_argument('--bathtub', default=False, action='stor_const',
+                        const=True, help='''Use to ignore marine-based ice and
+                                            coast slopes.'''
 
     comargs = parser.parse_args()
 
@@ -125,6 +128,7 @@ if __name__ == '__main__':
     tfileflag = comargs.tfiles
     ncyc = comargs.ncyc
     topoit = comargs.topoit
+    bathtub=comargs.bathtub
 
     configdict = {'ice': 'aa2_base_pers_288',
                   'earth': '75km0p04Asth_4e23Lith',
@@ -149,10 +153,16 @@ if __name__ == '__main__':
 
     sim.ice = create_load_cycles(sim.ice, ncyc)
 
+    # Get rid of noise in Aleksey's model. The noise is scattered around North
+    # America and Antarctica with some points exceeding 2 meters at LGM, so 5 
+    # meters was chosen as the cutoff.
+    sim.ice.stageArray[sim.ice.stageArray < 5] *= 0 
+
     print('Ice load modified\r')
 
     for i in range(topoit):
-        result = sim.performConvolution(out_times=sim.ice.times)
+        result = sim.performConvolution(out_times=sim.ice.times,
+                                        bathtub=bathtub)
         dtopo = result.sstopo.nearest_to(0) - topo0
         sim.topo -= dtopo
     
