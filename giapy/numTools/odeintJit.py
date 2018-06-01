@@ -332,8 +332,7 @@ class StepperDopr5(StepperBase):
 	#self.dy(self.h, derivs)
 	while True:
 	    self.dy(self.h, derivs)
-	    err = self.error()
-            print(err)
+	    err = self.error() 
 	    if self.success(err):
 		break
 	    if abs(self.h) <= abs(self.x)*self.EPS:
