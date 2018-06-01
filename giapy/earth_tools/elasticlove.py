@@ -37,8 +37,6 @@ except ImportError:
     from giapy.numTools.solvde import interior_smatrix_fast, solvde
     numba_load = False
 
-#from giapy.numTools.solvde import interior_smatrix_fast, solvde
-#numba_load = False
 def compute_love_numbers(ns, zarrayorgen, params, err=1e-14, Q=2, it_counts=False,
                              zgen=False, comp=True, args=[], kwargs={},
                              scaled=False):
@@ -291,8 +289,72 @@ def _matFill(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li,
             a[i,5,4] = 0
             a[i,5,5] = n-1.
 
-def _matFillinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
-    """Fill the incompressible propagator matrix a, used internally by propMatElas.""" 
+def _matFillscale(a, n, zarray, lam, mu, rho, grad_rho, g, 
+                                    beta_i, gamma, z_i, l, li, Q):
+    """Fill the propagator matrix a, used internally by propMatElas."""
+    for i in range(len(zarray)):
+        
+        # r dh/dr
+        a[i,0,0] = -4*lam[i]*beta_i[i]*li
+        a[i,0,1] = 2*lam[i]*beta_i[i]*(n+1)*li
+        a[i,0,2] = 2*beta_i[i]*zarray[i]
+        
+        # r dL/dr
+        a[i,1,0] = -2*n*li
+        a[i,1,1] = 2*li
+        a[i,1,2] = 0.
+        a[i,1,3] = 2*zarray[i]/mu[i]
+        
+        # r df_L/dr
+        if Q == 1:
+            a[i,2,0] = 2*(4*gamma[i]*z_i[i] - 4*rho[i]*g[i] 
+                                + (rho[i]**2)*zarray[i])*li*li
+        else:
+            a[i,2,0] = 8*(gamma[i]*z_i[i] - rho[i]*g[i])*li*li
+        a[i,2,1] = -2*(2*gamma[i]*z_i[i] - rho[i]*g[i])*(n+1)*li*li
+        a[i,2,2] = -8*mu[i]*beta_i[i]*li
+        a[i,2,3] = 2*(n+1.)*li
+        if Q == 2:
+            a[i,2,4] = -2*rho[i]*(n+1)*li*li
+        a[i,2,5] = 2*zarray[i]*rho[i]*li
+        
+        # r dF_M/dr
+        a[i,3,0] = 2*(rho[i]*g[i]-2*gamma[i]*z_i[i])*n*li*li
+        a[i,3,1] = 4*mu[i]*z_i[i]*(2*n*(n+1)*(lam[i]+mu[i])*beta_i[i]-1)*li*li
+        a[i,3,2] = -2*lam[i]*beta_i[i]*n*li
+        a[i,3,3] = -6*li
+        a[i,3,4] = 2*rho[i]*n*li*li
+        
+        # r dk_d/dr
+        if Q == 2:
+            a[i,4,0] = -2*rho[i]*zarray[i]*li
+        a[i,4,1] = 0.
+        a[i,4,2] = 0.
+        a[i,4,3] = 0.
+        if Q == 2:
+            a[i,4,4] = -2*(n+1)*li
+        a[i,4,5] = 2*zarray[i]
+        
+        # r dq/dr
+        if Q == 1:
+            a[i,5,0] = -2*(grad_rho[i]*zarray[i] 
+                            + 4*mu[i]*rho[i]*beta_i[i])*li*li
+            a[i,5,1] = 4*mu[i]*rho[i]*beta_i[i]*(n+1)*li*li
+            a[i,5,2] = -2*rho[i]*zarray[i]*beta_i[i]*li
+            a[i,5,3] = 0.
+            a[i,5,4] = 2*z_i[i]*n*(n+1.)*li*li
+            a[i,5,5] = -4*li
+        else:
+            a[i,5,0] = -2*rho[i]*(n+1)*li*li
+            a[i,5,1] = 2*rho[i]*(n+1)*li*li
+            a[i,5,2] = 0
+            a[i,5,3] = 0.
+            a[i,5,4] = 0
+            a[i,5,5] = 2*(n-1.)*li
+
+def _matFillinc(a, n, zarray, lam, mu, rho, grad_rho, g, 
+                                            beta_i, gamma, z_i, l, li, Q):
+    """Fill the incompressible propagator matrix a, used by propMatElas.""" 
     for i in range(len(zarray)):
         
         # r dh/dr
@@ -351,8 +413,9 @@ def _matFillinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, 
             a[i,5,4] = 0
             a[i,5,5] = n-1.
 
-def _matFillscaleinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i, l, li, Q):
-    """Fill the incompressible propagator matrix a, used internally by propMatElas.""" 
+def _matFillscaleinc(a, n, zarray, lam, mu, rho, grad_rho, g, 
+                                                beta_i, gamma, z_i, l, li, Q):
+    """Fill the incompressible propagator matrix a, used by propMatElas.""" 
     for i in range(len(zarray)):
         
         # r dh/dr
@@ -402,7 +465,7 @@ def _matFillscaleinc(a, n, zarray, lam, mu, rho, grad_rho, g, beta_i, gamma, z_i
             a[i,5,2] = 0.
             a[i,5,3] = 0.
             a[i,5,4] = 2*z_i[i]*n*(n+1.)*li*li
-            a[i,5,5] = -2
+            a[i,5,5] = -4*li
         else:
             a[i,5,0] = -2*rho[i]*(n+1)*li*li
             a[i,5,1] = 2*rho[i]*(n+1)*li*li
@@ -416,6 +479,7 @@ if numba_load:
     _matFill = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
         float64[:], float64[:], float64[:], float64[:], float64[:], float64,
         float64, int64), nopython=True)(_matFill)
+
     _matFillinc = jit(void(float64[:,:,:], int64, float64[:], float64[:], float64[:], float64[:],
         float64[:], float64[:], float64[:], float64[:], float64[:], float64,
         float64, int64), nopython=True)(_matFillinc)
@@ -540,15 +604,15 @@ class SphericalElasSMat(object):
 
         # Only recompute A matrix if n or z are changed.
         if n is not None or z is not None:
-            self.A = propMatElas(self.zmids, self.n, self.params, self.Q, self.comp,
-                                    self.scaled)
+            self.A = propMatElas(self.zmids, self.n, self.params, self.Q, 
+                                    self.comp, self.scaled)
             if self.scaled:
                 self.A = 1./self.zetamids[:,None,None]*self.A
             self.load = 1./self.params.getLithFilter(n=n)
 
         if b is not None:
             if self.scaled:
-                b *= 1./self.zetamids/(self.n+0.5)
+                b[1:-1] *= 1./self.zetamids[:,None]/(self.n+0.5)
             self.b = b
 
     @property
