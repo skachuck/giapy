@@ -73,9 +73,15 @@ def lm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
     else:
         return x
 
+<<<<<<< HEAD
 def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(),
                 jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False,
                 maxstep=100, maxfeval=200, maxjeval=50):
+=======
+def geolm_minimize(f, x0, jac=None, lup=5., ldo=10., fargs=(), fkwargs={}, jargs=(),
+                jkwargs={}, keep_steps=False, j0=None, r0=None, geo=False, l0=100,
+                maxstep=100, maxfeval=200, maxjeval=50, verbose=True):
+>>>>>>> manifold
     """
     Geodesic-accelerated Levenberg-Marquardt for nonlinear least-squares.
 
@@ -98,28 +104,61 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         a tuple of the location of the minimum (x), the steps (xs), the final
         jacobian (j) and the final residuals (r).
     """
-    SAFE = 0.5
-    ALPHA = 0.75
+    SAFE = 0.75
+    ALPHA = 2.
     h=0.1
 
     x = np.atleast_1d(x0)
     r = r0 or f(x, *fargs, **fkwargs)
+<<<<<<< HEAD
+=======
+    n = len(r)
+    converged = LMConverged(n)
+
+    verbose_str = '''
+Iter {} nfevals {} njevals {} accept {}
+---------------------------------------------
+    C    = {}
+    l    = {}
+    x    = {}
+    dx   = {}
+    |dx| = {}'''
+
+    if geo: 
+        verbose_str+='''
+    av   = {}'''
+    
+    jevals = 1
+    fevals = 1
+    nbad = 0
+>>>>>>> manifold
 
     if keep_steps:
         xs = [x]
         rs = [r]
+<<<<<<< HEAD
 
     l = 100
+=======
+        fs = [1]
+        js = [1]
+        nbads = [0]
+
+    l = l0
+>>>>>>> manifold
     I = np.eye(len(x))
     if jac is None:
-        jac = lambda xp: jacfridr(f, xp, np.ones_like(x), ndim=len(r),
+        jac = lambda xp: jacfridr(f, xp, np.ones_like(x), ndim=n,
                                     fargs=fargs, fkwargs=fkwargs)
     j = j0 or jac(x, *jargs, **jkwargs)
 
-    C = 0.5*r.dot(r)
+    C = 0.5*r.dot(r)/n
 
+<<<<<<< HEAD
     jevals = 0
     fevals = 0
+=======
+>>>>>>> manifold
 
     i = 0
 
@@ -129,7 +168,11 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
         g = j.T.dot(j) + l*I
         gradC = j.T.dot(r)
 
-        gi = np.linalg.inv(g)
+        try:
+            gi = np.linalg.inv(g)
+        except:
+            print('PROBLEM IN INV, l={}'.format(l))
+            break
 
         dx1 = - gi.dot(gradC)
 
@@ -140,32 +183,53 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
             fevals += 1
             dx2 = - 0.5*gi.dot(j.T.dot(k))
 
-            truncerr = 2*np.sqrt(dx2.dot(dx2))/np.sqrt(dx1.dot(dx1))
-            print(truncerr)
+            truncerr = 2*np.sqrt(dx2.dot(dx2))/np.sqrt(dx1.dot(dx1)) 
 
-        xnew = x + SAFE*(dx1 + 0.5*dx2)
-        rnew = f(xnew, *fargs, **fkwargs)
-        fevals += 1
-        Cnew = 0.5*rnew.dot(rnew)
 
-        if not geo:
-            accept = (Cnew < C)
+        if geo and truncerr > ALPHA:
+            accept = False
         else:
-            accept = (Cnew < C and truncerr < ALPHA)
+            dx = SAFE*(dx1 + 0.5*dx2)
+            xnew = x + dx 
+            rnew = f(xnew, *fargs, **fkwargs)
+            fevals += 1
+            Cnew = 0.5*rnew.dot(rnew)/n
+            accept = Cnew < C
+
+            if verbose:
+                if not geo:
+                    strarg = (i, fevals, jevals, accept, Cnew, l, xnew, dx,
+                                np.linalg.norm(dx))
+                else:
+                    strarg = (i, fevals, jevals, accept, Cnew, l, xnew, dx, 
+                                np.linalg.norm(dx), truncerr)
+
+                print(verbose_str.format(*strarg))
+
 
         if accept:
             x = xnew
             r = rnew
-            Cnew = C
+            C = Cnew
             l = l/ldo
 
             if keep_steps:
                 xs.append(x)
                 rs.append(r)
+<<<<<<< HEAD
+=======
+                fs.append(fevals)
+                js.append(jevals)
+                nbads.append(nbad)
+>>>>>>> manifold
             
-            if np.mean(r.dot(r)) < 1e-5:
+            if converged(r, dx):
                 if keep_steps:
+<<<<<<< HEAD
                     return x, i, xs, rs, j, r, fevals, jevals
+=======
+                    return x, xs, rs, r, j, i, fevals, jevals, fs, js, nbads
+>>>>>>> manifold
                 else:
                     return x
             else: 
@@ -174,9 +238,38 @@ def geolm_minimize(f, x0, jac=None, lup=5, ldo=10, fargs=(), fkwargs={}, jargs=(
 
         else:
             l = l*lup
+<<<<<<< HEAD
     if keep_steps:
         return x, i, xs, rs, j, r, fevals, jevals
+=======
+            nbad += 1
+    if keep_steps: 
+        return x, xs, rs, r, j, i, fevals, jevals, fs, js, nbads
+>>>>>>> manifold
     else:
         return x
 
-
+class LMConverged(object):
+    def __init__(self, n, atol=1e-2, nsteps=5, dxrtol=1e-4, dxatol=1e-6):
+        self.n = n
+        self.atol=atol
+        self.nsteps=nsteps
+        self.dxatol = dxatol
+        self.dxrtol = dxrtol
+        self.Cs = []
+        self.dxs = []
+    def __call__(self, r, dx):
+        C = 0.5*r.dot(r)/self.n
+        tests = [C<self.atol]
+        if len(self.Cs)>self.nsteps:
+            self.Cs.pop(0)
+            self.Cs.append(C)
+            tests.append(np.all(np.abs(np.diff(self.Cs))<self.dxrtol))
+            self.dxs.pop(0)
+            self.dxs.append(dx)
+            tests.append(np.all(self.dxs<self.dxrtol))
+        else:
+            self.Cs.append(C)
+            self.dxs.append(np.linalg.norm(dx))
+        tests.append(np.all(np.abs(dx)<self.dxatol))
+        return np.any(tests)

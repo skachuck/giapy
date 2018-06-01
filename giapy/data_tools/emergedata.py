@@ -228,7 +228,7 @@ def importEmergeDataFromFile(filename=None, ignorebadpts=False):
             comm, desc = desc, comm     # data.
         
         locs.append([lon, lat])
-        timeseries = np.zeros((num, 2))     # initialize the time series array.
+        timeseries = np.zeros((int(num), 2))     # initialize the time series array.
         if recnbr < 400 or recnbr >= 500:
             ncol = 2
             ecol = 1

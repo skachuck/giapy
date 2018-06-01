@@ -43,8 +43,8 @@ class EarthParams(object):
         number computation.
     """
     def __init__(self, model='prem', visArray=None, D=0, bulk=True,
-                    normmode='larry'):        
-        self.G = 4*np.pi*6.674e-11               # m^3/kg.s^2
+                    normmode='larry', G=6.674e-11, disc=True):        
+        self.G = 4*np.pi*G                      # m^3/kg.s^2
         
         self.normmode = 'larry'
         self.norms = {'r'  :     6.371e+8 ,     # cm
@@ -55,7 +55,7 @@ class EarthParams(object):
         try:
             locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
         except:
-            raise
+            locprem = np.loadtxt(model)
 
         self.norms = {'r'  : locprem[-1,0]*1e3, # m
                       'eta': 1e21             , # Pa s
@@ -94,6 +94,7 @@ class EarthParams(object):
 
         self._interpParams = interp1d(z, self._paramArray)
  
+        visLith = False
 
         # Set up viscosity profile with uniform viscosity
         if visArray is None:
@@ -102,6 +103,7 @@ class EarthParams(object):
                 if visArray[-1] == visArray[-2] >= 1e11:
                     visArray[-2:] = visArray[-3]
                     H = (z[-1]-z[-2])*6371
+                    visLith = True
 
                 self._paramArray[6] = visArray
                 self._interpParams = interp1d(z, self._paramArray)
@@ -113,13 +115,15 @@ class EarthParams(object):
             self.addViscosity(visArray)
         
 
-        try:
+        if visLith:
             self.addLithosphere(H=H)       
-        except:
+        else:
             self.addLithosphere(D=D)
 
-        # Flexural rigidity is assumed 0 (no lithosphere)
-        #self.D = D
+        if disc:
+            self._alterColumn = self._alterColumnPresDisc 
+        else:
+            self._alterColumn = self._alterColumnSmooth
 
         self.normalize(normmode)
 
@@ -134,6 +138,17 @@ class EarthParams(object):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._interpParams = interp1d(self.z, self._paramArray)
+
+    @property
+    def tau(self):
+        """Viscous decay constant in ka without wavenumber factor or
+        lithosphere factor"""
+        re = self.norms['r']
+        paramSurf = self.getParams(1.)
+        g0 = self.norms['g']
+        rhobar = g0/self.G/re
+        taunon = 2*self.norms['eta']/(rhobar*g0*re) / np.pi/1e10
+        return taunon
 
     def normalize(self, normmode='love'):
         """Normalize or dimensionalize the parameters.
@@ -244,7 +259,13 @@ class EarthParams(object):
             nonad[0] = nonad[0]*self.norms['r']
         self._alterColumn(5, nonad)
 
-    def addLithosphere(self, D=None, H=None):
+    def fullNonadiabatic(self, fac=1):
+        """Make the entire density gradient non-adiabatic.
+        """
+        self._paramArray[5] = fac*self._paramArray[4] 
+        self._interpParams = interp1d(self.z, self._paramArray)
+
+    def addLithosphere(self, D=None, H=None, mu=None, lam=None):
         """Append a lithosphere with flexural rigidity D (N m) or of thickness
         H (km)
         """
@@ -256,11 +277,21 @@ class EarthParams(object):
             g0 = self.norms['g']
             rhobar = g0/self.G/re
 
-            paramSurf = self(1.)
-            lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
-            mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
-            pois = lam/(2*(lam+mu))
-            young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
+            if mu is None and lam is None:
+                paramSurf = self(1.)
+                lam = paramSurf['bulk']#34.3 * 1e+10 # dyne / cm^2
+                mu =  paramSurf['shear']#26.6 * 1e+10 # dyne / cm^2
+                pois = lam/(2*(lam+mu))
+                young = mu*(3*lam + 2*mu)/(mu + lam)*rhobar*g0*re #Pa
+            elif mu is not None and lam is None:
+                pois = 0.5
+                young = 3*mu
+            elif mu is not None and lam is not None:
+                pois = lam/(2*(lam+mu))
+                young = mu*(3*lam + 2*mu)/(mu + lam) #Pa
+            else:
+                raise ValueError('Cannot specify lam without mu')
+
             # 1e8 converts km^3 dyne / cm^2 to N m
             # 1e9 converts km^3 to m^3 for D to have units N m
             self.D = young * H**3 / (12*(1-pois**2))*1e9
@@ -357,15 +388,15 @@ class EarthParams(object):
         self.z = znew
         self._interpParams = interp1d(self.z, self._paramArray)
 
-    def _alterColumn(self, col, zy):
-        self._alterColumnPresDisc(col, zy)
-        #z = zy[0]
-        #y = zy[1]
-        #interpY = interp1d(z, y) 
-        #self.z = np.union1d(z, self.z)
-        #self._paramArray = self._interpParams(self.z)
-        #self._paramArray[col] = interpY(self.z)
-        #self._interpParams = interp1d(self.z, self._paramArray)
+    def _alterColumnSmooth(self, col, zy):
+        
+        z = zy[0]
+        y = zy[1]
+        interpY = interp1d(z, y) 
+        self.z = np.union1d(z, self.z)
+        self._paramArray = self._interpParams(self.z)
+        self._paramArray[col] = interpY(self.z)
+        self._interpParams = interp1d(self.z, self._paramArray)
 
 def locateDiscontinuities(z):
     """Locate where in an array a value is repeated.
@@ -377,3 +408,12 @@ def locateDiscontinuities(z):
     i, = np.where((uniqueInds[1:]-uniqueInds[:-1]) == 0) 
     return i
 
+def layered_gravity(rs, ds, G=6.674e-11):
+    gs = np.zeros_like(rs)
+    G43p = 4*np.pi*G/3.
+    gs[0] = G43p*rs[0]*ds[0]
+    for i, rd in enumerate(zip(rs[1:], ds[1:]), start=1):
+        r, d = rd
+        gs[i] = (gs[i-1]*rs[i-1]**2 + G43p*d*(r**3-rs[i-1]**3))/r**2
+
+    return gs
