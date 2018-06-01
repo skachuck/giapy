@@ -43,7 +43,7 @@ class EarthParams(object):
         number computation.
     """
     def __init__(self, model='prem', visArray=None, D=0, bulk=True,
-                    normmode='larry', G=6.674e-11):        
+                    normmode='larry', G=6.674e-11, disc=True):        
         self.G = 4*np.pi*G                      # m^3/kg.s^2
         
         self.normmode = 'larry'
@@ -94,6 +94,7 @@ class EarthParams(object):
 
         self._interpParams = interp1d(z, self._paramArray)
  
+        visLith = False
 
         # Set up viscosity profile with uniform viscosity
         if visArray is None:
@@ -102,6 +103,7 @@ class EarthParams(object):
                 if visArray[-1] == visArray[-2] >= 1e11:
                     visArray[-2:] = visArray[-3]
                     H = (z[-1]-z[-2])*6371
+                    visLith = True
 
                 self._paramArray[6] = visArray
                 self._interpParams = interp1d(z, self._paramArray)
@@ -113,13 +115,15 @@ class EarthParams(object):
             self.addViscosity(visArray)
         
 
-        try:
+        if visLith:
             self.addLithosphere(H=H)       
-        except:
+        else:
             self.addLithosphere(D=D)
 
-        # Flexural rigidity is assumed 0 (no lithosphere)
-        #self.D = D
+        if disc:
+            self._alterColumn = self._alterColumnPresDisc 
+        else:
+            self._alterColumn = self._alterColumnSmooth
 
         self.normalize(normmode)
 
@@ -384,15 +388,15 @@ class EarthParams(object):
         self.z = znew
         self._interpParams = interp1d(self.z, self._paramArray)
 
-    def _alterColumn(self, col, zy):
-        self._alterColumnPresDisc(col, zy)
-        #z = zy[0]
-        #y = zy[1]
-        #interpY = interp1d(z, y) 
-        #self.z = np.union1d(z, self.z)
-        #self._paramArray = self._interpParams(self.z)
-        #self._paramArray[col] = interpY(self.z)
-        #self._interpParams = interp1d(self.z, self._paramArray)
+    def _alterColumnSmooth(self, col, zy):
+        
+        z = zy[0]
+        y = zy[1]
+        interpY = interp1d(z, y) 
+        self.z = np.union1d(z, self.z)
+        self._paramArray = self._interpParams(self.z)
+        self._paramArray[col] = interpY(self.z)
+        self._interpParams = interp1d(self.z, self._paramArray)
 
 def locateDiscontinuities(z):
     """Locate where in an array a value is repeated.
