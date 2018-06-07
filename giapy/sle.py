@@ -177,11 +177,13 @@ class GiaSimGlobal(object):
                 dIwh = (np.maximum(0, Ta+DENP*iceb) -
                                     np.maximum(0, Ta+DENP*icea)) 
 
+                #print(dIwh[262,83])
                 # Volume change of grounded ice.
                 dVi = -grid.integrate(dIwh, km=False)
                 # Spread this volume change over the ocean
                 dhwBarI = sealevelChangeByMelt(dVi, Ta+DENP*iceb, grid)
                 dwLoadI = volumeChangeLoad(dhwBarI, Ta+DENP*iceb)
+             
 
                 # Update the solid surface with the sea surface increment dSS
                 ssa, ssb = observerDict['SS'].array[[nta, nta+1]] 
@@ -195,11 +197,11 @@ class GiaSimGlobal(object):
 
                 # Transfer water load of marine ice to water load
                 dwLoadM = (iceb>0)*dSS*(Tb<0)
-
+             
                 # Locate (newly) floating ice minus (newly) grounded ice
                 dCalved = DENP*iceb*(
-                            (Tb+DENP*iceb<0)*(Ta+DENP*iceb>0)-
-                            (Tb+DENP*iceb>0)*(Ta+DENP*iceb<0))
+                            ((Tb+DENP*iceb)<0)*((Ta+DENP*iceb)>0)-
+                            ((Tb+DENP*iceb)>0)*((Ta+DENP*iceb)<0)) 
 
                 # Spread floating ice over the ocean
                 dVc = grid.integrate(dCalved, km=False)
@@ -209,9 +211,11 @@ class GiaSimGlobal(object):
                 Tb -= dhwBarC
 
                 dwLoad = dwLoadI + dwLoadU + dwLoadC - dwLoadM
-                dILoad = dIwh - dCalved + dwLoadM
-                dLoad = dwLoad + dILoad
 
+          
+                dILoad = dIwh - dCalved + dwLoadM
+                dLoad = dwLoad + dILoad + dCalved 
+                
                 eslU += dhwBarU
                 eslI += dhwBarI + dhwBarC
                 esl += dhwBarU + dhwBarI + dhwBarC
