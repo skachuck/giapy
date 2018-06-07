@@ -117,7 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('--topoit', default=1, type=int)
     parser.add_argument('--bathtub', default=False, action='stor_const',
                         const=True, help='''Use to ignore marine-based ice and
-                                            coast slopes.'''
+                                            coast slopes.''')
 
     comargs = parser.parse_args()
 
