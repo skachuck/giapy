@@ -115,7 +115,7 @@ if __name__ == '__main__':
                             dest='tfiles')
     parser.add_argument('--ncyc', default=1, type=int)
     parser.add_argument('--topoit', default=1, type=int)
-    parser.add_argument('--bathtub', default=False, action='stor_const',
+    parser.add_argument('--bathtub', default=False, action='store_const',
                         const=True, help='''Use to ignore marine-based ice and
                                             coast slopes.''')
 
