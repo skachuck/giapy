@@ -41,7 +41,7 @@ def propMatVisc(zarray, n, params, t=1, Q=1, scaled=False, logtime=False):
 
     Returns
     -------
-    a : numpy.ndarray of the propagator matrix. Has shape (len(zarray), 6, 6) 
+    a : numpy.ndarray of the propagator matrix. Has shape (len(zarray),4,4) 
         or (4,4).
     """
     assert params.normmode == 'love', 'Must normalize parameters'

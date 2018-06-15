@@ -5,6 +5,16 @@ Date: August 1, 2017
 
     Compute viscoelastic decay spectra for the earth.
 
+    Methods
+    -------
+    compute_viscel_numbers : Compute the viscoelastic Love numbers.
+
+    Classes
+    -------
+    SphericalLoveVelocities : Class for conveniently computing velocities
+    SphericalEarthOutput : Class for extracting and storing output,
+        an extout object, see giapy.numTools.odeint
+
     Note on gravity perturbation. This code supports two definitions of the
     gravity perturbation, using the keyword Q. Q=1 is simply the radial
     derivative of the perturbation of the gravtiational potential. Q=2
@@ -23,27 +33,24 @@ from giapy.numTools.solvdeJit import solvde
 from giapy.numTools.odeintJit import Odeint, StepperDopr5
 import giapy.numTools.odeintJit
 
-def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
+def compute_viscel_numbers(ns, ts, zarray, params, atol=1e-4, rtol=1e-4,
                            h=1, hmin=0.001, Q=1, scaled=False, logtime=False,
-                             zgen=False, comp=True, verbose=False,
-                             args=[], kwargs={}):
+                             comp=True, verbose=False):
     """
-    Compute the viscoelastic Love numbers associate with params at times ts.
+    Compute the viscoelastic Love numbers associated with params at times ts.
 
     Parameters
     ----------
     ns : order numbers to compute
     ts : times at which to compute
-    zarrayorgen : depth array or function to generate depth arrays
+    zarray : array of depths (only length used if scaled == True)
     params : <giapy.earth_tools.earthParams.EarthParams>
         Object for storing and interpolating the earth's material parameters.
     atol, rtol : tolerances for Odeint (default 1e-4, 1e-4)
     h, hmin : initial and minimum step sizes for Odeint (default 1, 0.001)
     Q : code for gravity flux (see note above, default 1)
     scaled_time : scales the time dimension into log(t)
-    zgen
     comp : indicates compressibility (default True)
-    args, kwargs : arguments for the zgen function
 
     Returns
     -------
@@ -53,32 +60,25 @@ def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
     
     ns = np.atleast_1d(ns)
 
-    if zgen:
-        zs = zarrayorgen(ns[0])
-    else:
-        zs = zarrayorgen
-
-    vels = SphericalLoveVelocities(params, zs, ns[0], comp=comp,
+    vels = SphericalLoveVelocities(params, zarray, ns[0], comp=comp,
                                 scaled=scaled, logtime=logtime)
     # Initialize viscous Love numbers, vertical and horizontal
-    hvLv0 = np.zeros(2*len(zs)) 
+    hvLv0 = np.zeros(2*len(zarray)) 
 
-    hLkt = np.zeros((len(ns), 4, len(ts)))
+    hLkt = np.zeros((len(ns), 3, len(ts)))
 
+    # Save output times for n-dependent lithospheric acceleration.
     tets = ts.copy()
     
     for i, n in enumerate(ns):
-        if zgen:
-            zs = zarrayorgen(n)
-
         tau = params.tau*(n+0.5)/params.getLithFilter(n=n)
         ts = tets/tau
 
         # Initialize the difeq matrices for relaxation method
-        vels.updateProps(n=n, z=zs, reset_b=True)
+        vels.updateProps(n=n, z=zarray, reset_b=True)
         # Initialize the output object for the integration (inds=-1 means we
         # are looking only at the surface response).
-        extout = SphericalEarthOutput(vels, ts, zs=zs, inds=-1)
+        extout = SphericalEarthOutput(vels, ts, zs=zarray, inds=-1)
 
         ode = Odeint(vels, hvLv0.copy(), ts[0], ts[-1], 
                         giapy.numTools.odeintJit.StepperDopr5, atol, rtol,
@@ -91,40 +91,47 @@ def compute_viscel_numbers(ns, ts, zarrayorgen, params, atol=1e-4, rtol=1e-4,
         hLkt[i,0,:] = out.extout.outArray[:,0,0]+out.extout.outArray[:,0,1]
         hLkt[i,1,:] = out.extout.outArray[:,0,2]+out.extout.outArray[:,0,3]
         hLkt[i,2,:] = out.extout.outArray[:,0,4]
-        hLkt[i,3,:] = out.extout.outArray[:,0,1]
+        #hLkt[i,3,:] = out.extout.outArray[:,0,1]
+
+    # Correct n=1 case
+    if ns[0] == 1:
+        hLkt[0,:2,:] += hLkt[0,2,:]
+        hLkt[0,2,:] -= hLkt[0,2,:]
 
     return np.squeeze(hLkt)
 
 class SphericalLoveVelocities(object):
+    """ Compute viscoelastic velocities at the surface of modeled earth.
+
+   Parameters
+   ----------
+   params : <giapy.earth_tools.earthParams.EarthParams> object 
+       for interpolation of earth parameters to relevant points.
+   zs : radial mesh
+   n : order number
+   yEVt0 : Initial guesses for solutions. (default ones)
+   Q
+   comp : True (default) for compressible, False for incompressible.
+   scaled : Use uniform mesh in logarithmic scaling of radial variable if True
+       (default False). Transformation is chi = exp(-(rC - r)*(2n-1)/rE).
+   logtime : use logarithmic time. BROKEN
+
+   Methods
+   -------
+   updateProps(n, z, reset_b)
+   solout()
+   """
+        
 
     def __init__(self, params, zs, n, yEVt0=None, Q=1, comp=True, 
                     scaled=False, logtime=False):
-        """
-        Compute viscoelastic velocities at the surface of modeled earth.
-
-        Parameters
-        ----------
-        params
-        zs
-        n
-        yEVt0
-        Q
-        comp
-        scaled_time
-
-        Methods
-        -------
-        updateProps(n, z, reset_b)
-        solout()
-        """
-        
         # t==0 Initial guesses
         if yEVt0 is None:
             self.yEt0, self.yVt0 = np.ones((6, len(zs))), np.ones((4, len(zs)))
         else:
             self.yEt0, self.yVt0 = yEVt0
 
-        # t>=0 Initial guesses.
+        # Use initial guesses without altering.
         self.yE = self.yEt0.copy()
         self.yV = self.yVt0.copy()
 
@@ -134,11 +141,12 @@ class SphericalLoveVelocities(object):
         self.n = n
         self.Q = Q
 
+        # Initialize smatrices for Solvde relaxation method
         self.difeqElas = SphericalElasSMat(n, zs, params, Q, comp=comp,
                                             scaled=scaled)
         self.difeqVisc = SphericalViscSMat(n, zs, params, Q, scaled=scaled, 
                                             logtime=logtime)
-
+        # Store between-mesh points for easier calls later.
         self.zmids = self.difeqElas.zmids
 
         self.indexvE = np.array([3,4,0,1,5,2])
@@ -183,7 +191,7 @@ class SphericalLoveVelocities(object):
 
         Parameters
         ----------
-        n : Update ordern number
+        n : Update order number
         z : Update radial mesh
         reset_b : if True, set inhomogeneous vectors to zero vector
         """
@@ -275,7 +283,6 @@ class SphericalEarthOutput(object):
         #   he  hv  Le  Lv  k q  hdv f_Le    f_Lv
         self.outArray = np.zeros((len(self.times), len(self.inds), 9))
 
-    #def out(self, t, hv, Lv, f):
     def out(self, t, hvLv):
         ind = np.argwhere(np.abs(self.times - t)<1e-15)
         try:
@@ -287,47 +294,15 @@ class SphericalEarthOutput(object):
         self.f(t, hvLv.copy(), 0*hvLv)
         #self.f(t, hvLv.copy())
         he, Le, k, q, hdv = self.f.solout()
-        #hv, Lv = hvLv[:self.nz], hvLv[self.nz:]
-        hv = hvLv[:self.nz]
+        hv, Lv = hvLv[:self.nz], hvLv[self.nz:] 
 
         self.outArray[ind, :, 0] = he[self.inds]
         self.outArray[ind, :, 1] = hv[self.inds]
         self.outArray[ind, :, 2] = Le[self.inds]
-        #self.outArray[ind, :, 3] = Lv[self.inds]
+        self.outArray[ind, :, 3] = Lv[self.inds]
         self.outArray[ind, :, 4] = k[self.inds]
         self.outArray[ind, :, 5] = q[self.inds]
         self.outArray[ind, :, 6] = hdv[self.inds]
         self.outArray[ind, :, 7] = self.f.yE[2, self.inds]
         self.outArray[ind, :, 8] = self.f.yV[2, self.inds]
 
-
-
-def integrateRelaxationScipy(f, out):
-    """Use Scipy ode for surface response to harmonic load.
-
-    Parameters
-    ----------
-    f : a function for the viscous velocities
-    out : an output object
-        Must have methods out.out and out.converged and data out.times.
-    """
-    params = f.params
-    paramSurf = params(1.)
-    #vislim = 1./(paramSurf['den']*paramSurf['grav']*f.alpha)
-    nz = len(f.zs)
-
-    # Get the t=0 response elastic, and save it
-    #f(0, np.zeros(nz))
-    #out.out(0, np.zeros(nz))
-
-    r = ode(f).set_integrator('vode', method='adams')
-    #r = ode(f).set_integrator('dop853')
-    
-    timeswrite = out.times
-    r.set_initial_value(y=np.zeros(nz), t=timeswrite[0])
-    dts = timeswrite[1:]-timeswrite[:-1]
-
-
-    for dt in dts:
-        r.integrate(r.t+dt)
-        out.out(r.t, r.y[:nz]) 
