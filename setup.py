@@ -20,6 +20,7 @@ setup(name='giapy',
     packages=find_packages(),
     include_package_data=True,
     entry_points={
-        'console_scripts': ['giapy-ellove=giapy.command_line:ellove'],
+        'console_scripts': ['giapy-ellove=giapy.command_line:ellove',
+                            'giapy-velove=giapy.command_line:velove'],
     },
 )
