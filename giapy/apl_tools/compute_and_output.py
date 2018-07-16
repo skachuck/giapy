@@ -118,6 +118,8 @@ if __name__ == '__main__':
     parser.add_argument('--bathtub', default=False, action='store_const',
                         const=True, help='''Use to ignore marine-based ice and
                                             coast slopes.''')
+    parser.add_argument('--ice6g', default=False, action='store_const',
+                        const=True, help='Use ice6g as base ice model.')
 
     comargs = parser.parse_args()
 
@@ -130,9 +132,16 @@ if __name__ == '__main__':
     topoit = comargs.topoit
     bathtub=comargs.bathtub
 
-    configdict = {'ice': 'aa2_base_pers_288',
+    if comargs.ice6g:
+        icename = 'ice6g_pers_square'
+        toponame = 'sstopo_ice6g'
+    else:
+        icename = 'aa2_base_pers_288',
+        toponame = 'sstopo288'
+
+    configdict = {'ice': icename,
                   'earth': '75km0p04Asth_4e23Lith',
-                  'topo': 'sstopo288'}
+                  'topo': toponame}
 
     sim = giapy.giasim.configure_giasim(configdict)
     topo0 = sim.topo.copy()
@@ -149,7 +158,8 @@ if __name__ == '__main__':
     sim.ice.stageOrder = np.array(sim.ice.stageOrder)
     sim.ice.stageOrder[sim.ice.times <= tnochange] = sim.ice.stageOrder[-1]
 
-    sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid)
+    if not comargs.ice6g:
+        sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid)
 
     sim.ice = create_load_cycles(sim.ice, ncyc)
 
