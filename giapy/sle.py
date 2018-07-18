@@ -1,5 +1,5 @@
 """
-giasim.py
+sle.py
 Author: Samuel B. Kachuck
 Date  : 08 01 2015
 
@@ -13,6 +13,7 @@ configure_giasim
 
 Classes
 -------
+GlobalSLE
 GiaSimGlobal
 GiaSimOutput
 
@@ -28,7 +29,7 @@ from giapy.map_tools import GridObject
 
 from giapy import GITVERSION, timestamp, MODPATH, call, os
 
-class GiaSimGlobal(object):
+class GlobalSLE(object):
     def __init__(self, earth, ice, grid=None, topo=None):
         """
         Compute glacial isostatic adjustment on a globe.
@@ -66,9 +67,13 @@ class GiaSimGlobal(object):
         # computational efficiency, but at a memory cost.
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
-    def performConvolution(self, out_times=None, ntrunc=None, topo=None,
+    def performConvolution(*args, **kwargs):
+        """Legacy function, see compute"""
+        self.compute(*args, **kwargs)
+
+    def compute(self, out_times=None, ntrunc=None, topo=None,
                             verbose=False, eliter=5, nrem=1, massconerr=1e-2,
-                            bathtub=False):  
+                            bathtub=False, intwriteout=None):  
         """Convolve an ice load and an earth response model in fft space.
         Calculate the uplift associated with stored earth and ice model.
         
@@ -92,6 +97,16 @@ class GiaSimGlobal(object):
         nrem   : int
             Number of removal stages between the provided ice stages
             (intermediate steps are interpolated linearly). Default 1.
+        massconerr : float
+            acceptable conservation of mass error, estimated by the relative
+            magnitude of the zeroth harmonic to the largest load harmonic.
+            Default 1e-2.
+        bathtub : Boolean. Keep coastlines fixed, if true (Default: False).
+        intwriteout(i, t, observerDict) : callable
+            A function that can write out the currently completed stage of the
+            sea level equation. It must accept the current index, the time
+            associated with that index, and the observerDict, which contains
+            all the computed quantities, see GiaSimOutput.
        
         Results
         -------
@@ -101,12 +116,12 @@ class GiaSimGlobal(object):
             computed on the input grid at out_times.
         """
  
+        #TODO make these optional keyword arguments
         DENICE      = 931.   #934.           # kg/m^3
         DENWAT      = 1000.  #999.           # kg/m^3
         DENSEA      = 1000.  #1029.          # kg/m^3
         GSURF       = 9.815          # m/s^2
-        DENP        = DENICE/DENSEA
-        #PAperM      = DENSEA*GSURF
+        DENP        = DENICE/DENSEA 
         NREM        = nrem           # number of intermediate steps
 
 
@@ -176,8 +191,7 @@ class GiaSimGlobal(object):
                 # Increment the grounded ice load on the old topography
                 dIwh = (np.maximum(0, Ta+DENP*iceb) -
                                     np.maximum(0, Ta+DENP*icea)) 
-
-                #print(dIwh[262,83])
+ 
                 # Volume change of grounded ice.
                 dVi = -grid.integrate(dIwh, km=False)
                 # Spread this volume change over the ocean
@@ -398,17 +412,23 @@ class GiaSimGlobal(object):
             ################# RESPONSE STAGE CALCULATION #################
             # Secondary loop: over output times.
             for inter_time in np.linspace(tb, ta, NREM, endpoint=False)[::-1]:
-                # Perform the time convolution for each output time
+                # Propagate response to current load increment to future times.
                 for t_out in calcTimes[calcTimes < inter_time]:
                     respArray = earth.getResp(inter_time-t_out)
                     for o in observerDict:
                         o.respStageUpdate(t_out, respArray, 
                                             DENSEA*loadChangeSpec) 
 
+            if intwriteout is not None:
+                intwriteout(nta+1, tb, observerDict)
+
         # Don't keep the intermediate uplift stages for water redistribution
         #observerDict.removeObserver('eslUpl', 'eslGeo') 
 
         return observerDict
+
+# Legacy class definition.
+GiaSimGlobal = GlobalSLE
 
 def configure_giasim(configdict=None):
     """
@@ -466,7 +486,7 @@ def configure_giasim(configdict=None):
     if topo is not None:
         topo = np.load(dpath+tname)[2]
     
-    sim = GiaSimGlobal(earth=earth, ice=ice, topo=topo)
+    sim = GlobalSLE(earth=earth, ice=ice, topo=topo)
 
     return sim
 

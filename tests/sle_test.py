@@ -32,7 +32,6 @@ topo_spatial_cases = {'B0': (0, 0, 0, 0),
 
 LATFAC = 2
 NLON, NLAT = 720, 360*LATFAC+1
-#NLON, NLAT = 512, 1025
 
 def sphericalload(Lons, Lats, lonc, latc, h0, alpha=10):
     """
