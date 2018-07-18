@@ -9,7 +9,7 @@ icehistory.py
 
 import numpy as np
 
-import os
+import os, time
 
 from giapy import pickle
 from giapy.map_tools import loadXYZGridData
@@ -515,7 +515,41 @@ class PersistentIceHistory(IceHistory):
                                 self.stageOrder[itup+1:]]
         self.times = np.r_[self.times[:itup+1], t, self.times[itup+1]]
 
+class OfflineIceHistory(object):
+    """
+    An ice history that is read in stage-by-stage, as they are made available.
+    """
+    def __init__(self, times, fnames, shape, drctry='./', readargs=[],
+                    readkwargs={}):
+        self.times = times
+        self.fnames = fnames
+        self.shape = shape
+        self.drctry = drctry
+        self.readargs = readargs
+        self.readkwargs = readkwargs
+        # Need nlat for sle.
+        self.nlat = self.shape[0]
 
+    def pairIter(self):
+        t0, icefname0 = self.times[0], self.fnames[0]
+        ice0 = self.read_icestage(self.drctry+icefname0, *self.readargs,
+                                    **self.readkwargs)
+        for t1, next_ice_load_path in zip(self.times[1:], self.fnames[1:]):
+            while not os.path.exists(self.drctry+next_ice_load_path):
+                time.sleep(1)
+            if os.path.isfile(self.drctry+next_ice_load_path):
+                ice1 = self.read_icestage(self.drctry+next_ice_load_path, *self.readargs,
+                                        **self.readkwargs)
+                yield ice0, t0, ice1, t1
+            else:
+                raise ValueError("%s isn't a file!" % next_ice_load_path)
+
+            # Save current step for next step
+            ice0, t0 = ice1, t1
+
+    def read_icestage(self, fname):
+        """Overwritable method for reading in the ice stage."""
+        return np.loadtxt(fname).reshape(self.shape)
 
 def printMW(ice, grid, areaVerts=None, areaNames=None, oceanarea=3.61e8):
     """Print equivalent meters meltwater for the glaciers.
