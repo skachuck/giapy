@@ -88,8 +88,7 @@ class GlobalSLE(object):
             Topography on which to compute. If None (default), assumes a flat
             topography. Must be the same shapt as ice.
         verbose : boolean
-            Display progress on computation. Depends on progressbar module.
-            Default is False.
+            Display progress on computation. Default is False.
         eliter  : int
             The maximum number of iterations allowed to compute initial elastic
             response to redistributed load at each stage. If 0, instantaneous
@@ -421,6 +420,8 @@ class GlobalSLE(object):
 
             if intwriteout is not None:
                 intwriteout(nta+1, tb, observerDict)
+            if verbose:
+                print('Stage {} completed, time {}\r'.format(nta+1, tb))
 
         # Don't keep the intermediate uplift stages for water redistribution
         #observerDict.removeObserver('eslUpl', 'eslGeo') 
