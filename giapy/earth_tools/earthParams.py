@@ -55,7 +55,7 @@ class EarthParams(object):
         try:
             locprem = np.loadtxt(MODPATH+'/data/earth/'+model+'.txt')
         except:
-            locprem = np.loadtxt(model)
+            locprem = np.loadtxt(model+'.txt')
 
         self.norms = {'r'  : locprem[-1,0]*1e3, # m
                       'eta': 1e21             , # Pa s

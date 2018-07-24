@@ -85,7 +85,8 @@ def compute_viscel_numbers(ns, ts, zarray, params, atol=1e-4, rtol=1e-4,
                         h, hmin, xsave=ts, extout=extout)
 
         out = ode.integrate(verbose=verbose)
-        print n, ode.h, (ode.nbad+ode.nok), ode.nbad/(ode.nbad+ode.nok)
+        if verbose:
+            print(n, ode.h, (ode.nbad+ode.nok), ode.nbad/(ode.nbad+ode.nok))
 
         # Save the Love numbers for this order number.
         hLkt[i,0,:] = out.extout.outArray[:,0,0]+out.extout.outArray[:,0,1]
