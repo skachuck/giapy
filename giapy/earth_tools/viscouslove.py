@@ -220,13 +220,14 @@ def gen_viscb(n, yE, hV, params, zarray, Q=1):
 
     b = np.zeros((len(zarray)+2, 4))
 
-    # Lower Boundary Condition inhomogeneity
-    b[0,0] = 0.
-    b[0,1] = 0.
-    b[0,2] = ((denC-rhoC)*gC*hV[0] + denC*yE[4,0] +
-                0.33*params.rCore*denC**2*yE[0,0]
-                -rhoC*(denC-rhoC)*hV[0]*li)*li
-    b[0,3] = 0.
+    if n != 1: 
+        # Lower Boundary Condition inhomogeneity
+        b[0,0] = 0.
+        b[0,1] = 0.
+        b[0,2] = ((denC-rhoC)*gC*hV[0] + denC*yE[4,0] +
+                    0.33*params.rCore*denC**2*yE[0,0]
+                    -rhoC*(denC-rhoC)*hV[0]*li)*li
+        b[0,3] = 0.
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
@@ -336,12 +337,20 @@ class SphericalViscSMat(object):
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y):
         Q = self.Q
         if k == k1:      # Core-Mantle boundary conditions.            
-            # Radial stress on the core.
-            s[2, 4+indexv[0]] = 0.
-            s[2, 4+indexv[1]] = 0.
-            s[2, 4+indexv[2]] = 1.
-            s[2, 4+indexv[3]] = 0.
-            s[2, jsf] = y[2,0] 
+            if self.n == 1:
+                # Radial displacement of the CMB
+                s[2, 4+indexv[0]] = 1.
+                s[2, 4+indexv[1]] = 0.
+                s[2, 4+indexv[2]] = 0.
+                s[2, 4+indexv[3]] = 0.
+                s[2, jsf] = y[0,0] 
+            else:
+                # Radial stress on the core.
+                s[2, 4+indexv[0]] = 0.
+                s[2, 4+indexv[1]] = 0.
+                s[2, 4+indexv[2]] = 1.
+                s[2, 4+indexv[3]] = 0.
+                s[2, jsf] = y[2,0] 
                                             
             # Poloidal stress on the core.
             s[3, 4+indexv[0]] = 0.

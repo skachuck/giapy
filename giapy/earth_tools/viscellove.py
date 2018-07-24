@@ -150,8 +150,12 @@ class SphericalLoveVelocities(object):
         # Store between-mesh points for easier calls later.
         self.zmids = self.difeqElas.zmids
 
-        self.indexvE = np.array([3,4,0,1,5,2])
-        self.indexvV = np.array([2,3,0,1])
+        if n == 1:
+            self.indexvE = np.array([0,4,3,1,5,2]) 
+            self.indexvV = np.array([0,3,2,1])
+        else:
+            self.indexvE = np.array([3,4,0,1,5,2])
+            self.indexvV = np.array([2,3,0,1])
 
         self.logtime = logtime
         if logtime:
@@ -196,7 +200,14 @@ class SphericalLoveVelocities(object):
         z : Update radial mesh
         reset_b : if True, set inhomogeneous vectors to zero vector
         """
-        self.n = n or self.n
+        self.n = n or self.n 
+        if self.n == 1:
+            self.indexvE = np.array([0,4,3,1,5,2]) 
+            self.indexvV = np.array([0,3,2,1])
+        else:
+            self.indexvE = np.array([3,4,0,1,5,2])
+            self.indexvV = np.array([2,3,0,1])
+
         self.z = self.z if z is None else z
 
         if self.logtime:

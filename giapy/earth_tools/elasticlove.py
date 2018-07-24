@@ -72,7 +72,7 @@ def compute_love_numbers(ns, zarray, params, err=1e-14, Q=2, it_counts=False,
  
     # Setup for relaxation method
     scalvElas = np.array([1., 1., 1., 1., 1., 1.])
-    indexv = np.array([3,4,0,1,5,2])
+
     slowc = 1
 
     # Initial guess - subsequent orders use previous solution.
@@ -81,6 +81,10 @@ def compute_love_numbers(ns, zarray, params, err=1e-14, Q=2, it_counts=False,
     # Main order number loop.
     #TODO add adaptive n stepsize and interpolate to interior orders.
     for n in ns:
+        if n == 1:
+            indexv = np.array([0,4,3,1,5,2])
+        else:
+            indexv = np.array([3,4,0,1,5,2])
         sys.stdout.write('Computing love number {}\r'.format(n))
      
         # If not first order num, update relaxation object...
@@ -250,16 +254,17 @@ def gen_elasb(n, hV, params, zarray, Q=1):
     b = np.zeros((len(zarray)+2, 6))
 
     # Lower Boundary Condition inhomogeneity
-    b[0,0] = 0.
-    b[0,1] = 0.
-    b[0,2] = ((denC-rhoC)*gC*hV[0]*li
-                -rhoC*(denC-rhoC)*hV[0]*li**2)
-    b[0,3] = 0.
-    b[0,4] = -(denC-rhoC)*hV[0]*li
-    if Q == 1:
-        b[0,5] = (denC-rhoC)*hV[0]*li - n/params.rCore*(denC-rhoC)*hV[0]*li**2
-    else:
-        b[0,5] = denC*hV[0]*li - 1./params.rCore*(denC-rhoC)*hV[0]*li**2
+    if n != 1:
+        b[0,0] = 0.
+        b[0,1] = 0.
+        b[0,2] = ((denC-rhoC)*gC*hV[0]*li
+                    -rhoC*(denC-rhoC)*hV[0]*li**2)
+        b[0,3] = 0.
+        b[0,4] = -(denC-rhoC)*hV[0]*li
+        if Q == 1:
+            b[0,5] = (denC-rhoC)*hV[0]*li - n/params.rCore*(denC-rhoC)*hV[0]*li**2
+        else:
+            b[0,5] = denC*hV[0]*li - 1./params.rCore*(denC-rhoC)*hV[0]*li**2
 
     # Upper Boundary Condition inhomogeneity
     b[-1,0] = 0.
@@ -406,16 +411,26 @@ class SphericalElasSMat(object):
             
             denCore = self.params.denCore
             difden = (self.params.denCore - paramsCore['den'])
-            
-            # Radial stress on the core.
-            s[k1i, 6+indexv[0]] = -0.33*rCore*denCore**2*li
-            s[k1i, 6+indexv[1]] = 0.
-            s[k1i, 6+indexv[2]] = 1.
-            s[k1i, 6+indexv[3]] = 0.
-            s[k1i, 6+indexv[4]] = -denCore*li
-            s[k1i, 6+indexv[5]] = 0.
-            s[k1i, jsf] = (y[2,0] - 0.33*rCore*denCore**2*li*y[0,0] - 
-                            denCore*li*y[4,0])
+
+            if self.n == 1:
+                # Radial displacement of the CMB.
+                s[k1i, 6+indexv[0]] = 1.
+                s[k1i, 6+indexv[1]] = 0.
+                s[k1i, 6+indexv[2]] = 0.
+                s[k1i, 6+indexv[3]] = 0.
+                s[k1i, 6+indexv[4]] = 0.
+                s[k1i, 6+indexv[5]] = 0.
+                s[k1i, jsf] = y[0,0]
+            else:
+                # Radial stress on the core.
+                s[k1i, 6+indexv[0]] = -0.33*rCore*denCore**2*li
+                s[k1i, 6+indexv[1]] = 0.
+                s[k1i, 6+indexv[2]] = 1.
+                s[k1i, 6+indexv[3]] = 0.
+                s[k1i, 6+indexv[4]] = -denCore*li
+                s[k1i, 6+indexv[5]] = 0.
+                s[k1i, jsf] = (y[2,0] - 0.33*rCore*denCore**2*li*y[0,0] - 
+                                denCore*li*y[4,0])
                                             
             # Poloidal stress on the core.
             s[k1j, 6+indexv[0]] = 0.          
