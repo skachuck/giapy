@@ -1,5 +1,4 @@
 import numpy as np
-from ... import pickle
 
 def _list2UT(l, N):
     """Return a list of the rows of an NxN upper triangular"""
@@ -180,7 +179,7 @@ class FlatEarthBase(object):
         return self.get_resp(t_dur)
         
     def save(self, filename):
-        pickle.dump(self, open(filename, 'wb'))
+        np.pickle.dump(self, open(filename, 'wb'))
 
     def get_resp(self, t_dur):
         """Calculate and return earth response to a unit load in an fft_mat.
@@ -520,6 +519,3 @@ def check_k(earth):
     print "ak_wl and ak_fft are close: "+str(np.allclose(ak_wl, ak_fft))
     print "ak_wl and ak_ea are close:  "+str(np.allclose(ak_wl, ak_ea))
     print "ak_fft and ak_ea are close: "+str(np.allclose(ak_fft, ak_ea))
- 
-def load(filename):
-    return pickle.load(open(filename, 'r'))
