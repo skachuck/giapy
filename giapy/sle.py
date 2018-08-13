@@ -67,7 +67,7 @@ class GlobalSLE(object):
         # computational efficiency, but at a memory cost.
         self.harmTrans = spharm.Spharmt(self.nlon, self.nlat, legfunc='stored')
 
-    def performConvolution(*args, **kwargs):
+    def performConvolution(self,*args, **kwargs):
         """Legacy function, see compute"""
         self.compute(*args, **kwargs)
 
@@ -144,7 +144,7 @@ class GlobalSLE(object):
         if out_times is None:
             out_times = self.out_times
         else:
-            out_times = out_times
+            out_times = np.asarray(out_times)
         self.out_times = out_times
         assert out_times is not None, 'out_times is not set'
         
@@ -173,7 +173,7 @@ class GlobalSLE(object):
         ssResp = np.zeros_like(ns) 
         ssResp[npad] = observerDict['SS'].isolateRespArray(elRespArray)
 
-        Ts = topo.copy()
+        if topo is not None: Ts = topo.copy()
 
         # Convolve each ice stage to the each output time.
         # Primary loop: over ice load changes.
@@ -212,8 +212,8 @@ class GlobalSLE(object):
                 dwLoadM = (iceb>0)*dSS*(Tb<0)
              
                 # Locate (newly) floating ice minus (newly) grounded ice
-                dCalved = DENP*iceb*(
-                            ((Tb+DENP*iceb)<0)*((Ta+DENP*iceb)>0)-
+                dCalved = DENP*iceb*np.logical_xor(
+                            ((Tb+DENP*iceb)<0)*((Ta+DENP*iceb)>0),
                             ((Tb+DENP*iceb)>0)*((Ta+DENP*iceb)<0)) 
 
                 # Spread floating ice over the ocean
@@ -248,8 +248,8 @@ class GlobalSLE(object):
                                                 Tb+DENP*iceb, dSSel)
 
                     # Locate (newly) floating ice minus (newly) grounded ice
-                    dCalvedp = DENP*iceb*(
-                                (Tb+dSSelp-dhwBarUel+DENP*iceb<0)*(Tb+DENP*iceb>0) -
+                    dCalvedp = DENP*iceb*np.logical_xor(
+                                (Tb+dSSelp-dhwBarUel+DENP*iceb<0)*(Tb+DENP*iceb>0),
                                 (Tb+dSSelp-dhwBarUel+DENP*iceb>0)*(Tb+DENP*iceb<0))
 
                     # Spread floating ice over the ocean

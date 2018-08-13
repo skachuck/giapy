@@ -15,7 +15,7 @@ configdict = {'ice': 'AA2_Tail_nochange5_hightres_Pers_288_square',
 sim = giapy.sim.configure_giasim(configdict)
 print('Inputs loaded and GiaSim object configured')
 
-result = sim.performConvolution(out_times=[12, 10, 8, 0.1, 0, -0.1])
+result = sim.performConvolution(out_times=sim.ice.times)
 print('Glacial isostatic adjustment computed')
 
 print('To test plotting, in an iPython session, run this script and type')
