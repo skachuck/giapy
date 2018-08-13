@@ -39,8 +39,7 @@ class GridObject(object):
             basemap = Basemap(**mapparam)
             self.basemap = basemap
         else:
-            raise ValueError('GridObject needs either Basemap object or\
-                                paramaters.')
+            self.basemap = Basemap
 
         self.shape = shape or (50, 50)
         self.x = np.linspace(basemap.xmin, basemap.xmax, self.shape[1],
@@ -90,7 +89,7 @@ class GridObject(object):
 
     def integrateArea(self, array, area, latlon=False):
         """Integrate an array over a specific area."""
-        inds = self.selectArea(area, latlon=latlon, reduced=1)
+        inds = self.selectArea(areaDict, latlon=latlon, reduced=1)
         dV = self.volume(array)
         return dV[inds].sum()
 

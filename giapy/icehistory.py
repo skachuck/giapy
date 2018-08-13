@@ -520,7 +520,7 @@ class OfflineIceHistory(object):
     An ice history that is read in stage-by-stage, as they are made available.
     """
     def __init__(self, times, fnames, shape, drctry='./', readargs=[],
-                    readkwargs={}):
+                    readkwargs={}, *args, **kwargs):
         self.times = times
         self.fnames = fnames
         self.shape = shape
@@ -529,6 +529,11 @@ class OfflineIceHistory(object):
         self.readkwargs = readkwargs
         # Need nlat for sle.
         self.nlat = self.shape[0]
+
+    def __getitem__(self, key):
+        stage = self.read_icestage(self.drctry+self.fnames[key],
+                                *self.readargs, **self.readkwargs)
+        return stage
 
     def pairIter(self):
         t0, icefname0 = self.times[0], self.fnames[0]
