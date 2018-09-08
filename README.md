@@ -14,6 +14,8 @@ Run ```$ python setup.py build && python setup.py install``` to register the com
 ## Use
 Try ```$ giapy-ellove 100```, which will output the first 100 elastic love numbers h', l', k', suitable for input into, e.g., [REAR](https://github.com/danielemelini/rear) (Melini et al., 2014). See ```$ giapy-ellove -h``` to customize use.
 
+To perform the Sea Level Equation benchmarks from Martinec et al. (2018), run ```$ python tests/sle-tests.py```.
+
 ## Dependencies
 [numpy](http://www.numpy.org) : Numerical computing package.
 
@@ -30,7 +32,9 @@ Cathles, L.M. (1975). *The Viscosity of the Earth's Mantle.* Princeton Universit
 
 Kachuck, S.B. and Cathles, L.M. (2017, September). *Normalized relaxation method for efficient computation of elastic Love numbers.* Oral presentation at the 1st circular Workshop on Glacial Isostatic Adjustment and Elastic Deformation, Reykjavik, Iceland.
 
+Martinec, Z, Klemann, V, van der Wal, W, Riva, REM, Spada, G, Sun, Y, Melini, D, Kachuck, SB, Barletta, V, Simon, K, A, G & James, T (2018), 'A benchmark study of numerical implementations of the sea-level equation in GIA modelling' Geophysical Journal International, vol 215, no. 1, pp. 389-414. DOI: 10.1093/gji/ggy280
+
 Melini D., Gegout P., Spada G, King M. (2014) REAR - a regional ElAstic Rebound calculator.
-User manual for version 1.0, available on–line at: http://hpc.rm.ingv.it/rear.
+User manual for version 1.0, available on–line at: [http://hpc.rm.ingv.it/rear](http://hpc.rm.ingv.it/rear).
 
 &copy; 2017 S.B. Kachuck
