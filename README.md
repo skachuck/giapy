@@ -14,7 +14,7 @@ Run ```$ python setup.py build && python setup.py install``` to register the com
 ## Use
 Try ```$ giapy-ellove 100```, which will output the first 100 elastic love numbers h', l', k', suitable for input into, e.g., [REAR](https://github.com/danielemelini/rear) (Melini et al., 2014). See ```$ giapy-ellove -h``` to customize use.
 
-To perform the Sea Level Equation benchmarks from Martinec et al. (2018), run ```$ python tests/sle-tests.py```.
+To perform the Sea Level Equation benchmarks from Martinec et al. (2018), run ```$ python tests/sle-test.py```.
 
 ## Dependencies
 [numpy](http://www.numpy.org) : Numerical computing package.
