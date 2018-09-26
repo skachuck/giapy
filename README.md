@@ -9,10 +9,12 @@ This release provides a scaled, normalized relaxation method for computing elast
 In future releases, I will include methods for the viscoelastic relaxation and solving the sea level equation. If you are interested in having a look, these can currently be found in the development branch.
 
 ## Installation
-Run ```$ python setup.py build && python setup.py install``` to register the command line tool ```giapy-ellove```.
+Run ```$ python setup.py build && python setup.py install``` to register the command line tools ```giapy-ellove``` and ```giapy-velove```.
 
 ## Use
 Try ```$ giapy-ellove 100```, which will output the first 100 elastic love numbers h', l', k', suitable for input into, e.g., [REAR](https://github.com/danielemelini/rear) (Melini et al., 2014). See ```$ giapy-ellove -h``` to customize use.
+
+Similarly, you can run ```$ giapy-velove 10``` for the decay spectra of the three love numbers for the first 10 order numbers.
 
 To perform the Sea Level Equation benchmarks from Martinec et al. (2018), run ```$ python tests/sle-test.py```.
 
