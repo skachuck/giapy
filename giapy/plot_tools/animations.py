@@ -7,12 +7,7 @@ from mpl_toolkits.basemap import Basemap
 
 from giapy.apl_tools import read_t_files
 
-find ocean deapth():
-    ocean_mask
-    return ocean_mask*max(load, topo)
-    
-ax.fill_between(ds, 
-
+"""
 m = Basemap(width=4900000,height=4700000,\
               rsphere=(6378137.00,6356752.3142),\
               resolution='l',area_thresh=1000.,projection='lcc',\
@@ -31,6 +26,7 @@ lat1152 = Lat1152[:,0]
 emerg_int = RectBivariateSpline(lon576, lat576, emerg[0,:,:].T)
 load_int = RectBivariateSpline(lon576, lat576, load[0,:,:].T)
 topo_int = RectBivariateSpline(lon1152, lat1152, topo1152[0,:,:].T)
+"""
 
 
 def anim_transects(emerg_func, load_func, topo_func, paths, filename):
