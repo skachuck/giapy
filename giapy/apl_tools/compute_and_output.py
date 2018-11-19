@@ -1,9 +1,14 @@
 import numpy as np
 import giapy
+from scipy.interpolate import interp1
+
 import giapy.apl_tools.t_files
 import giapy.data_tools.gpsdata
 import giapy.data_tools.tiltdata
 
+# ESL definition
+esldat = np.loadtxt('../data/obs/Meltwater_last_glacial_cycle_p00mmpy.txt').T
+esl = interp1d(esldat[0], esldat[1])
 
 def read_ice_assignments(fname):
     with open(fname, 'r') as f:
@@ -73,6 +78,36 @@ def load_ice_modifications(propfname, glacfname, ice, grid):
 
     return ice.applyAlteration()
 
+def read_dupuit_ice(fname):
+    """Read a Dupuit Ice model csv, who's structure is:
+    Lon   Lat   t0   t1   t2   ...
+    """
+    ice = np.loadtxt(fname, delimiter=',', skiprows=1)
+    ice = ice.reshape((288,288,-1)).transpose((2,0,1))
+
+    f = open(fname, 'r')
+    l = f.readline()
+    col = l.split(',')
+
+    ts = np.array(map(float, col[2:])) 
+
+    metadata = {'fnames': '',
+                'Lon': ice[0],
+                'Lat': ice[1],
+                'nlat': 288,
+                'stageOrder':np.arange(len(ts)),
+                'path':'',
+                'shape':(288,288),
+                'times':ts}
+
+    ice = giapy.icehistory.PersistentIceHistory(ice[2:], metadata=metadata)
+    ice.appendLoadCycle(esl)
+
+    # Add -100 and +100 years.
+    ice.times = np.union1d(ice.times, [-.1,.1])[::-1]
+    ice.stageOrder = np.r_[ice.stageOrder, 0, 0]
+
+    return ice
 
 def create_load_cycles(ice, n):
     """Append load cycles to the ice model.
@@ -120,6 +155,8 @@ if __name__ == '__main__':
                                             coast slopes.''')
     parser.add_argument('--ice6g', default=False, action='store_const',
                         const=True, help='Use ice6g as base ice model.')
+    parser.add_argument('--dupuit', default=False, action='store_const',
+                        const=True, help='Load Dupuit ice model from file')
 
     comargs = parser.parse_args()
 
@@ -155,10 +192,13 @@ if __name__ == '__main__':
     
     print('Inputs loaded\r')
 
+    if comargs.dupuit:
+       sim.ice = read_dupuit_ice(alterfile)
+
     sim.ice.stageOrder = np.array(sim.ice.stageOrder)
     sim.ice.stageOrder[sim.ice.times <= tnochange] = sim.ice.stageOrder[-1]
 
-    if not comargs.ice6g:
+    if not comargs.ice6g and not comargs.dupuit:
         sim.ice = load_ice_modifications(alterfile, glacfile, sim.ice, sim.grid)
 
     sim.ice = create_load_cycles(sim.ice, ncyc)
