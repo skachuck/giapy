@@ -1,14 +1,14 @@
 import numpy as np
 import giapy
-from scipy.interpolate import interp1
+from scipy.interpolate import interp1d
 
 import giapy.apl_tools.t_files
 import giapy.data_tools.gpsdata
 import giapy.data_tools.tiltdata
 
 # ESL definition
-esldat = np.loadtxt('../data/obs/Meltwater_last_glacial_cycle_p00mmpy.txt').T
-esl = interp1d(esldat[0], esldat[1])
+esldat = np.loadtxt(giapy.MODPATH+'/data/obs/Meltwater_last_glacial_cycle_p00mmpy.txt').T
+esl = interp1d(esldat[0]/1000, esldat[1])
 
 def read_ice_assignments(fname):
     with open(fname, 'r') as f:
@@ -89,7 +89,7 @@ def read_dupuit_ice(fname):
     l = f.readline()
     col = l.split(',')
 
-    ts = np.array(map(float, col[2:])) 
+    ts = np.array(map(float, col[2:]))/1000. 
 
     metadata = {'fnames': '',
                 'Lon': ice[0],
@@ -98,10 +98,12 @@ def read_dupuit_ice(fname):
                 'stageOrder':np.arange(len(ts)),
                 'path':'',
                 'shape':(288,288),
-                'times':ts}
+                'times':ts,
+                'areaProps':None}
 
     ice = giapy.icehistory.PersistentIceHistory(ice[2:], metadata=metadata)
     ice.appendLoadCycle(esl)
+    ice.times = ice.times
 
     # Add -100 and +100 years.
     ice.times = np.union1d(ice.times, [-.1,.1])[::-1]
@@ -173,7 +175,7 @@ if __name__ == '__main__':
         icename = 'ice6g_pers_square'
         toponame = 'sstopo_ice6g'
     else:
-        icename = 'aa2_base_pers_288',
+        icename = 'aa2_base_pers_288'
         toponame = 'sstopo288'
 
     configdict = {'ice': icename,
