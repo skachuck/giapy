@@ -1,4 +1,4 @@
-############ M3L70V01 MODEL FOR MANTLE (Spada et al. 2011) #############
+############ PRELIMINARY EARTH REFERENCE MODEL FOR MANTLE #############
 #  (first entry is the core)
 #  Radius     Density     Bulk mod    Shear mod   Gravity   Viscosity
 #  (km)       (kg/m3)      (GPa)       (GPa)       (m/s^2)  (Pa s)
