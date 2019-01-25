@@ -24,15 +24,16 @@ def compute_2d_uplift_stage(t, ice, dx, dy, rate=False, **ekwargs):
 
     for ice0, bas0, t0, ice1, bas1, t1 in ice.pairIter():
         # Only propagate response from earlier times.
-        if t0 > t:
+        if t0 >= t:
             break
         dIload = (thickness_above_floating(ice1,bas1)
-                            -thickness_above_floating(ice0,bas0))
-        dWload = ocean_uplift_load(bas0, bas1)
-        dload[padsl] = dIload + dWload
+                            -thickness_above_floating(ice0,bas0)) 
+        dWload = 0#ocean_uplift_load(bas0, bas1)
+        dload[padsl] = dIload# + dWload
 
         dload_f = np.fft.fft2(dload)
         dur = t - t0
+        print dur
         unit_resp = -(1 - np.exp(dur/taus*alpha/1e3))
         if rate:
             upl += np.real(0.3*np.fft.ifft2(unit_resp/taus/1e3*dload_f))
@@ -75,8 +76,8 @@ def thickness_above_floating(thk, bas, beta=0.9):
     beta - ratio of ice density to water density (defauly=0.9)
     """
     #   Segment over ocean, checks for flotation    Over land
-    taf = (beta*thk+bas)*(beta*thk>-bas)*(bas<0) + thk*(bas>0)
-    return beta*taf
+    taf = (beta*thk+bas)*(beta*thk>-bas)*(bas<0) + beta*thk*(bas>0)
+    return taf
 
 def ocean_uplift_load(bas0, bas1):
     """Compute the (water equivalent) ocean load from uplift/subsidence.
@@ -90,7 +91,7 @@ def ocean_uplift_load(bas0, bas1):
     return ocup + newsub + neweme
 
 
-def calc_earth(nx,ny,dx,dy,**kwargs):
+def calc_earth(nx,ny,dx,dy,return_freq=False,**kwargs):
     """Compute the decay constants, elastic uplift, and lithosphere filter.
 
     Parameters
@@ -103,8 +104,7 @@ def calc_earth(nx,ny,dx,dy,**kwargs):
     Returns
     -------
 
-    """
-    nx, ny = 128, 192
+    """ 
     freqx = np.fft.fftfreq(nx, dx)
     freqy = np.fft.fftfreq(ny, dx)
     freq = np.sqrt(freqx[None,:]**2 + freqy[:,None]**2)
@@ -146,4 +146,7 @@ def calc_earth(nx,ny,dx,dy,**kwargs):
     # alpha is dimensionless
     alpha = 1 + freq**4*fr23/g/rho*1e11
 
-    return taus, elup, alpha
+    if return_freq:
+        return freq, taus, elup, alpha
+    else:
+        return taus, elup, alpha
