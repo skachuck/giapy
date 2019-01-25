@@ -142,16 +142,20 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Compute and output GIA for '
                                                   'APL GlacialRebound program')
-    parser.add_argument('casename', type=str)
-    parser.add_argument('alterfile', type=str)
-    parser.add_argument('glacfile', type=str)
-    parser.add_argument('tnochange', type=float)
-    parser.add_argument('--earth', type=str, default=None)
+    parser.add_argument('casename', type=str, help='Name of case to run (for output)')
+    parser.add_argument('alterfile', type=str, help='''Path to ice alteration (or
+                                                    dupuit model if --dupuit set)''')
+    parser.add_argument('glacfile', type=str, help='''Path to glacier definitions.''')
+    parser.add_argument('tnochange', type=float, help='''Time after which no ice
+                                                        change.''')
+    parser.add_argument('--earth', type=str, default=None, help='''Path to earth model''')
     parser.add_argument('--tfiles', default=False,
                             action='store_const', const=True,
                             dest='tfiles')
-    parser.add_argument('--ncyc', default=1, type=int)
-    parser.add_argument('--topoit', default=1, type=int)
+    parser.add_argument('--ncyc', default=1, type=int, help='''Number of glacial cycles.''')
+    parser.add_argument('--topoit', default=1, type=int, help='''Number of iterations for 
+                            initial topography (matches end topogrphy to
+                            present day.''')
     parser.add_argument('--bathtub', default=False, action='store_const',
                         const=True, help='''Use to ignore marine-based ice and
                                             coast slopes.''')
