@@ -102,7 +102,7 @@ def prop(u, d, k):
                     [sp*u, s*u, cp, c], 
                     [-s*u, sm*u, -c, cm]])
                     
-def exp_decay_const(earth, i, j):
+def exp_decay_const(earth, k):
     """Return the 2D exponential decay constant for order harmonic unit loads. 
     
     Parameters
@@ -117,8 +117,6 @@ def exp_decay_const(earth, i, j):
     The resulting decay, dec(i, j) = 1-np.exp(elapsed_time * 1000./tauc(i, j)),
     along with lithospheric filter can be returned using earth.get_resp.
     """
-    wl = yield_wl(i, j, fwl=600*10)         # wavelength
-    ak = 2*np.pi/wl                         # wavenumber
     
     # ----- Interior to Surface integration ----- #
     # uses propagator method from Cathles 1975
@@ -130,17 +128,17 @@ def exp_decay_const(earth, i, j):
     
     # Determine the necessary start depth (start lower for longer wavelengths)
     # to solve a roundoff problem with the matrix method.
-    lstart = np.where(wl < earth.depths)[0]
-    if np.any(lstart): 
-        lstart=lstart.max()
-    else:
-        lstart=0
+    lstart = np.where(2*np.pi/k < earth.depths)[0]
+    #if np.any(lstart): 
+    #    lstart=lstart.max()
+    #else:
+    lstart=0
     
     # integrate from starting depth to surface, layer by layer
     for dd, uu, in zip(earth.d[lstart:], earth.u[lstart:]):
-        p = prop(uu, dd, ak)
-        for k, c in enumerate(cc):
-            cc[k,:] = p.dot(c)
+        p = prop(uu, dd, k)
+        for i, c in enumerate(cc):
+            cc[i,:] = p.dot(c)
     
     # initialize the inegration constants
     x = np.zeros(2)
@@ -150,15 +148,14 @@ def exp_decay_const(earth, i, j):
     x[1] = -cc[0,2]/(cc[0,2]*cc[1,3]-cc[0,3]*cc[1,2])
     
     # multiply into the solution
-    for k in range(2):
-        cc[k,:]=x[k]*cc[k,:]
+    cc*=x[i,None]
     # form the final solution
     cc = np.sum(cc, axis=0)
     
     # As cc[1] gives the surface velocity, the exponential time constant is 
     # its reciprocal (see Cathles 1975, p43)
     # 1955600 = 2/rho (~3.313) /g (~9.8) * (1/pi*1e8) unit conversion to years
-    tau = 1955600.*ak/cc[1]
+    tau = 1955600.*k/cc[1]
     
     return tau
 
@@ -272,7 +269,7 @@ class EarthNLayer(FlatEarthBase):
     def set_taus(self, taus):
         self.taus=taus
         
-    def calc_taus(self, N=None):
+    def calc_taus(self, nx, ny, lx, ly):
         """Generate and store a list of exponential decay constants.
         
         The procedure sets class data: 
@@ -289,16 +286,17 @@ class EarthNLayer(FlatEarthBase):
 
         For description of formats, see help(_list_to_fft_mat)
         """
-        self.N = N or self.N
-        taus = [[exp_decay_const(self, i, j) for i in xrange(j, N/2+1)] 
-                                                for j in xrange(N/2+1)]
-        #TODO Generalize to arbitrary wavelengths using GridObject?
-        wl = np.array([[6000/np.sqrt(i**2+j**2) if (i!=0 or j!=0) else 16000 
-                                    for i in range(j, N/2+1)] 
-                                    for j in range(N/2+1)])
-        wl = _UT2list(wl)
-        self.ak = 2*np.pi/np.array(wl)
-        
+
+        kx = 2*np.pi*np.fft.fftfreq(nx, lx/nx)
+        ky = 2*np.pi*np.fft.fftfreq(ny, ly/ny)
+        k = np.sqrt(kx[None,:]**2 + ky[:,None]**2)
+
+        taus = [[exp_decay_const(self, k[j,i]) for i in xrange(j, nx/2+1)] 
+                                                for j in xrange(ny/2+1)]
+ 
+        self.ak = [[k[j,i] for i in xrange(j, nx/2+1)] 
+                                                for j in xrange(ny/2+1)]
+        self.ak = _UT2list(self.ak)
         # Sort by increasing order number
         self.index = range(len(self.ak))
         self.index.sort(key=self.ak.__getitem__)
@@ -307,14 +305,15 @@ class EarthNLayer(FlatEarthBase):
         
         # the Lithosphere filter, sorted by wave number
         # factor of 1e8 is for unit conversion
-        self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
+        #self.alpha = 1.+((self.ak)**4)*self.fr23/self.g/self.rho*1e8
+        self.alpha=1.
 
         # Augment the decay times by the Lithosphere filter
         self.taus = self.taus/self.alpha 
                                                 
         # Turn the Lithosphere filter and taus into a matrix that matches the 
         # frequencey matrix from an NxN fft.
-        self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
+       # self.alpha = _list_to_fft_mat(self.alpha, self.index, self.N)
         
         
 class EarthTwoLayer(FlatEarthBase):

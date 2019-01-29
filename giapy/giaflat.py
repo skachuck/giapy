@@ -33,7 +33,7 @@ def compute_2d_uplift_stage(t, ice, dx, dy, rate=False, **ekwargs):
 
         dload_f = np.fft.fft2(dload)
         dur = t - t0
-        print dur
+
         unit_resp = -(1 - np.exp(dur/taus*alpha/1e3))
         if rate:
             upl += np.real(0.3*np.fft.ifft2(unit_resp/taus/1e3*dload_f))
@@ -45,10 +45,12 @@ def compute_2d_uplift_stage(t, ice, dx, dy, rate=False, **ekwargs):
 
     return upl
 
-def compute_2d_uplift(ice, taus, alpha=1, elup=0, padfac=1):
+def propagate_2d_adjustment(t, upl, **ekwargs):
     """
+    Propagate the effect of load change from t0 to t1 to future times
     """
 
+    padfac = 1
     nx, ny = 128, 192
     upl = np.zeros((len(ice.times)-1, ny*padfac, nx*padfac))
     dload = np.zeros((1, ny*padfac, nx*padfac))
