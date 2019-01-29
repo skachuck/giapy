@@ -69,7 +69,7 @@ class GlobalSLE(object):
 
     def performConvolution(self,*args, **kwargs):
         """Legacy function, see compute"""
-        self.compute(*args, **kwargs)
+        return self.compute(*args, **kwargs)
 
     def compute(self, out_times=None, ntrunc=None, topo=None,
                             verbose=False, eliter=5, nrem=1, massconerr=1e-2,

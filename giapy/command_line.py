@@ -137,7 +137,11 @@ of 1e23 N m (overrides parameter table, if set)''')
     assert args.lstart >= 1, 'lstart must be 1 or greater.'
     ls = range(args.lstart, args.lmax+1)
 
-    paramname = os.path.abspath(args.params) or 'prem'
+    # Load prem if no paramname given
+    if args.params is None:
+        paramname = 'prem'
+    else:
+        paramname = os.path.abspath(args.params)
     # Load the parameters with no crust for viscoelastic response
     params = EarthParams(model=paramname+'_nocrust')
     # Check for lithospheric override

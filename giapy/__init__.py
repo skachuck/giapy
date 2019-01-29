@@ -41,17 +41,17 @@ def timestamp():
 def load(filename):
     return pickle.load(open(filename, 'r'))
 
-#import giapy.earth_tools
-#import giapy.earth_tools as earth
+import giapy.earth_tools
+import giapy.earth_tools as earth
 #import giapy.data_tools
 #import giapy.data_tools as data
-#import giapy.icehistory as ice
-#import giapy.map_tools as maps
+import giapy.icehistory as ice
+import giapy.map_tools as maps
 
-#import giapy.sle
+import giapy.sle
 # For internal backwards compatibility for now
-#import giapy.sle as sim
-#import giapy.sle as giasim
+import giapy.sle as sim
+import giapy.sle as giasim
 
 #import giapy.plot_tools as plot
 
