@@ -12,7 +12,6 @@ odeint.py
 """
 from __future__ import division
 import numpy as np
-import numexpr as ne
 from numba import jit, void, int64, float64
 
 class Odeint(object):
