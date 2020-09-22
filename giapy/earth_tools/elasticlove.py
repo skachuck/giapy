@@ -118,6 +118,94 @@ def compute_love_numbers(ns, zarray, params, err=1e-14, Q=2, it_counts=False,
     else:
         return hLk
 
+def compute_lith_numbers(ns, zarray, params, liththick, err=1e-14, Q=2, it_counts=False,
+                             comp=True, scaled=False):
+    """Compute surface elastic load love numbers for harmonic order numbers ns.
+
+    Parameters
+    ----------
+    ns : array of order numbers
+    zarray : array of radii (only length used if scaled == True)
+    params : <giapy.earth_tools.earthParams.EarthParams> object 
+        for interpolation of earth parameters to relevant points.
+    err : float, maximum tolerated error for relaxation method.
+
+    it_counts : Boolean
+        Whether counts of relaxation iterations are output (default False)
+    comp : True (default) for compressible, False for incompressible.
+    scaled : Use uniform mesh in logarithmic scaling of radial variable if True
+        (default False). Transformation is chi = exp(-(rC - r)*(2n-1)/rE).
+
+    Returns
+    -------
+    hLk : (len(ns), 3) array of h, L, and k_d. 
+        To get the total gravitational love number, k=n*(1+k_d).
+    its : len(ns) array of iteration numbers for relaxation method 
+        (if it_counts=True).
+    """
+
+    alphas = []
+    disps = []
+    if it_counts:
+        its = []
+ 
+    # Setup for relaxation method
+    scalvElas = np.array([1., 1., 1., 1., 1., 1.])
+
+    slowc = 1
+
+    # Initial guess - subsequent orders use previous solution.
+    y0 = (scalvElas*np.ones((6, len(zarray))).T).T
+    
+    # Main order number loop.
+    #TODO add adaptive n stepsize and interpolate to interior orders.
+    for n in ns:
+        if n == 1:
+            indexv = np.array([0,4,3,1,5,2])
+        else:
+            indexv = np.array([3,4,0,1,5,2])
+        sys.stdout.write('Computing love number {}\r'.format(n))
+     
+        # If not first order num, update relaxation object...
+        try:
+            difeqElas.updateProps(n=n)
+        # ... otherwise create it.
+        except:
+            difeqElas = SphericalElasSMat(ns[0], zarray, params, Q=Q, 
+                                                comp=comp, scaled=scaled)
+
+        # Perform the relaxation for the order number and store results.
+        y0, it = solvde(500, err, slowc, scalvElas, indexv, 3,
+                                y0, difeqElas, False, it_count=True)
+
+        # Interpolate to rM
+        if scaled:
+            z_rm = (params.norms['r'] - liththick)/params.norms['r']
+            zeta_rm = difeqElas.z2zeta(z_rm)
+            rMT = np.interp(zeta_rm, difeqElas.zeta, y0[2])
+            rME = np.interp(zeta_rm, difeqElas.zeta, y0[0])
+        else:
+            z_rm = (params.norms['r'] - liththick)/params.norms['r'] 
+            rMT = np.interp(zeta_rm, difeqElas.z, y0[2])
+            rME = np.interp(zeta_rm, difeqElas.z, y0[0])         
+
+        alphas.append(rMT/y0[2][-1])
+        disps.append(y0[0][-1] - rME)
+
+        if it_counts:
+            its.append(it)
+    sys.stdout.write('\n')
+
+    alphas = np.array(alphas)
+    disps = np.array(disps)
+
+    if it_counts:
+        its=np.array(its)
+
+    if it_counts:
+        return alphas, disps, its
+    else:
+        return alphas, disps
 def hLK_asymptotic(params):
     """Compute large order-number elastic Love numbers from params.
     """
@@ -391,6 +479,10 @@ class SphericalElasSMat(object):
 
     def zeta2z(self, zeta):
         return 1 + np.log(zeta)/(self.n+0.5)
+
+    def z2zeta(self, z):
+        """z must be normalized"""
+        return np.exp((self.n + 0.5)*(z - 1))
 
     def smatrix(self, k, k1, k2, jsf, is1, isf, indexv, s, y): 
         Q = self.Q

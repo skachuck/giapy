@@ -297,6 +297,7 @@ class EarthParams(object):
             self.D = young * H**3 / (12*(1-pois**2))*1e9
         else:
             raise ValueError('Muse specify either D (in N m) or H (in km)')
+        
 
     def getLithFilter(self, k=None, n=None):
         """Return the Lithospheric filter value for loads and rates.
@@ -317,6 +318,14 @@ class EarthParams(object):
         g = paramSurf['grav']*g0        # m/s^2
         # 1e1 converts rho*g in dyne/cm^3 to N/m^3
         return 1 + k**4 * self.D / (rho * g)
+
+    def setExternalLithFilter(self, ns, alphas):
+        self.lith_ns = ns
+        self.lith_as = alphas
+        self.getLithFilter = self.getExternalLithFilter
+
+    def getExternalLithFilter(self, n):
+        return 1./self.lith_as[np.argwhere(n==self.lith_ns)[0][0]]
 
     def effectiveElasticThickness(self):
 
