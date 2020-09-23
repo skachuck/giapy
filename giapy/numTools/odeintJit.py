@@ -21,16 +21,16 @@ class Odeint(object):
     EPS = np.finfo(float).eps
 
     def __init__(self, derivs, ystart, x1, x2, stepper, atol, rtol, h, hmin,
-	nsave=None, xsave=None, extout=None, **kwargs):
+        nsave=None, xsave=None, extout=None, **kwargs):
         """Constructor sets everything up. The routine integrates starting
-	values ystart[0..nvar-1] from x1 to x2 with absolute tolerance atol and
-	relative tolerance rtol. The quantity h1 should be set as a guessed
-	first stepsize (can be zero). An Ouput object should be input to
-	control the saving of intermediate values. On ouput, nok and nbad are
-	the number of good and bad (but retired and dixed) steps taken, and
-	ystart is replaced by values at the end of the integration interval.
-	derivs is the user-supplied routine for calculating the right-hand side
-	derivative."""
+        values ystart[0..nvar-1] from x1 to x2 with absolute tolerance atol and
+        relative tolerance rtol. The quantity h1 should be set as a guessed
+        first stepsize (can be zero). An Ouput object should be input to
+        control the saving of intermediate values. On ouput, nok and nbad are
+        the number of good and bad (but retired and dixed) steps taken, and
+        ystart is replaced by values at the end of the integration interval.
+        derivs is the user-supplied routine for calculating the right-hand side
+        derivative."""
 
         if isinstance(ystart, float):
             nvar = 1
@@ -60,14 +60,14 @@ class Odeint(object):
 
         self.dense = self.out.dense
         self.derivs = derivs
-	self.h = float(np.sign(x2-x1)*h)
+        self.h = float(np.sign(x2-x1)*h)
 
         self.stepper = stepper(self.y, self.dydx, self.x, atol, 
                                     rtol, self.dense, **kwargs)
 
 
     def integrate(self, verbose=False):
-	"""Do the actual integration"""
+        """Do the actual integration"""
         out = self.out
         s = self.stepper
 
@@ -111,49 +111,49 @@ class Odeint(object):
 
 class StepperBase(object):
     def __init__(self, y, dydx, x, atol, rtol, dense):
-	self.x = x
-	self.y = y
-	self.dydx = dydx
+        self.x = x
+        self.y = y
+        self.dydx = dydx
         self.dydxnew = dydx.copy()
-	self.atol = atol
-	self.rtol = rtol
-	self.dense = dense
-	self.n = len(y)
-	self.neqn = self.n	        # neqn = n except for StepperStoerm.
-	self.yout = np.zeros(self.n)	# New value of y 
-	self.yerr = np.zeros(self.n)	# and error estimate
+        self.atol = atol
+        self.rtol = rtol
+        self.dense = dense
+        self.n = len(y)
+        self.neqn = self.n              # neqn = n except for StepperStoerm.
+        self.yout = np.zeros(self.n)    # New value of y 
+        self.yerr = np.zeros(self.n)    # and error estimate
 
 class Output(object):
     def __init__(self, x1, x2, nsave, ny):
-	self.nsave = nsave 
-	if self.nsave > 0:
-	    self.dense = True
+        self.nsave = nsave 
+        if self.nsave > 0:
+            self.dense = True
             self.i = 0
             # Preallocate the save arrays 
             self.xsave = np.zeros(nsave+1)
             self.ysave = np.zeros((ny, nsave+1))
-	elif self.nsave < 0 and self.nsave is not None:
-	    self.dense = False
-	    return
-	else:
-	    self.dense = False
+        elif self.nsave < 0 and self.nsave is not None:
+            self.dense = False
+            return
+        else:
+            self.dense = False
             #TODO How to preallocate unkown space?
             self.xsave = []
             self.ysave = []
 
-	if self.dense:
-	    self.x1 = x1
-	    self.x2 = x2
-	    self.xout = x1
-	    self.dxout = float(x2-x1)/nsave
+        if self.dense:
+            self.x1 = x1
+            self.x2 = x2
+            self.xout = x1
+            self.dxout = float(x2-x1)/nsave
 
     def save_dense(self, stepper, xout, h):
-	self.save(xout, stepper.denseOut(xout, h))
+        self.save(xout, stepper.denseOut(xout, h))
 
     def save(self, x, y):
         if self.dense:
-	    self.ysave[:,self.i] = y[:]
-	    self.xsave[self.i] = x
+            self.ysave[:,self.i] = y[:]
+            self.xsave[self.i] = x
             self.i += 1
         else:
             self.ysave.append(y)
@@ -166,15 +166,15 @@ class Output(object):
         values. THe routine checks whether x is greater than the desired output
         point xout. If so, it calls save_dense.
         """
-	if not self.dense:
-	    raise ValueError("dense output not set in Output!")
-	if nstp == -1:
-	    self.save(x, y)
-	    self.xout += self.dxout
-	else:
-	    while (x-self.xout)*(self.x2-self.x1) > 0.0:
-		self.save_dense(stepper, self.xout, h)
-		self.xout += self.dxout
+        if not self.dense:
+            raise ValueError("dense output not set in Output!")
+        if nstp == -1:
+            self.save(x, y)
+            self.xout += self.dxout
+        else:
+            while (x-self.xout)*(self.x2-self.x1) > 0.0:
+                self.save_dense(stepper, self.xout, h)
+                self.xout += self.dxout
 
 class ArbitraryOutput(Output):
     def __init__(self, x1, x2, xsave, ny):
@@ -200,8 +200,8 @@ class ArbitraryOutput(Output):
             self.xout = self.xsaveiter.next()
         else:
             while (x-self.xout)*(self.x2-self.x1) > 0.0:
-		self.save_dense(stepper, self.xout, h)
-		self.xout = self.xsaveiter.next()
+                self.save_dense(stepper, self.xout, h)
+                self.xout = self.xsaveiter.next()
 
 class ArbitraryArrayOutput(Output):
     def __init__(self, x1, x2, xsave=None):
@@ -220,11 +220,11 @@ class ArbitraryArrayOutput(Output):
             self.x2 = x2
 
     def save_dense(self, stepper, xout, h):
-	self.ysave.append(stepper.denseOut(xout, h))
+        self.ysave.append(stepper.denseOut(xout, h))
         self.xsavelist.append(xout)
 
     def save(self, x, y):
-	self.ysave.append(y)
+        self.ysave.append(y)
         self.xsavelist.append(x)
 
     def out(self, nstp, x, y, stepper, h):
@@ -236,7 +236,7 @@ class ArbitraryArrayOutput(Output):
             # Locate x range between x and x+h
             xout = self.xsave[np.logical_and(self.xsave<=x,
                             self.xsave>x-h)]
-	    self.save_dense(stepper, xout, h)
+            self.save_dense(stepper, xout, h)
 
 
 class ExternalOutput(Output):
@@ -262,8 +262,8 @@ class ExternalOutput(Output):
         else:
             while (x-self.xout)*(self.x2-self.x1) > 0.0:
                 self.extout.out(self.xout, stepper.denseOut(self.xout, h))
-	
-		self.xout = self.xsaveiter.next()
+        
+                self.xout = self.xsaveiter.next()
 
 
 class StepperDopr5(StepperBase):
@@ -313,74 +313,74 @@ class StepperDopr5(StepperBase):
         self.k6 = np.zeros(self.n)
 
         # Dopr5 Stepsize Controller
-	self.beta = kwargs.get('beta', 0.0) 
-	self.alpha = kwargs.get('alpha', 0.2 - self.beta*0.75)
-	self.safe = kwargs.get('safe', 0.9)
-	self.minscale = kwargs.get('minscale', 0.2)
-	self.maxscale = kwargs.get('maxscale', 10.)
+        self.beta = kwargs.get('beta', 0.0) 
+        self.alpha = kwargs.get('alpha', 0.2 - self.beta*0.75)
+        self.safe = kwargs.get('safe', 0.9)
+        self.minscale = kwargs.get('minscale', 0.2)
+        self.maxscale = kwargs.get('maxscale', 10.)
         self.errold = 1e-4
         self.reject = False
 
     def step(self, htry, derivs):
-	"""Attempts a step with stepsize htry. On output, y and x are replaced
-	by their new values, hdid is the stepsize that was actually
-	accomplished, and hnext is the estimated next stepsize."""
+        """Attempts a step with stepsize htry. On output, y and x are replaced
+        by their new values, hdid is the stepsize that was actually
+        accomplished, and hnext is the estimated next stepsize."""
 
-	self.h = float(htry)
+        self.h = float(htry)
 
-	#self.dy(self.h, derivs)
-	while True:
-	    self.dy(self.h, derivs)
-	    err = self.error() 
-	    if self.success(err):
-		break
-	    if abs(self.h) <= abs(self.x)*self.EPS:
-		raise ValueError("stepsize underflow in StepperDopr5")
+        #self.dy(self.h, derivs)
+        while True:
+            self.dy(self.h, derivs)
+            err = self.error() 
+            if self.success(err):
+                break
+            if abs(self.h) <= abs(self.x)*self.EPS:
+                raise ValueError("stepsize underflow in StepperDopr5")
 
-	if self.dense:
-	    self.prepareDense(self.h, derivs)
+        if self.dense:
+            self.prepareDense(self.h, derivs)
 
-	self.dydx = self.dydxnew.copy()
-	self.y = self.yout
-	self.xold = self.x
-	self.hdid = float(self.h)
-	self.x += self.hdid
+        self.dydx = self.dydxnew.copy()
+        self.y = self.yout
+        self.xold = self.x
+        self.hdid = float(self.h)
+        self.x += self.hdid
         return self.x, self.y
 
     def dy(self, h, derivs):
-	"""Given values for n variables y[0..n-1] and their derivatives
-	dydx[0..n-1] known at x, use the fifth-order Dormand-Prince Runge-Kutta
-	method to advance the solution over an interval h and store the
-	incremented variables in yout[0..n-1]. Also store an estimate of the
-	local truncation error in yerr using the embedded fourth-order method.
-	"""
+        """Given values for n variables y[0..n-1] and their derivatives
+        dydx[0..n-1] known at x, use the fifth-order Dormand-Prince Runge-Kutta
+        method to advance the solution over an interval h and store the
+        incremented variables in yout[0..n-1]. Also store an estimate of the
+        local truncation error in yerr using the embedded fourth-order method.
+        """
         y = self.y
         x = self.x
         dydx = self.dydx
 
         ytemp = np.zeros_like(y)
 
-	#ytemp = y + h*self.a21*dydx                        # First step.
-	#derivs(x+self.c2*h, ytemp, self.k2)	            # Second step.
+        #ytemp = y + h*self.a21*dydx                        # First step.
+        #derivs(x+self.c2*h, ytemp, self.k2)                # Second step.
         #k2 = self.k2
-	#ytemp = y + h*(self.a31*dydx + self.a32*k2)
-	#derivs(x+self.c3*h, ytemp, self.k3)	            # Third step.
+        #ytemp = y + h*(self.a31*dydx + self.a32*k2)
+        #derivs(x+self.c3*h, ytemp, self.k3)                # Third step.
         #k3 = self.k3
-	#ytemp = y + h*(self.a41*dydx + self.a42*k2 + \
+        #ytemp = y + h*(self.a41*dydx + self.a42*k2 + \
         #                self.a43*k3)
-	#derivs(x+self.c4*h, ytemp, self.k4)	            # Fourth step.
+        #derivs(x+self.c4*h, ytemp, self.k4)                # Fourth step.
         #k4 = self.k4
-	#ytemp = y + h*(self.a51*dydx + self.a52*k2 + \
+        #ytemp = y + h*(self.a51*dydx + self.a52*k2 + \
         #                self.a53*k3 + self.a54*k4)
-	#derivs(x+self.c5*h, ytemp, self.k5)                 # Fifth step.
+        #derivs(x+self.c5*h, ytemp, self.k5)                 # Fifth step.
         #k5 = self.k5
-	#ytemp = y + h*(self.a61*dydx + self.a62*k2 + \
+        #ytemp = y + h*(self.a61*dydx + self.a62*k2 + \
         #                self.a63*k3 + self.a64*k4 +\
         #                self.a65*k5)
-	#xph = x + h
-	#derivs(xph, ytemp, self.k6)	                    # Sixth step.
-	## Accumulate increments with proper weights
-	#self.yout = y + h*(self.a71*dydx  + self.a73*self.k3 + \
+        #xph = x + h
+        #derivs(xph, ytemp, self.k6)                        # Sixth step.
+        ## Accumulate increments with proper weights
+        #self.yout = y + h*(self.a71*dydx  + self.a73*self.k3 + \
         #                    self.a74*self.k4 + self.a75*self.k5 + \
         #                    self.a76*self.k6)
 
@@ -399,40 +399,40 @@ class StepperDopr5(StepperBase):
         fifthStep(ytemp, y, h, dydx, self.k2, self.k3, self.k4, self.k5,
                     self.n)
 
-	xph = x + h
-	derivs(xph, ytemp, self.k6)
+        xph = x + h
+        derivs(xph, ytemp, self.k6)
         #sixthStep(self.yout, y, h, dydx, self.k3, self.k4, self.k5,
         #            self.k6, self.n)
         self.yout = y + h*(self.a71*dydx  + self.a73*self.k3 + \
                             self.a74*self.k4 + self.a75*self.k5 + \
                             self.a76*self.k6)
 
-	derivs(xph, self.yout, self.dydxnew)
+        derivs(xph, self.yout, self.dydxnew)
 
-	self.yerr = h*(self.e1*dydx + self.e3*self.k3 + self.e4*self.k4 + \
+        self.yerr = h*(self.e1*dydx + self.e3*self.k3 + self.e4*self.k4 + \
                         self.e5*self.k5 + self.e6*self.k6 + \
                         self.e7*self.dydxnew)
 
     def prepareDense(self, h, derivs):
-	"""Store coefficients of interpolating polynomial for dense output in
-	rcont1...rcont5"""
-	# Data
+        """Store coefficients of interpolating polynomial for dense output in
+        rcont1...rcont5"""
+        # Data
         d1=-12715105075./11282082432.; d3=87487479700./32700410799.;
         d4=-10690763975./1880347072.; d5=701980252875./199316789632.;
         d6=-1453857185./8226518144.;  d7=69997945./29380423.;
 
-	self.rcont1 = self.y.copy()
-	ydiff = self.yout - self.y
-	self.rcont2 = ydiff
-	bspl = h*self.dydx - ydiff
-	self.rcont3 = bspl
-	self.rcont4 = ydiff - h*self.dydxnew - bspl
-	self.rcont5 = h*(d1*self.dydx + d3*self.k3 + d4*self.k4 + d5*self.k5 + \
-		    d6*self.k6 + d7*self.dydxnew)
+        self.rcont1 = self.y.copy()
+        ydiff = self.yout - self.y
+        self.rcont2 = ydiff
+        bspl = h*self.dydx - ydiff
+        self.rcont3 = bspl
+        self.rcont4 = ydiff - h*self.dydxnew - bspl
+        self.rcont5 = h*(d1*self.dydx + d3*self.k3 + d4*self.k4 + d5*self.k5 + \
+                    d6*self.k6 + d7*self.dydxnew)
 
     def denseOut(self, x, h):
-	"""Evaluate interpolating polynomial for y at location x, where
-	xold <= x <= xold+h."""    
+        """Evaluate interpolating polynomial for y at location x, where
+        xold <= x <= xold+h."""    
         if isinstance(x, float):
             s = (x - self.xold)/h
             s1 = 1. - s
@@ -445,42 +445,42 @@ class StepperDopr5(StepperBase):
                         self.rcont3, self.rcont4, self.rcont5, len(x),
                         self.n)
 
-	return ynew
+        return ynew
 
     def error(self):
-	"""Use yerr to compute norm of scaled error estimate. A value less than
-	one means the step was successful."""
+        """Use yerr to compute norm of scaled error estimate. A value less than
+        one means the step was successful."""
         scale = (self.atol + 
                  self.rtol*np.maximum(np.abs(self.y), np.abs(self.yout)))
-	return np.sqrt(np.mean((self.yerr/scale)**2))
+        return np.sqrt(np.mean((self.yerr/scale)**2))
 
     def success(self, err):
-	"""Returns True if err<=1, False otherwise. If step was successful,
-	sets hnext to the estimated optimal stepsize for the next step. If the
-	step failed, reduces h appropriately for another try."""
+        """Returns True if err<=1, False otherwise. If step was successful,
+        sets hnext to the estimated optimal stepsize for the next step. If the
+        step failed, reduces h appropriately for another try."""
 
-	if err <= 1.:		# Step succeeded. Compute hnext.
-	    if err == 0:
-		scale = self.maxscale
-	    else:
-		scale = self.safe*err**(-self.alpha)*self.errold**self.beta
-		if scale<self.minscale: scale=self.minscale
-		if scale>self.maxscale: scale=self.maxscale
+        if err <= 1.:           # Step succeeded. Compute hnext.
+            if err == 0:
+                scale = self.maxscale
+            else:
+                scale = self.safe*err**(-self.alpha)*self.errold**self.beta
+                if scale<self.minscale: scale=self.minscale
+                if scale>self.maxscale: scale=self.maxscale
 
-	    if self.reject:			 # Don' let step increase if last
-		self.hnext = float(self.h*min(scale, 1.))    # one was just rejected.
-	    else:
-		self.hnext = float(self.h*scale)
+            if self.reject:                      # Don' let step increase if last
+                self.hnext = float(self.h*min(scale, 1.))    # one was just rejected.
+            else:
+                self.hnext = float(self.h*scale)
 
-	    self.errold = max(err, 1e-4)        # Bookkeeping for next call.
-	    self.reject = False
+            self.errold = max(err, 1e-4)        # Bookkeeping for next call.
+            self.reject = False
             return True
 
-	else:                   # Truncation error too large, reduce stepsize.
-	    scale = max(self.safe*err**(-self.alpha), self.minscale)
-	    self.h *= float(scale)
-	    self.reject = True
-	    return False
+        else:                   # Truncation error too large, reduce stepsize.
+            scale = max(self.safe*err**(-self.alpha), self.minscale)
+            self.h *= float(scale)
+            self.reject = True
+            return False
 
 
 @jit(void(float64[:], float64[:], float64, float64[:], int64), nopython=True)
@@ -543,12 +543,12 @@ def rk4(y, dydx, x, h, derivs, args=()):
     h6 = h/6.
     xh = x+hh
 
-    yt = y + hh*dydx		    # First step.
+    yt = y + hh*dydx                # First step.
     dyt = np.zeros_like(y)
-    derivs(xh, yt, dyt, *args)	    # Second step.
+    derivs(xh, yt, dyt, *args)      # Second step.
     yt = y + hh*dyt
     dym = np.zeros_like(y)
-    derivs(xh, yt, dym, *args)	    # Third step.
+    derivs(xh, yt, dym, *args)      # Third step.
     yt = y + h*dym
     dym += dyt
     derivs(x+h, yt, dyt, *args)    # Fourth step.

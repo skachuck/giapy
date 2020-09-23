@@ -67,13 +67,13 @@ def solvde(itmax, conv, slowc, scalv, indexv, nb, y, difeq, verbose=False,
     jc1=0
     jcf=ic3
 
-    for it in xrange(itmax):        # Primary iteration loop.
+    for it in range(itmax):        # Primary iteration loop.
         k = k1                 # Boundary conditions at first point.
         s = difeq.smatrix(k, k1, k2, 2*ne, ne-nb, 
                                     ne, indexv, s, y)
         pinvs(ne-nb, ne, ne, 2*ne, 0, k1, s, c, np.zeros(nb, dtype=int), np.zeros(nb))
 
-        for k in xrange(k1+1, k2):    # Finite difference equations at
+        for k in range(k1+1, k2):    # Finite difference equations at
             kp=k                        # all point pairs.
             s = difeq.smatrix(k, k1, k2, 2*ne, 0, 
                                         ne, indexv, s, y)
