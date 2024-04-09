@@ -4,10 +4,10 @@ This is an opensource python package in development for copmuting
 the Glacial Isostatic Adjustment of the surface of the earth in response to
 shifting surface loads and comparing it to geophysical data. 
 
-This release provides a scaled, normalized relaxation method for computing the elastic and viscoelastic Love numers (Kachuck & Cathles, in review) and the sea level equation (Martinec et al., 2018).
+This release provides a scaled, normalized relaxation method for computing the elastic and viscoelastic Love numers (Kachuck & Cathles, 2019) and the sea level equation (Martinec et al., 2018).
 
 ## Installation
-The current version is built on python 2.7, as a key dependency has not yet been released on python 3. I highly recommend the [Continuum Analytics Anaconda python distribution](http://www.anaconda.com). Once this has been installed, install the necessary packages with
+The current version is built on python 2.7, as a key dependency (the spherical harmonics library) has not yet been released on python 3, although I am looking into alternatives. I highly recommend the [Continuum Analytics Anaconda python distribution](http://www.anaconda.com). Once this has been installed, install the necessary packages with
 ```$ conda config --add channels conda-forge```
 
 ```$ conda install numpy scipy matplotlib numba pyspharm basemap```
@@ -39,7 +39,7 @@ This work is distributed under the MIT license ('LICENSE').
 ## References
 Cathles, L.M. (1975). *The Viscosity of the Earth's Mantle.* Princeton University Press. Princeton, NJ. 
 
-Kachuck, S.B. and Cathles, L.M. (in review). 'Benchmarked computation of time-domain viscoelastic Love numbers for adiabatic mantles'
+Kachuck, S.B. and Cathles, L.M. (2019). 'Benchmarked computation of time-domain viscoelastic Love numbers for adiabatic mantles.' Geophysical Journal International. DOI: [https://doi.org/10.1093/gji/ggz276](https://doi.org/10.1093/gji/ggz276)
 
 Martinec, Z., Klemann, V., van der Wal, W., Riva, R.E.M., Spada, G., Melini, D., Simon, K.M., Blank, B., Sun, Y. A, G., & James, T., Barletta, V.R., Kachuck, S.B. (2018), 'A benchmark study of numerical implementations of the sea-level equation in GIA modelling' Geophysical Journal International, vol 215, no. 1, pp. 389-414. DOI: 10.1093/gji/ggy280
 
